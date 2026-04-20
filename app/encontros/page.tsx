@@ -69,19 +69,23 @@ export default async function EncontrosPage({
       <main className="min-h-screen px-4 py-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <section className="rounded-[28px] bg-gradient-to-r from-orange-500 to-amber-500 p-8 text-white shadow-lg">
-            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-              Moda Run
-            </span>
+  <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+    Moda Run
+  </span>
 
-            <h1 className="mt-4 text-3xl font-bold sm:text-5xl">
-              Corra com pessoas. Corra com propósito.
-            </h1>
+  <h1 className="mt-4 text-3xl font-bold sm:text-5xl">
+    Corra com pessoas. Corra com propósito.
+  </h1>
 
-            <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-              Organize treinos, participe de encontros e descubra os produtos
-              ideais para cada corrida.
-            </p>
-          </section>
+  <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
+    Organize treinos, participe de encontros e descubra os produtos
+    ideais para cada corrida.
+  </p>
+</section>
+
+<div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm">
+  Mais de <strong>100 corredores</strong> já estão usando o app para treinar juntos 🏃‍♂️
+</div>
 
           <EncontroForm />
 
@@ -113,7 +117,7 @@ export default async function EncontrosPage({
               {data?.map((e) => (
                 <article
                   key={e.id}
-                  className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                  className="card-hover group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-lg"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-2">
@@ -199,13 +203,13 @@ export default async function EncontrosPage({
                     )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <a
-                      href="/loja"
-                      className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                    >
-                      Ver produtos para esse treino
-                    </a>
-                  </div>
+  <a
+    href="/loja"
+    className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+  >
+    🔥 Ver kit ideal para essa corrida
+  </a>
+</div>
                 </article>
               ))}
             </div>
