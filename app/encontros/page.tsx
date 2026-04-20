@@ -4,6 +4,8 @@ import FiltroEncontros from "@/components/FiltroEncontros";
 import ParticiparEncontro from "@/components/ParticiparEncontro";
 import BannerModaRun from "@/components/BannerModaRun";
 import KitCorrida from "@/components/KitCorrida";
+import Header from "@/components/Header";
+import { createClient as createServerClient } from "@/utils/supabase/server";
 
 type SearchParams = Promise<{
   cidade?: string;
@@ -17,16 +19,21 @@ export default async function EncontrosPage({
   const params = await searchParams;
   const cidadeFiltro = params.cidade?.trim() || "";
 
- let query = supabase
-  .from("encontros")
-  .select(`
-    *,
-    encontro_participantes (
-      id,
-      nome
-    )
-  `)
-  .order("data_encontro", { ascending: true });
+  const authSupabase = await createServerClient();
+  const {
+    data: { user },
+  } = await authSupabase.auth.getUser();
+
+  let query = supabase
+    .from("encontros")
+    .select(`
+      *,
+      encontro_participantes (
+        id,
+        nome
+      )
+    `)
+    .order("data_encontro", { ascending: true });
 
   if (cidadeFiltro) {
     query = query.ilike("cidade", `%${cidadeFiltro}%`);
@@ -36,152 +43,176 @@ export default async function EncontrosPage({
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-100 px-4 py-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
-            <h1 className="text-2xl font-bold text-slate-900">
-              Encontros de Corrida
-            </h1>
-            <p className="mt-2 text-red-600">Erro ao carregar: {error.message}</p>
+      <>
+        <Header userEmail={user?.email} />
+
+        <main className="min-h-screen px-4 py-8">
+          <div className="mx-auto max-w-5xl">
+            <div className="rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
+              <h1 className="text-2xl font-bold text-slate-900">
+                Encontros de Corrida
+              </h1>
+              <p className="mt-2 text-red-600">
+                Erro ao carregar: {error.message}
+              </p>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <section className="rounded-[28px] bg-gradient-to-r from-orange-500 to-amber-500 p-8 text-white shadow-lg">
-          <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-            Moda Run
-          </span>
+    <>
+      <Header userEmail={user?.email} />
 
-          <h1 className="mt-4 text-3xl font-bold sm:text-4xl">
-  Corra na moda. Corra melhor.
-</h1>
+      <main className="min-h-screen px-4 py-8">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <section className="rounded-[28px] bg-gradient-to-r from-orange-500 to-amber-500 p-8 text-white shadow-lg">
+            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+              Moda Run
+            </span>
 
-<p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-  Descubra eventos de corrida, encontre grupos e use os melhores produtos para sua performance.
-</p>
-        </section>
+            <h1 className="mt-4 text-3xl font-bold sm:text-5xl">
+              Corra com pessoas. Corra com propósito.
+            </h1>
 
-        <EncontroForm />
+            <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
+              Organize treinos, participe de encontros e descubra os produtos
+              ideais para cada corrida.
+            </p>
+          </section>
 
-        <BannerModaRun />
+          <EncontroForm />
 
-        <FiltroEncontros cidadeInicial={cidadeFiltro} />
+          <BannerModaRun />
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">
-                Lista de encontros
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {cidadeFiltro
-                  ? `Mostrando resultados para: ${cidadeFiltro}`
-                  : "Veja os encontros disponíveis"}
-              </p>
+          <FiltroEncontros cidadeInicial={cidadeFiltro} />
+
+          <section className="space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Lista de encontros
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {cidadeFiltro
+                    ? `Mostrando encontros para: ${cidadeFiltro}`
+                    : "Descubra encontros disponíveis e participe da comunidade"}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {data && data.length === 0 && (
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-              Nenhum encontro encontrado para esse filtro.
-            </div>
-          )}
+            {data && data.length === 0 && (
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+                Nenhum encontro encontrado para esse filtro.
+              </div>
+            )}
 
-          <div className="grid gap-4">
-            {data?.map((e) => (
-              <article
-                key={e.id}
-                className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-bold text-slate-900">
-                        {e.titulo}
-                      </h3>
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                        Encontro
-                      </span>
+            <div className="grid gap-4">
+              {data?.map((e) => (
+                <article
+                  key={e.id}
+                  className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-bold text-slate-900">
+                          {e.titulo}
+                        </h3>
+                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                          Encontro
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-slate-600">
+                        {e.cidade} - {e.estado}
+                      </p>
+
+                      <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        Participantes: {e.encontro_participantes?.length || 0}
+                      </div>
                     </div>
 
-                    <p className="text-sm text-slate-600">
-                      {e.cidade} - {e.estado}
-                    </p>
-                    <div className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-  Participantes: {e.encontro_participantes?.length || 0}
-</div>
+                    <ParticiparEncontro encontroId={e.id} />
                   </div>
 
-                 <ParticiparEncontro encontroId={e.id} />
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <InfoItem label="Data" value={String(e.data_encontro)} />
-                  <InfoItem label="Horário" value={String(e.horario)} />
-                  <InfoItem label="Local de saída" value={e.local_saida} />
-                  <InfoItem label="Distância" value={e.distancia} />
-<InfoItem label="Ritmo" value={e.ritmo || "Não informado"} />
-<KitCorrida distancia={e.distancia} />
-                  <InfoItem
-                    label="Organizador"
-                    value={e.organizador_nome || "Não informado"}
-                  />
-                </div>
-
-                {e.percurso && (
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-700">
-                      Percurso
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">{e.percurso}</p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <InfoItem label="Data" value={String(e.data_encontro)} />
+                    <InfoItem label="Horário" value={String(e.horario)} />
+                    <InfoItem label="Local de saída" value={e.local_saida} />
+                    <InfoItem label="Distância" value={e.distancia} />
+                    <InfoItem
+                      label="Ritmo"
+                      value={e.ritmo || "Não informado"}
+                    />
+                    <KitCorrida distancia={e.distancia} />
+                    <InfoItem
+                      label="Organizador"
+                      value={e.organizador_nome || "Não informado"}
+                    />
                   </div>
-                )}
 
-                {e.observacoes && (
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-700">
-                      Observações
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {e.observacoes}
-                    </p>
+                  {e.percurso && (
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-700">
+                        Percurso
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {e.percurso}
+                      </p>
+                    </div>
+                  )}
+
+                  {e.observacoes && (
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-700">
+                        Observações
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {e.observacoes}
+                      </p>
+                    </div>
+                  )}
+
+                  {e.encontro_participantes &&
+                    e.encontro_participantes.length > 0 && (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-700">
+                          Participantes
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {e.encontro_participantes.map(
+                            (p: { id: number; nome: string }) => (
+                              <span
+                                key={p.id}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                              >
+                                {p.nome}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <a
+                      href="/loja"
+                      className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                    >
+                      Ver produtos para esse treino
+                    </a>
                   </div>
-                )}
-                {e.encontro_participantes && e.encontro_participantes.length > 0 && (
-  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-    <p className="text-sm font-semibold text-slate-700">Participantes</p>
-
-    <div className="mt-2 flex flex-wrap gap-2">
-      {e.encontro_participantes.map((p: { id: number; nome: string }) => (
-        <span
-  key={p.id}
-  className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200"
->
-  {p.nome}
-</span>
-      ))}
-    </div>
-  </div>
-)}
-<div className="mt-4 flex flex-wrap gap-2">
-  <a
-    href="/loja"
-    className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-  >
-    Ver produtos para esse treino
-  </a>
-</div>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
-    </main>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </main>
+    </>
   );
 }
 

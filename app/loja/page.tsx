@@ -20,7 +20,7 @@ export default function LojaPage() {
 
           <div className="mt-5 flex flex-wrap gap-3">
             <a
-              href="https://wa.me/559492009526?text=Olá! Vim pelo app Moda Run e quero ver os produtos disponíveis."
+              href="https://wa.me/5594920009526?text=Olá! Vim pelo app Moda Run e quero ver os produtos disponíveis."
               target="_blank"
               rel="noreferrer"
               className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-orange-600"
