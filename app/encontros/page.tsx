@@ -58,13 +58,12 @@ export default async function EncontrosPage({
           </span>
 
           <h1 className="mt-4 text-3xl font-bold sm:text-4xl">
-            Encontros de Corrida
-          </h1>
+  Corra na moda. Corra melhor.
+</h1>
 
-          <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-            Crie grupos, organize treinos e encontre pessoas para correr com
-            você na sua cidade.
-          </p>
+<p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
+  Descubra eventos de corrida, encontre grupos e use os melhores produtos para sua performance.
+</p>
         </section>
 
         <EncontroForm />
@@ -97,7 +96,7 @@ export default async function EncontrosPage({
             {data?.map((e) => (
               <article
                 key={e.id}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md"
+                className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
@@ -126,8 +125,8 @@ export default async function EncontrosPage({
                   <InfoItem label="Horário" value={String(e.horario)} />
                   <InfoItem label="Local de saída" value={e.local_saida} />
                   <InfoItem label="Distância" value={e.distancia} />
-                  <KitCorrida distancia={e.distancia} />
-                  <InfoItem label="Ritmo" value={e.ritmo || "Não informado"} />
+<InfoItem label="Ritmo" value={e.ritmo || "Não informado"} />
+<KitCorrida distancia={e.distancia} />
                   <InfoItem
                     label="Organizador"
                     value={e.organizador_nome || "Não informado"}
@@ -160,15 +159,23 @@ export default async function EncontrosPage({
     <div className="mt-2 flex flex-wrap gap-2">
       {e.encontro_participantes.map((p: { id: number; nome: string }) => (
         <span
-          key={p.id}
-          className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200"
-        >
-          {p.nome}
-        </span>
+  key={p.id}
+  className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 border border-slate-200"
+>
+  {p.nome}
+</span>
       ))}
     </div>
   </div>
 )}
+<div className="mt-4 flex flex-wrap gap-2">
+  <a
+    href="/loja"
+    className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+  >
+    Ver produtos para esse treino
+  </a>
+</div>
               </article>
             ))}
           </div>
