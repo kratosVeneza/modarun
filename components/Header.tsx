@@ -50,8 +50,28 @@ export default function Header({ userEmail }: { userEmail?: string }) {
           </Link>
         </nav>
 
-        <div className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm sm:block">
-          {userEmail || "Visitante"}
+        <div className="flex items-center gap-3">
+          {userEmail ? (
+            <div className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm sm:block">
+              {userEmail}
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Entrar
+              </Link>
+
+              <Link
+                href="/cadastro"
+                className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+              >
+                Criar conta
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
