@@ -234,6 +234,19 @@ export default function EncontroForm() {
             onChange={handleChange}
             className="min-h-[110px] w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
           />
+
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+  <p>
+    <strong>Ponto de encontro:</strong>{" "}
+    {pontoEncontro
+      ? `${pontoEncontro.lat}, ${pontoEncontro.lng}`
+      : "nenhum"}
+  </p>
+
+  <p className="mt-2">
+    <strong>Pontos da rota:</strong> {rotaCoords.length}
+  </p>
+</div>
         </div>
 
         <MapaTreinoEditor
