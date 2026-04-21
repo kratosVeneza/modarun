@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -8,6 +7,7 @@ import {
   TileLayer,
   useMapEvents,
 } from "react-leaflet";
+import { useMemo } from "react";
 import type { LatLngExpression } from "leaflet";
 
 type LatLng = {
@@ -29,21 +29,20 @@ function CliqueMapa({
   setRotaCoords,
 }: Props) {
   useMapEvents({
-    click(e) {
-  console.log("CLICOU NO MAPA", e.latlng);
+    click(event) {
+      const novoPonto: LatLng = {
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+      };
 
-  const novoPonto: LatLng = {
-    lat: e.latlng.lat,
-    lng: e.latlng.lng,
-  };
+      console.log("CLICOU NO MAPA", novoPonto);
 
-  if (!pontoEncontro) {
-    setPontoEncontro(novoPonto);
-    return;
-  }
-
-  setRotaCoords([...rotaCoords, novoPonto]);
-},
+      if (pontoEncontro === null) {
+        setPontoEncontro(novoPonto);
+      } else {
+        setRotaCoords([...rotaCoords, novoPonto]);
+      }
+    },
   });
 
   return null;
@@ -56,34 +55,21 @@ export default function MapaTreinoEditor({
   setRotaCoords,
 }: Props) {
   const center = useMemo<LatLngExpression>(() => {
-    if (pontoEncontro) {
-      return [pontoEncontro.lat, pontoEncontro.lng];
-    }
-
+    if (pontoEncontro) return [pontoEncontro.lat, pontoEncontro.lng];
     return [-3.7657, -49.6725];
   }, [pontoEncontro]);
 
-  const polylinePositions: LatLngExpression[] = rotaCoords.map((p) => [
-    p.lat,
-    p.lng,
-  ]);
-
-  function desfazerUltimoPonto() {
-    setRotaCoords(rotaCoords.slice(0, -1));
-  }
-
-  function limparTudo() {
-    setPontoEncontro(null);
-    setRotaCoords([]);
-  }
+  const positions: LatLngExpression[] = [
+    ...(pontoEncontro ? [[pontoEncontro.lat, pontoEncontro.lng] as [number, number]] : []),
+    ...rotaCoords.map((p) => [p.lat, p.lng] as [number, number]),
+  ];
 
   return (
     <div className="space-y-3">
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="text-sm font-semibold text-slate-900">Mapa do treino</p>
         <p className="mt-1 text-sm text-slate-500">
-          Clique uma vez para marcar o ponto de encontro. Depois, clique no mapa
-          para adicionar os pontos do percurso.
+          Clique uma vez para marcar o ponto de encontro. Depois, clique novamente para desenhar o percurso.
         </p>
       </div>
 
@@ -113,7 +99,7 @@ export default function MapaTreinoEditor({
               pathOptions={{
                 color: "#f97316",
                 fillColor: "#f97316",
-                fillOpacity: 0.9,
+                fillOpacity: 1,
               }}
             />
           )}
@@ -126,14 +112,14 @@ export default function MapaTreinoEditor({
               pathOptions={{
                 color: "#0f172a",
                 fillColor: "#0f172a",
-                fillOpacity: 0.85,
+                fillOpacity: 1,
               }}
             />
           ))}
 
-          {pontoEncontro && rotaCoords.length > 0 && (
+          {positions.length >= 2 && (
             <Polyline
-              positions={[[pontoEncontro.lat, pontoEncontro.lng], ...polylinePositions]}
+              positions={positions}
               pathOptions={{ color: "#f97316", weight: 4 }}
             />
           )}
@@ -143,7 +129,7 @@ export default function MapaTreinoEditor({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={desfazerUltimoPonto}
+          onClick={() => setRotaCoords(rotaCoords.slice(0, -1))}
           className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Desfazer último ponto
@@ -151,7 +137,10 @@ export default function MapaTreinoEditor({
 
         <button
           type="button"
-          onClick={limparTudo}
+          onClick={() => {
+            setPontoEncontro(null);
+            setRotaCoords([]);
+          }}
           className="rounded-2xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
         >
           Limpar rota
