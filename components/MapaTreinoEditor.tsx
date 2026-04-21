@@ -30,18 +30,20 @@ function CliqueMapa({
 }: Props) {
   useMapEvents({
     click(e) {
-      const novoPonto: LatLng = {
-        lat: e.latlng.lat,
-        lng: e.latlng.lng,
-      };
+  console.log("CLICOU NO MAPA", e.latlng);
 
-      if (!pontoEncontro) {
-        setPontoEncontro(novoPonto);
-        return;
-      }
+  const novoPonto: LatLng = {
+    lat: e.latlng.lat,
+    lng: e.latlng.lng,
+  };
 
-      setRotaCoords([...rotaCoords, novoPonto]);
-    },
+  if (!pontoEncontro) {
+    setPontoEncontro(novoPonto);
+    return;
+  }
+
+  setRotaCoords([...rotaCoords, novoPonto]);
+},
   });
 
   return null;
