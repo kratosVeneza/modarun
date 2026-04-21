@@ -74,20 +74,19 @@ export default async function EncontrosPage({
   </span>
 
   <h1 className="mt-4 text-3xl font-bold sm:text-5xl">
-    Corra com pessoas. Corra com propósito.
+    Treinos em Grupo
   </h1>
 
   <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-    Organize treinos, participe de encontros e descubra os produtos
-    ideais para cada corrida.
+    Organize corridas, marque pontos de encontro e treine com outras pessoas na sua cidade.
   </p>
 </section>
 
 <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm">
-  Mais de <strong>100 corredores</strong> já estão usando o app para treinar juntos 🏃‍♂️
+  Crie um treino e defina o ponto de encontro para correr com outras pessoas 🏃‍♂️
 </div>
 
-          <EncontroForm />
+<EncontroForm />
 
           <BannerModaRun />
 
@@ -97,19 +96,19 @@ export default async function EncontrosPage({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">
-                  Lista de encontros
+                  Lista de treinos
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {cidadeFiltro
-                    ? `Mostrando encontros para: ${cidadeFiltro}`
-                    : "Descubra encontros disponíveis e participe da comunidade"}
-                </p>
+  {cidadeFiltro
+    ? `Mostrando treinos para: ${cidadeFiltro}`
+    : "Veja treinos disponíveis e escolha um ponto de encontro para correr"}
+</p>
               </div>
             </div>
 
             {data && data.length === 0 && (
               <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-                Nenhum encontro encontrado para esse filtro.
+                Nenhum treino encontrado para esse filtro.
               </div>
             )}
 
@@ -126,8 +125,8 @@ export default async function EncontrosPage({
                           {e.titulo}
                         </h3>
                         <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                          Encontro
-                        </span>
+  Treino
+</span>
                       </div>
 
                       <p className="text-sm text-slate-600">
@@ -202,10 +201,17 @@ export default async function EncontrosPage({
                       </div>
                     )}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                 <div className="mt-4 flex flex-wrap gap-2">
+  <a
+    href={`/treinos/${e.id}`}
+    className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+  >
+    Abrir treino
+  </a>
+
   <a
     href="/loja"
-    className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+    className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
   >
     🔥 Ver kit ideal para essa corrida
   </a>

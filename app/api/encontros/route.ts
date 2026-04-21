@@ -22,7 +22,15 @@ export async function POST(request: Request) {
       ritmo,
       observacoes,
       organizador_nome,
+      tipo_treino,
+      km_planejado,
+      ponto_encontro_lat,
+      ponto_encontro_lng,
+      rota_coords,
     } = body;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
 
     if (
       !titulo ||
@@ -54,6 +62,12 @@ export async function POST(request: Request) {
           ritmo,
           observacoes,
           organizador_nome,
+          tipo_treino,
+          km_planejado: km_planejado ? Number(km_planejado) : null,
+          ponto_encontro_lat,
+          ponto_encontro_lng,
+          rota_coords,
+          user_id: user?.id,
         },
       ])
       .select();
@@ -65,7 +79,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data });
   } catch {
     return NextResponse.json(
-      { error: "Erro interno ao criar encontro." },
+      { error: "Erro interno ao criar treino." },
       { status: 500 }
     );
   }

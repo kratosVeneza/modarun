@@ -30,7 +30,7 @@ export default function Header({ userEmail }: { userEmail?: string }) {
 
             <div>
               <p className="text-base font-bold text-slate-900">Moda Run</p>
-              <p className="text-xs text-slate-500">Corrida, encontros e estilo</p>
+              <p className="text-xs text-slate-500">Corrida, treinos e estilo</p>
             </div>
           </Link>
         </div>
@@ -66,7 +66,7 @@ export default function Header({ userEmail }: { userEmail?: string }) {
                 : "text-slate-600 hover:text-orange-600"
             }`}
           >
-            🏃 Encontros
+            🏃 Treinos
           </Link>
 
           <Link
@@ -88,7 +88,7 @@ export default function Header({ userEmail }: { userEmail?: string }) {
                 : "text-slate-600 hover:text-orange-600"
             }`}
           >
-            Meus encontros
+            Meus treinos
           </Link>
         </nav>
 
