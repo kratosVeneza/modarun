@@ -18,9 +18,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const buffer = new Uint8Array(await file.arrayBuffer());
 
-  const { error: uploadError } = await supabase.storage.from("produtos").upload(`produtos/${fileName}`, buffer, { contentType: file.type, upsert: false });
+  // Upload direto na raiz do bucket "produtos"
+  const { error: uploadError } = await supabase.storage
+    .from("produtos")
+    .upload(fileName, buffer, { contentType: file.type, upsert: false });
+
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
 
-  const { data: { publicUrl } } = supabase.storage.from("produtos").getPublicUrl(`produtos/${fileName}`);
+  const { data: { publicUrl } } = supabase.storage.from("produtos").getPublicUrl(fileName);
   return NextResponse.json({ success: true, url: publicUrl });
 }
