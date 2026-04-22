@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ParticiparEncontro({ encontroId }: { encontroId: number }) {
+export default function ParticiparEncontro({ encontroId }: { encontroId: number }): React.JSX.Element {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
@@ -19,49 +19,50 @@ export default function ParticiparEncontro({ encontroId }: { encontroId: number 
       const res = await fetch("/api/participar-encontro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ encontro_id: encontroId, nome: nome.trim(), whatsapp }) });
       const result = await res.json();
       if (!res.ok) { setMensagem(result.error || "Erro ao participar."); setLoading(false); return; }
-      setSucesso(true);
-      setMensagem("Participação confirmada! 🎉");
+      setSucesso(true); setMensagem("Participação confirmada! 🎉");
       setTimeout(() => router.refresh(), 300);
       if (result.whatsappLink) setTimeout(() => window.open(result.whatsappLink, "_blank"), 800);
       setTimeout(() => { setAberto(false); setMensagem(""); setSucesso(false); setNome(""); setWhatsapp(""); }, 2200);
-    } catch { setMensagem("Erro de conexão. Tente novamente."); }
+    } catch { setMensagem("Erro de conexão."); }
     finally { setLoading(false); }
   }
 
-  function fechar() { setAberto(false); setMensagem(""); setSucesso(false); setNome(""); setWhatsapp(""); }
+  const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", width: "100%" } as React.CSSProperties;
+  const lbl = { display: "block", fontSize: "11px", fontWeight: 700, color: "#8B949E", marginBottom: "6px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" } as React.CSSProperties;
 
   return (
     <>
-      <button onClick={() => setAberto(true)} className="shrink-0 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 active:scale-95">Participar</button>
+      <button onClick={() => setAberto(true)}
+        className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black transition-all hover:brightness-110 hover:scale-105"
+        style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+        ⚡ PARTICIPAR
+      </button>
+
       {aberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && fechar()}>
-          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }} onClick={e => e.target === e.currentTarget && setAberto(false)}>
+          <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
+            <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl" style={{ background: "linear-gradient(90deg, #5CC800, #FF6B00)" }} />
+            <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid rgba(92,200,0,0.1)" }}>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Confirmar participação</h3>
-                <p className="mt-0.5 text-xs text-slate-500">Após confirmar, o organizador será notificado pelo WhatsApp.</p>
+                <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>CONFIRMAR PRESENÇA</h3>
+                <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>O organizador será notificado pelo WhatsApp.</p>
               </div>
-              <button onClick={fechar} className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100">✕</button>
+              <button onClick={() => setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>✕</button>
             </div>
             <form onSubmit={enviar} className="space-y-4 p-6">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nome *</label>
-                <input type="text" placeholder="Como você quer ser chamado" value={nome} onChange={(e) => setNome(e.target.value)} autoFocus className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp <span className="normal-case font-normal text-slate-400">(opcional)</span></label>
-                <input type="tel" placeholder="(00) 00000-0000" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100" />
-              </div>
+              <div><label style={lbl}>NOME *</label><input type="text" placeholder="Como você quer ser chamado" value={nome} onChange={e => setNome(e.target.value)} autoFocus style={inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
+              <div><label style={lbl}>WHATSAPP <span style={{ fontWeight: 400, textTransform: "none" }}>(opcional)</span></label><input type="tel" placeholder="(00) 00000-0000" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} style={inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
               {mensagem && (
-                <div className={`rounded-2xl px-4 py-3 text-sm font-medium ${sucesso ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: sucesso ? "rgba(92,200,0,0.1)" : "rgba(255,107,0,0.1)", color: sucesso ? "#5CC800" : "#FF6B00", border: `1px solid ${sucesso ? "rgba(92,200,0,0.3)" : "rgba(255,107,0,0.3)"}` }}>
                   {mensagem}
-                  {sucesso && <p className="mt-1 text-xs opacity-70">Abrindo WhatsApp para notificar o organizador...</p>}
+                  {sucesso && <p className="mt-1 text-xs opacity-70">Abrindo WhatsApp para notificar...</p>}
                 </div>
               )}
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={fechar} className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-                <button type="submit" disabled={loading || sucesso} className="flex-1 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60">
-                  {loading ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/>Enviando...</span> : sucesso ? "✓ Confirmado!" : "Confirmar"}
+                <button type="button" onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
+                <button type="submit" disabled={loading || sucesso} className="flex-1 rounded-xl py-3 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {loading ? "ENVIANDO..." : sucesso ? "✓ CONFIRMADO!" : "CONFIRMAR"}
                 </button>
               </div>
             </form>
