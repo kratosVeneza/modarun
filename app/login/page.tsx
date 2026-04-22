@@ -1,8 +1,9 @@
-import React from "react";
+"use client";
+
 import AuthForm from "@/components/AuthForm";
 import Link from "next/link";
 
-export default function LoginPage(): React.JSX.Element {
+export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: "linear-gradient(135deg, #0D1117 0%, #161B22 100%)" }}>
       {/* Grid pattern */}

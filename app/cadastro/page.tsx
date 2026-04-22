@@ -1,7 +1,6 @@
-import React from "react";
 import AuthForm from "@/components/AuthForm";
 
-export default function CadastroPage(): React.JSX.Element {
+export default function CadastroPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: "linear-gradient(135deg, #0D1117 0%, #161B22 100%)" }}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-5">

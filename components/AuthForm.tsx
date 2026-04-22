@@ -1,166 +1,94 @@
 "use client";
 
+import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
-export default function Header({ userEmail, isAdmin = false }: { userEmail?: string; isAdmin?: boolean }) {
-  const pathname = usePathname();
+type AuthFormProps = { mode: "login" | "signup" };
+
+export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
+  const supabase = createClient();
   const router = useRouter();
-  const [menuAberto, setMenuAberto] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mensagem, setMensagem] = useState("");
+  const [sucesso, setSucesso] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  function isActive(path: string) { return pathname === path || pathname.startsWith(path + "/"); }
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true); setMensagem(""); setSucesso(false);
+    if (!email || !password) { setMensagem("Preencha email e senha."); setLoading(false); return; }
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    if (mode === "signup") {
+      if (password.length < 6) { setMensagem("A senha deve ter pelo menos 6 caracteres."); setLoading(false); return; }
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) { setMensagem(traduzirErro(error.message)); setLoading(false); return; }
+      setSucesso(true); setMensagem("Conta criada! Verifique seu email.");
+      setLoading(false); setTimeout(() => router.push("/login"), 2500); return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setMensagem(traduzirErro(error.message)); setLoading(false); return; }
+    setSucesso(true); setMensagem("Login realizado!");
+    setLoading(false); setTimeout(() => { router.push("/"); router.refresh(); }, 600);
   }
 
-  const navLinks = [
-    { href: "/", label: "Início", icon: "🏠" },
-    { href: "/eventos", label: "Eventos", icon: "🏁" },
-    { href: "/encontros", label: "Treinos", icon: "⚡" },
-    { href: "/loja", label: "Loja", icon: "🛒" },
-    { href: "/meus-treinos", label: "Meus Treinos", icon: "📋" },
-    { href: "/perfil", label: "Perfil", icon: "👤" },
-  ];
-  const adminLinks = [{ href: "/admin", label: "Admin", icon: "⚙️" }];
+  const inputStyle = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", width: "100%", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", transition: "border-color 0.2s" };
+  const labelStyle = { display: "block", fontSize: "11px", fontWeight: 700, color: "#8B949E", marginBottom: "6px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" };
 
   return (
-    <header className="sticky top-0 z-50" style={{ background: "rgba(13,17,23,0.95)", backdropFilter: "blur(20px)", borderBottom: "1px solid rgba(92,200,0,0.15)" }}>
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #5CC800, #FF6B00)" }}>
-            <span className="text-white font-black text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>MR</span>
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-black leading-none tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#5CC800" }}>
-              MODA <span style={{ color: "#FF6B00" }}>RUN</span>
-            </p>
-            <p className="text-xs leading-none mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>RUNNING & PERFORMANCE</p>
-          </div>
-        </Link>
-
-        {/* Nav desktop */}
-        <nav className="hidden items-center gap-1 lg:flex">
-          {navLinks.map((link) => (
-            <Link key={link.href} href={link.href}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200"
-              style={{
-                color: isActive(link.href) ? "#5CC800" : "#8B949E",
-                background: isActive(link.href) ? "rgba(92,200,0,0.1)" : "transparent",
-                borderBottom: isActive(link.href) ? "2px solid #5CC800" : "2px solid transparent",
-              }}>
-              <span>{link.icon}</span>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", fontSize: "13px" }}>{link.label.toUpperCase()}</span>
-            </Link>
-          ))}
-          {isAdmin && adminLinks.map((link) => (
-            <Link key={link.href} href={link.href}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200"
-              style={{ color: isActive(link.href) ? "#FF6B00" : "#8B949E", background: isActive(link.href) ? "rgba(255,107,0,0.1)" : "transparent" }}>
-              <span>{link.icon}</span>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", fontSize: "13px" }}>ADMIN</span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* Ações */}
-        <div className="flex items-center gap-2">
-          {userEmail ? (
-            <div className="hidden items-center gap-2 sm:flex">
-              <span className="rounded-lg px-3 py-1.5 text-xs truncate max-w-[140px]"
-                style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)" }}>
-                {userEmail}
-              </span>
-              <button onClick={handleLogout}
-                className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all hover:scale-105"
-                style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>
-                SAIR
-              </button>
-            </div>
-          ) : (
-            <div className="hidden gap-2 sm:flex">
-              <Link href="/login"
-                className="rounded-lg px-4 py-2 text-xs font-bold transition-all hover:scale-105"
-                style={{ border: "1px solid rgba(92,200,0,0.4)", color: "#5CC800" }}>
-                ENTRAR
-              </Link>
-              <Link href="/cadastro"
-                className="rounded-lg px-4 py-2 text-xs font-bold transition-all hover:scale-105 hover:brightness-110"
-                style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
-                CRIAR CONTA
-              </Link>
-            </div>
-          )}
-
-          {/* Mobile menu button */}
-          <button onClick={() => setMenuAberto(!menuAberto)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg lg:hidden transition-all"
-            style={{ background: menuAberto ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", border: "1px solid rgba(92,200,0,0.2)", color: "#5CC800" }}>
-            {menuAberto ? "✕" : "☰"}
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div>
+        <label style={labelStyle}>EMAIL</label>
+        <input type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required
+          style={inputStyle} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+      </div>
+      <div>
+        <label style={labelStyle}>SENHA</label>
+        <div style={{ position: "relative" }}>
+          <input type={mostrarSenha ? "text" : "password"} placeholder={mode === "signup" ? "Mínimo 6 caracteres" : "Sua senha"} value={password} onChange={e => setPassword(e.target.value)} required
+            style={{ ...inputStyle, paddingRight: "60px" }} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+          <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)}
+            style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "11px", fontWeight: 700, color: "#8B949E", background: "none", border: "none", cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+            {mostrarSenha ? "OCULTAR" : "VER"}
           </button>
         </div>
       </div>
 
-      {/* Mobile menu */}
-      {menuAberto && (
-        <div className="lg:hidden px-4 pb-4" style={{ background: "rgba(13,17,23,0.98)", borderTop: "1px solid rgba(92,200,0,0.1)" }}>
-          <nav className="flex flex-col gap-1 pt-3">
-            {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} onClick={() => setMenuAberto(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all"
-                style={{
-                  color: isActive(link.href) ? "#5CC800" : "#8B949E",
-                  background: isActive(link.href) ? "rgba(92,200,0,0.1)" : "transparent",
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  letterSpacing: "0.05em",
-                }}>
-                <span className="text-lg">{link.icon}</span>
-                {link.label.toUpperCase()}
-              </Link>
-            ))}
-            {isAdmin && (
-              <Link href="/admin" onClick={() => setMenuAberto(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold"
-                style={{ color: "#FF6B00", background: "rgba(255,107,0,0.1)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                ⚙️ ADMIN
-              </Link>
-            )}
-          </nav>
-          <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            {userEmail ? (
-              <div className="space-y-2">
-                <p className="px-1 text-xs truncate" style={{ color: "#5CC800" }}>{userEmail}</p>
-                <button onClick={handleLogout}
-                  className="w-full rounded-xl py-3 text-sm font-bold transition"
-                  style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  SAIR DA CONTA
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <Link href="/login" onClick={() => setMenuAberto(false)}
-                  className="rounded-xl py-3 text-center text-sm font-bold"
-                  style={{ border: "1px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  ENTRAR
-                </Link>
-                <Link href="/cadastro" onClick={() => setMenuAberto(false)}
-                  className="rounded-xl py-3 text-center text-sm font-bold"
-                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  CRIAR CONTA
-                </Link>
-              </div>
-            )}
-          </div>
+      <button type="submit" disabled={loading}
+        style={{ background: loading ? "#4aaa00" : "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "14px", fontWeight: 900, cursor: loading ? "not-allowed" : "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", transition: "all 0.2s", opacity: loading ? 0.8 : 1 }}>
+        {loading ? (
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+            <span style={{ display: "inline-block", width: "16px", height: "16px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            {mode === "signup" ? "CRIANDO..." : "ENTRANDO..."}
+          </span>
+        ) : mode === "signup" ? "🚀 CRIAR CONTA" : "⚡ ENTRAR"}
+      </button>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {mensagem && (
+        <div style={{ background: sucesso ? "rgba(92,200,0,0.1)" : "rgba(255,107,0,0.1)", border: `1px solid ${sucesso ? "rgba(92,200,0,0.3)" : "rgba(255,107,0,0.3)"}`, color: sucesso ? "#5CC800" : "#FF6B00", borderRadius: "12px", padding: "12px 16px", fontSize: "13px", fontWeight: 600 }}>
+          {mensagem}
         </div>
       )}
-    </header>
+
+      <p style={{ textAlign: "center", fontSize: "13px", color: "#8B949E" }}>
+        {mode === "login" ? (
+          <>Não tem conta?{" "}<Link href="/cadastro" style={{ color: "#5CC800", fontWeight: 700 }}>Criar conta grátis</Link></>
+        ) : (
+          <>Já tem conta?{" "}<Link href="/login" style={{ color: "#5CC800", fontWeight: 700 }}>Entrar</Link></>
+        )}
+      </p>
+    </form>
   );
+}
+
+function traduzirErro(msg: string): string {
+  if (msg.includes("Invalid login credentials")) return "Email ou senha incorretos.";
+  if (msg.includes("Email not confirmed")) return "Confirme seu email antes de entrar.";
+  if (msg.includes("User already registered")) return "Este email já está cadastrado.";
+  return msg;
 }
