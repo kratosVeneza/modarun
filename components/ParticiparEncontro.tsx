@@ -3,35 +3,31 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ParticiparEncontro({
-  encontroId,
-}: {
-  encontroId: number;
-}) {
+export default function ParticiparEncontro({ encontroId }: { encontroId: number }) {
   const router = useRouter();
-
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [sucesso, setSucesso] = useState(false);
 
   async function enviarParticipacao(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMensagem("");
 
+    if (!nome.trim()) {
+      setMensagem("Informe seu nome.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/participar-encontro", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          encontro_id: encontroId,
-          nome,
-          whatsapp,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ encontro_id: encontroId, nome: nome.trim(), whatsapp }),
       });
 
       const result = await response.json();
@@ -42,89 +38,123 @@ export default function ParticiparEncontro({
         return;
       }
 
-      setMensagem("Participação confirmada!");
+      setSucesso(true);
+      setMensagem("Participação confirmada! 🎉");
       setNome("");
       setWhatsapp("");
-      router.refresh();
-
+      setTimeout(() => router.refresh(), 300);
       setTimeout(() => {
         setAberto(false);
         setMensagem("");
-      }, 1200);
+        setSucesso(false);
+      }, 2000);
     } catch {
-      setMensagem("Erro ao enviar participação.");
+      setMensagem("Erro de conexão. Tente novamente.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function fechar() {
+    setAberto(false);
+    setMensagem("");
+    setSucesso(false);
+    setNome("");
+    setWhatsapp("");
   }
 
   return (
     <>
       <button
         onClick={() => setAberto(true)}
-        className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600"
+        className="shrink-0 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 active:scale-95"
       >
         Participar
       </button>
 
       {aberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-            <div className="mb-4">
-              <h3 className="text-xl font-bold text-slate-900">
-                Participar do encontro
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Preencha seus dados para confirmar sua participação.
-              </p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && fechar()}
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+            {/* Header modal */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Confirmar participação</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Seus dados ficam visíveis para os outros participantes.
+                </p>
+              </div>
+              <button
+                onClick={fechar}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                ✕
+              </button>
             </div>
 
-            <form onSubmit={enviarParticipacao} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Seu nome"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-              />
+            <form onSubmit={enviarParticipacao} className="space-y-4 p-6">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Nome *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Como você quer ser chamado"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  autoFocus
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
 
-              <input
-                type="text"
-                placeholder="WhatsApp"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-              />
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAberto(false)}
-                  className="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-70"
-                >
-                  {loading ? "Enviando..." : "Confirmar"}
-                </button>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  WhatsApp <span className="normal-case font-normal text-slate-400">(opcional)</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(00) 00000-0000"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100"
+                />
               </div>
 
               {mensagem && (
-                <p
-                  className={`text-sm ${
-                    mensagem.toLowerCase().includes("confirmada")
-                      ? "text-emerald-600"
-                      : "text-red-600"
+                <div
+                  className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+                    sucesso
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
                   }`}
                 >
                   {mensagem}
-                </p>
+                </div>
               )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={fechar}
+                  className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || sucesso}
+                  className="flex-1 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-60"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      Enviando...
+                    </span>
+                  ) : sucesso ? "✓ Confirmado!" : "Confirmar"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

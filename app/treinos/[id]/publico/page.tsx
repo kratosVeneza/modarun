@@ -128,7 +128,7 @@ export default function TreinoPage() {
   }
 
   const participantes = treino.encontro_participantes || [];
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.vercel.app"}/treinos/${id}`;
+  const url = `${process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.vercel.app"}/treinos/${id}/publico`;
 
   return (
     <>

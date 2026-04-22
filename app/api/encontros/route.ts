@@ -32,17 +32,10 @@ export async function POST(request: Request) {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData.user;
 
-    if (
-      !titulo ||
-      !cidade ||
-      !estado ||
-      !data_encontro ||
-      !horario ||
-      !local_saida ||
-      !distancia
-    ) {
+    // Apenas campos realmente essenciais são obrigatórios
+    if (!titulo || !cidade || !estado || !data_encontro || !horario || !local_saida) {
       return NextResponse.json(
-        { error: "Preencha os campos obrigatórios." },
+        { error: "Preencha os campos obrigatórios: título, cidade, estado, data, horário e ponto de encontro." },
         { status: 400 }
       );
     }
@@ -57,12 +50,12 @@ export async function POST(request: Request) {
           data_encontro,
           horario,
           local_saida,
-          percurso,
-          distancia,
-          ritmo,
-          observacoes,
-          organizador_nome,
-          tipo_treino,
+          percurso: percurso || null,
+          distancia: distancia || null,
+          ritmo: ritmo || null,
+          observacoes: observacoes || null,
+          organizador_nome: organizador_nome || null,
+          tipo_treino: tipo_treino || null,
           km_planejado: km_planejado ? Number(km_planejado) : null,
           ponto_encontro_lat,
           ponto_encontro_lng,

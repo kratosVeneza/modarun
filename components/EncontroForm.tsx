@@ -38,7 +38,6 @@ export default function EncontroForm() {
     horario: "",
     local_saida: "",
     percurso: "",
-    distancia: "",
     ritmo: "",
     observacoes: "",
     organizador_nome: "",
@@ -48,6 +47,7 @@ export default function EncontroForm() {
 
   const [pontoEncontro, setPontoEncontro] = useState<LatLng | null>(null);
   const [rotaCoords, setRotaCoords] = useState<LatLng[]>([]);
+  const [distanciaReal, setDistanciaReal] = useState<number>(0);
 
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -71,6 +71,7 @@ export default function EncontroForm() {
         },
         body: JSON.stringify({
           ...form,
+          distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : null,
           ponto_encontro_lat: pontoEncontro?.lat ?? null,
           ponto_encontro_lng: pontoEncontro?.lng ?? null,
           rota_coords: rotaCoords,
@@ -95,7 +96,6 @@ export default function EncontroForm() {
         horario: "",
         local_saida: "",
         percurso: "",
-        distancia: "",
         ritmo: "",
         observacoes: "",
         organizador_nome: "",
@@ -105,7 +105,10 @@ export default function EncontroForm() {
 
       setPontoEncontro(null);
       setRotaCoords([]);
-      router.refresh();
+      setDistanciaReal(0);
+      // Aguarda o React concluir os setState antes de disparar o router
+      // Evita o warning "Router action dispatched before initialization"
+      setTimeout(() => router.refresh(), 100);
     } catch {
       setMensagem("Erro ao enviar os dados.");
     } finally {
@@ -126,7 +129,7 @@ export default function EncontroForm() {
         <div className="grid gap-4 md:grid-cols-2">
           <CampoInput
             name="titulo"
-            placeholder="Título do treino"
+            placeholder="Título do treino *"
             value={form.titulo}
             onChange={handleChange}
           />
@@ -141,19 +144,19 @@ export default function EncontroForm() {
         <div className="grid gap-4 md:grid-cols-2">
           <CampoInput
             name="cidade"
-            placeholder="Cidade"
+            placeholder="Cidade *"
             value={form.cidade}
             onChange={handleChange}
           />
           <CampoInput
             name="estado"
-            placeholder="Estado"
+            placeholder="Estado *"
             value={form.estado}
             onChange={handleChange}
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Tipo de treino
@@ -180,13 +183,6 @@ export default function EncontroForm() {
             value={form.km_planejado}
             onChange={handleChange}
           />
-
-          <CampoInput
-            name="distancia"
-            placeholder="Distância (ex: 5 km)"
-            value={form.distancia}
-            onChange={handleChange}
-          />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -206,7 +202,7 @@ export default function EncontroForm() {
 
         <CampoInput
           name="local_saida"
-          placeholder="Nome do ponto de encontro"
+          placeholder="Nome do ponto de encontro *"
           value={form.local_saida}
           onChange={handleChange}
         />
@@ -214,39 +210,41 @@ export default function EncontroForm() {
         <div className="grid gap-4 md:grid-cols-2">
           <CampoInput
             name="ritmo"
-            placeholder="Ritmo (ex: leve, moderado, forte)"
+            placeholder="Ritmo (ex: leve, moderado, forte) — opcional"
             value={form.ritmo}
             onChange={handleChange}
           />
           <CampoInput
             name="percurso"
-            placeholder="Descrição do percurso"
+            placeholder="Descrição do percurso — opcional"
             value={form.percurso}
             onChange={handleChange}
           />
         </div>
 
-        <div>
-          <textarea
-            name="observacoes"
-            placeholder="Observações"
-            value={form.observacoes}
-            onChange={handleChange}
-            className="min-h-[110px] w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-          />
+        <textarea
+          name="observacoes"
+          placeholder="Observações — opcional"
+          value={form.observacoes}
+          onChange={handleChange}
+          className="min-h-[110px] w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+        />
 
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-  <p>
-    <strong>Ponto de encontro:</strong>{" "}
-    {pontoEncontro
-      ? `${pontoEncontro.lat}, ${pontoEncontro.lng}`
-      : "nenhum"}
-  </p>
-
-  <p className="mt-2">
-    <strong>Pontos da rota:</strong> {rotaCoords.length}
-  </p>
-</div>
+        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 space-y-1">
+          <p>
+            <strong>Ponto de encontro:</strong>{" "}
+            {pontoEncontro
+              ? `${pontoEncontro.lat.toFixed(5)}, ${pontoEncontro.lng.toFixed(5)}`
+              : "nenhum"}
+          </p>
+          <p>
+            <strong>Pontos da rota:</strong> {rotaCoords.length}
+          </p>
+          {distanciaReal > 0 && (
+            <p className="text-orange-600 font-semibold">
+              📍 Distância do percurso marcado: {distanciaReal.toFixed(2)} km
+            </p>
+          )}
         </div>
 
         <MapaTreinoEditor
@@ -254,6 +252,7 @@ export default function EncontroForm() {
           setPontoEncontro={setPontoEncontro}
           rotaCoords={rotaCoords}
           setRotaCoords={setRotaCoords}
+          onDistanciaChange={setDistanciaReal}
         />
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
