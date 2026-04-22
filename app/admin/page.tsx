@@ -110,7 +110,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {/* Tabs */}
           <div className="flex gap-3">
-            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"]] as const).map(([id,icon,label,desc]) => (
+            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
                 style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: `1px solid ${aba===id ? "rgba(92,200,0,0.4)" : "rgba(92,200,0,0.1)"}` }}>
