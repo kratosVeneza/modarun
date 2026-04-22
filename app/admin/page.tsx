@@ -6,7 +6,8 @@ import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 
 type Evento = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; local?: string; link_inscricao?: string; destaque?: boolean };
-type Produto = { id: string; nome: string; descricao?: string; preco: number; preco_promocional?: number; categoria: string; fotos: string[]; cores: string[]; tamanhos: string[]; estoque_disponivel: boolean; destaque: boolean; whatsapp_msg?: string; ordem: number };
+type VariacaoCor = { cor: string; fotos: string[] };
+type Produto = { id: string; nome: string; descricao?: string; preco: number; preco_promocional?: number; categoria: string; fotos: string[]; variacoes_cor: VariacaoCor[]; cores: string[]; tamanhos: string[]; estoque_disponivel: boolean; destaque: boolean; whatsapp_msg?: string; ordem: number };
 
 const estadosBR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 const categorias = ["Camiseta","Conjunto","Shorts","Calçado","Meia","Boné","Acessório","Nutrição","Hidratação","Outro"];
@@ -16,7 +17,7 @@ const coresPadrao = ["Preto","Branco","Cinza","Azul","Vermelho","Verde","Amarelo
 const inp = "w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100";
 const lbl = "block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1";
 const eventoVazio = { nome:"",cidade:"",estado:"",data_evento:"",distancia:"",local:"",link_inscricao:"",destaque:false };
-const produtoVazio = { nome:"",descricao:"",preco:0,preco_promocional:undefined as number|undefined,categoria:"Camiseta",fotos:[] as string[],cores:[] as string[],tamanhos:[] as string[],estoque_disponivel:true,destaque:false,whatsapp_msg:"",ordem:0 };
+const produtoVazio = { nome:"",descricao:"",preco:0,preco_promocional:undefined as number|undefined,categoria:"Camiseta",fotos:[] as string[],variacoes_cor:[] as VariacaoCor[],cores:[] as string[],tamanhos:[] as string[],estoque_disponivel:true,destaque:false,whatsapp_msg:"",ordem:0 };
 
 function fmt(v: number) { return v?.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
 function fmtData(d: string) { if(!d) return "—"; const [a,m,dia]=String(d).split("-"); return `${dia}/${m}/${a}`; }
@@ -50,6 +51,21 @@ export default function AdminPage(): React.JSX.Element {
   const [corCustom, setCorCustom] = useState("");
   const [tamanhoCustom, setTamanhoCustom] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Componente inline para upload por cor
+  function UploadCorBtn({ cor, uploadando, onUpload }: { cor: string; uploadando: boolean; onUpload: (f: File) => void }): React.JSX.Element {
+    const ref = useRef<HTMLInputElement>(null);
+    return (
+      <>
+        <button type="button" onClick={() => ref.current?.click()} disabled={uploadando}
+          className="flex h-16 w-16 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition text-xs disabled:opacity-50">
+          <span className="text-lg">+</span>
+        </button>
+        <input ref={ref} type="file" accept="image/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if(f) onUpload(f); e.target.value=""; }} />
+      </>
+    );
+  }
 
   useEffect(() => {
     async function init() {
@@ -96,7 +112,7 @@ export default function AdminPage(): React.JSX.Element {
 
   // ── Produto handlers ──
   function abrirNovoProduto() { setProdutoEditando(null); setProdutoForm(produtoVazio); setProdutoErro(""); setProdutoFormAberto(true); }
-  function abrirEditarProduto(p: Produto) { setProdutoEditando(p); setProdutoForm({nome:p.nome,descricao:p.descricao||"",preco:p.preco,preco_promocional:p.preco_promocional,categoria:p.categoria,fotos:[...p.fotos],cores:[...p.cores],tamanhos:[...p.tamanhos],estoque_disponivel:p.estoque_disponivel,destaque:p.destaque,whatsapp_msg:p.whatsapp_msg||"",ordem:p.ordem}); setProdutoErro(""); setProdutoFormAberto(true); }
+  function abrirEditarProduto(p: Produto) { setProdutoEditando(p); setProdutoForm({nome:p.nome,descricao:p.descricao||"",preco:p.preco,preco_promocional:p.preco_promocional,categoria:p.categoria,fotos:[...p.fotos],variacoes_cor:[...(p.variacoes_cor||[])],cores:[...p.cores],tamanhos:[...p.tamanhos],estoque_disponivel:p.estoque_disponivel,destaque:p.destaque,whatsapp_msg:p.whatsapp_msg||"",ordem:p.ordem}); setProdutoErro(""); setProdutoFormAberto(true); }
   async function uploadFoto(file: File) {
     setUploadando(true);
     const fd = new FormData(); fd.append("file",file);
@@ -249,23 +265,68 @@ export default function AdminPage(): React.JSX.Element {
                       <button onClick={()=>setProdutoFormAberto(false)} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100">✕</button>
                     </div>
                     <div className="space-y-5 p-6">
-                      {/* Fotos */}
-                      <div>
-                        <label className={lbl}>📸 Fotos</label>
-                        <div className="mt-2 flex flex-wrap gap-3">
-                          {produtoForm.fotos.map((url,i)=>(
-                            <div key={i} className="group relative">
-                              <img src={url} alt="" className="h-24 w-24 rounded-2xl object-cover border border-slate-200"/>
-                              <button onClick={()=>setProdutoForm(f=>({...f,fotos:f.fotos.filter(u=>u!==url)}))} className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
-                              {i===0&&<span className="absolute bottom-1 left-1 rounded-lg bg-black/60 px-1.5 py-0.5 text-xs text-white">Principal</span>}
-                            </div>
-                          ))}
-                          <button onClick={()=>fileRef.current?.click()} disabled={uploadando} className="flex h-24 w-24 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-500 transition disabled:opacity-50">
-                            {uploadando?<span className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-500"/>:<><span className="text-2xl">+</span><span className="mt-1 text-xs font-semibold">Foto</span></>}
-                          </button>
+                      {/* Fotos gerais + por cor */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className={lbl}>📸 Fotos gerais do produto <span className="normal-case font-normal text-slate-400">(fallback quando não há variação)</span></label>
+                          <div className="mt-2 flex flex-wrap gap-3">
+                            {produtoForm.fotos.map((url,i)=>(
+                              <div key={i} className="group relative">
+                                <img src={url} alt="" className="h-20 w-20 rounded-2xl object-cover border border-slate-200"/>
+                                <button onClick={()=>setProdutoForm(f=>({...f,fotos:f.fotos.filter(u=>u!==url)}))} className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
+                                {i===0&&<span className="absolute bottom-1 left-1 rounded-lg bg-black/60 px-1.5 py-0.5 text-xs text-white">Principal</span>}
+                              </div>
+                            ))}
+                            <button onClick={()=>fileRef.current?.click()} disabled={uploadando} className="flex h-20 w-20 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400 hover:border-orange-400 hover:bg-orange-50 hover:text-orange-500 transition disabled:opacity-50">
+                              {uploadando?<span className="h-5 w-5 animate-spin rounded-full border-2 border-orange-300 border-t-orange-500"/>:<><span className="text-2xl">+</span><span className="mt-1 text-xs font-semibold">Foto</span></>}
+                            </button>
+                          </div>
+                          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={async e=>{const files=Array.from(e.target.files||[]);for(const f of files) await uploadFoto(f);e.target.value="";}}/>
                         </div>
-                        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={async e=>{const files=Array.from(e.target.files||[]);for(const f of files) await uploadFoto(f);e.target.value="";}}/>
-                        <p className="mt-1 text-xs text-slate-400">Primeira foto = imagem principal. Máx. 5MB.</p>
+
+                        {/* Fotos por cor */}
+                        {produtoForm.cores.length > 0 && (
+                          <div>
+                            <label className={lbl}>🎨 Fotos por cor <span className="normal-case font-normal text-slate-400">(cada cor com suas próprias fotos)</span></label>
+                            <div className="mt-2 space-y-3">
+                              {produtoForm.cores.map(cor => {
+                                const variacaoAtual = produtoForm.variacoes_cor.find(v=>v.cor===cor) || {cor, fotos:[]};
+                                return (
+                                  <div key={cor} className="rounded-2xl border border-slate-200 p-3">
+                                    <p className="mb-2 text-xs font-bold text-slate-700">📌 {cor}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {variacaoAtual.fotos.map((url,i)=>(
+                                        <div key={i} className="group relative">
+                                          <img src={url} alt={cor} className="h-16 w-16 rounded-xl object-cover border border-slate-200"/>
+                                          <button onClick={()=>{
+                                            const novas = produtoForm.variacoes_cor.map(v=>v.cor===cor?{...v,fotos:v.fotos.filter(u=>u!==url)}:v);
+                                            setProdutoForm(f=>({...f,variacoes_cor:novas}));
+                                          }} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
+                                        </div>
+                                      ))}
+                                      <UploadCorBtn cor={cor} uploadando={uploadando} onUpload={async(file)=>{
+                                        setUploadando(true);
+                                        const fd=new FormData(); fd.append("file",file);
+                                        const res=await fetch("/api/admin/upload-foto",{method:"POST",body:fd});
+                                        const result=await res.json();
+                                        setUploadando(false);
+                                        if(res.ok){
+                                          setProdutoForm(f=>{
+                                            const existe=f.variacoes_cor.find(v=>v.cor===cor);
+                                            const novas=existe
+                                              ?f.variacoes_cor.map(v=>v.cor===cor?{...v,fotos:[...v.fotos,result.url]}:v)
+                                              :[...f.variacoes_cor,{cor,fotos:[result.url]}];
+                                            return {...f,variacoes_cor:novas};
+                                          });
+                                        }
+                                      }}/>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div><label className={lbl}>Nome *</label><input type="text" value={produtoForm.nome} onChange={e=>setProdutoForm({...produtoForm,nome:e.target.value})} className={inp}/></div>
