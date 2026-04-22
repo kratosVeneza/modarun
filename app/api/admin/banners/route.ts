@@ -13,9 +13,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const user = await verificarAdmin(supabase);
   if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
   const body = await request.json() as Record<string, unknown>;
-  const { titulo, subtitulo, imagem_url, link_url, link_texto, ativo, ordem } = body;
+  const { titulo, subtitulo, imagem_url, link_url, link_texto, ativo, ordem, position_x, position_y } = body;
   if (!imagem_url) return NextResponse.json({ error: "Imagem é obrigatória." }, { status: 400 });
-  const { data, error } = await supabase.from("banners").insert([{ titulo: titulo||null, subtitulo: subtitulo||null, imagem_url, link_url: link_url||null, link_texto: link_texto||"Ver mais", ativo: ativo??true, ordem: ordem||0 }]).select().single();
+  const { data, error } = await supabase.from("banners").insert([{
+    titulo: titulo||null, subtitulo: subtitulo||null, imagem_url,
+    link_url: link_url||null, link_texto: link_texto||"Ver mais",
+    ativo: ativo??true, ordem: ordem||0,
+    position_x: position_x??50, position_y: position_y??50,
+  }]).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true, data });
 }
