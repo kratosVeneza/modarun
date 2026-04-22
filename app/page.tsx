@@ -1,9 +1,10 @@
-import Link from "next/link";
+import React from "react";
 import Header from "@/components/Header";
 import { getAdminStatus } from "@/utils/supabase/isAdmin";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
-export default async function HomePage() {
+export default async function HomePage(): Promise<React.JSX.Element> {
   const { user, isAdmin } = await getAdminStatus();
 
   const [{ count: totalTreinos }, { count: totalParticipantes }, { data: proximosTreinos }, { data: proximosEventos }] = await Promise.all([
@@ -22,143 +23,244 @@ export default async function HomePage() {
   return (
     <>
       <Header userEmail={user?.email} isAdmin={isAdmin} />
-      <main className="min-h-screen bg-slate-50">
-        <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-4 py-16 text-white sm:py-24">
-          <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-orange-500/10" />
-          <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-amber-400/5" />
-          <div className="relative mx-auto max-w-5xl">
-            <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 rounded-full bg-orange-500/20 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-orange-300">🏃 Moda Run App</span>
-              <h1 className="mt-5 text-4xl font-bold leading-tight sm:text-6xl">
-                Corra em grupo.<br /><span className="text-orange-400">Vista-se para vencer.</span>
+      <main style={{ background: "#0D1117", minHeight: "100vh" }}>
+
+        {/* HERO */}
+        <section className="relative overflow-hidden px-4 py-20 sm:py-32" style={{ background: "linear-gradient(135deg, #0D1117 0%, #161B22 50%, #0D1117 100%)" }}>
+          {/* Decorações */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -right-40 top-0 h-[600px] w-[600px] rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent 70%)" }} />
+            <div className="absolute -left-20 bottom-0 h-[400px] w-[400px] rounded-full opacity-5" style={{ background: "radial-gradient(circle, #FF6B00, transparent 70%)" }} />
+            {/* Linhas decorativas */}
+            <svg className="absolute inset-0 w-full h-full opacity-5" xmlns="http://www.w3.org/2000/svg">
+              <defs><pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#5CC800" strokeWidth="0.5"/></pattern></defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
+          </div>
+
+          <div className="relative mx-auto max-w-6xl">
+            <div className="max-w-3xl">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
+                ⚡ RUNNING & PERFORMANCE
+              </div>
+
+              <h1 className="text-5xl font-black leading-none sm:text-7xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "-0.01em" }}>
+                <span style={{ color: "#E6EDF3" }}>CORRA NA</span><br />
+                <span style={{ color: "#5CC800" }}>MODA.</span>{" "}
+                <span style={{ color: "#FF6B00" }}>VENÇA</span><br />
+                <span style={{ color: "#E6EDF3" }}>COM ESTILO.</span>
               </h1>
-              <p className="mt-5 max-w-xl text-base text-slate-400 sm:text-lg">
-                Organize treinos, encontre corredores na sua cidade e equipamentos para cada prova — tudo num só lugar.
+
+              <p className="mt-6 max-w-xl text-base sm:text-lg" style={{ color: "#8B949E" }}>
+                Organize treinos em grupo, descubra provas no Brasil inteiro e encontre os equipamentos perfeitos para cada corrida.
               </p>
+
               <div className="mt-8 flex flex-wrap gap-3">
                 {user ? (
                   <>
-                    <Link href="/encontros" className="rounded-2xl bg-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600 active:scale-95">🏃 Ver treinos</Link>
-                    <Link href="/perfil" className="rounded-2xl border border-white/20 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10">Meu perfil</Link>
+                    <Link href="/encontros"
+                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 text-sm font-black transition-all hover:scale-105 hover:brightness-110"
+                      style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
+                      ⚡ VER TREINOS
+                    </Link>
+                    <Link href="/perfil"
+                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 text-sm font-black transition-all hover:scale-105"
+                      style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
+                      👤 MEU PERFIL
+                    </Link>
                   </>
                 ) : (
                   <>
-                    <Link href="/cadastro" className="rounded-2xl bg-orange-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600 active:scale-95">Criar conta grátis</Link>
-                    <Link href="/encontros" className="rounded-2xl border border-white/20 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10">Ver treinos</Link>
+                    <Link href="/cadastro"
+                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 font-black transition-all hover:scale-105 hover:brightness-110"
+                      style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px", boxShadow: "0 0 30px rgba(92,200,0,0.3)" }}>
+                      🚀 CRIAR CONTA GRÁTIS
+                    </Link>
+                    <Link href="/encontros"
+                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 font-black transition-all hover:scale-105"
+                      style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
+                      ⚡ VER TREINOS
+                    </Link>
                   </>
                 )}
               </div>
-            </div>
-            <div className="mt-12 flex flex-wrap gap-6">
-              <div><p className="text-3xl font-bold text-white">{totalTreinos || 0}</p><p className="text-sm text-slate-400">Treinos criados</p></div>
-              <div className="w-px bg-white/10" />
-              <div><p className="text-3xl font-bold text-white">{totalParticipantes || 0}</p><p className="text-sm text-slate-400">Confirmações de presença</p></div>
-              <div className="w-px bg-white/10" />
-              <div><p className="text-3xl font-bold text-orange-400">Grátis</p><p className="text-sm text-slate-400">Para sempre</p></div>
+
+              {/* Stats */}
+              <div className="mt-12 flex flex-wrap gap-8">
+                {[
+                  { v: totalTreinos || 0, l: "Treinos criados" },
+                  { v: totalParticipantes || 0, l: "Confirmações" },
+                  { v: "∞", l: "Quilômetros pela frente" },
+                ].map((s, i) => (
+                  <div key={i}>
+                    <p className="text-3xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: i === 0 ? "#5CC800" : i === 1 ? "#FF6B00" : "#FFB800" }}>{s.v}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>{s.l}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <div className="mx-auto max-w-5xl space-y-8 px-4 py-10">
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">🏃 Próximos treinos</h2>
-              <Link href="/encontros" className="text-sm font-semibold text-orange-600 hover:underline">Ver todos →</Link>
+        {/* PRÓXIMOS TREINOS */}
+        <section className="px-4 py-12" style={{ background: "#161B22" }}>
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS TREINOS</h2>
+              </div>
+              <Link href="/encontros" className="text-xs font-bold transition hover:brightness-110" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                VER TODOS →
+              </Link>
             </div>
+
             {!proximosTreinos || proximosTreinos.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
-                <p className="text-sm text-slate-500">Nenhum treino criado ainda.</p>
-                <Link href="/encontros" className="mt-3 inline-flex rounded-2xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-600">Criar o primeiro treino</Link>
+              <div className="rounded-2xl p-8 text-center" style={{ background: "#21262D", border: "1px dashed rgba(92,200,0,0.2)" }}>
+                <p className="text-4xl mb-2">🏃</p>
+                <p className="font-semibold" style={{ color: "#8B949E" }}>Nenhum treino ainda.</p>
+                <Link href="/encontros" className="mt-4 inline-flex rounded-xl px-5 py-2.5 text-sm font-black"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  CRIAR PRIMEIRO TREINO
+                </Link>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-3">
                 {proximosTreinos.map((t) => (
                   <Link key={t.id} href={`/treinos/${t.id}`}
-                    className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-orange-200">
-                    <div className="flex items-start justify-between gap-2">
+                    className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1 hover:shadow-2xl"
+                    style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.1)" }}>
+                    <div className="absolute top-0 left-0 h-0.5 w-full" style={{ background: "linear-gradient(90deg, #5CC800, #FF6B00)" }} />
+                    <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="truncate font-bold text-slate-900">{t.titulo}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">📍 {t.cidade} - {t.estado}</p>
+                        <p className="font-black truncate text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{t.titulo}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {t.cidade} - {t.estado}</p>
                       </div>
-                      <span className="shrink-0 rounded-xl bg-orange-50 px-2 py-1 text-xs font-bold text-orange-600">{formatarData(String(t.data_encontro))}</span>
+                      <span className="ml-2 shrink-0 rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {formatarData(String(t.data_encontro))}
+                      </span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {t.tipo_treino && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{t.tipo_treino}</span>}
-                      {(t.km_planejado || t.distancia) && <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">{t.km_planejado ? `${t.km_planejado}km` : t.distancia}</span>}
+                      {t.tipo_treino && <span className="rounded-lg px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00" }}>{t.tipo_treino}</span>}
+                      {(t.km_planejado || t.distancia) && <span className="rounded-lg px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800" }}>{t.km_planejado ? `${t.km_planejado}km` : t.distancia}</span>}
                     </div>
-                    <p className="mt-3 text-xs font-semibold text-orange-500 group-hover:translate-x-1 transition-transform">{t.horario} — Ver detalhes →</p>
+                    <p className="mt-3 text-xs font-bold" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{t.horario} — ABRIR →</p>
                   </Link>
                 ))}
               </div>
             )}
-          </section>
+          </div>
+        </section>
 
-          {proximosEventos && proximosEventos.length > 0 && (
-            <section>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">🏁 Próximas provas</h2>
-                <Link href="/eventos" className="text-sm font-semibold text-orange-600 hover:underline">Ver todas →</Link>
+        {/* PRÓXIMOS EVENTOS */}
+        {proximosEventos && proximosEventos.length > 0 && (
+          <section className="px-4 py-12" style={{ background: "#0D1117" }}>
+            <div className="mx-auto max-w-6xl">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-6 w-1 rounded-full" style={{ background: "#FF6B00" }} />
+                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMAS PROVAS</h2>
+                </div>
+                <Link href="/eventos" className="text-xs font-bold" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>VER TODAS →</Link>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {proximosEventos.map((e) => (
-                  <div key={e.id} className="flex items-center gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-orange-50">
-                      <p className="text-lg font-bold text-orange-600 leading-none">{formatarData(String(e.data_evento))}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {proximosEventos.map(e => (
+                  <div key={e.id} className="flex items-center gap-4 rounded-2xl p-5" style={{ background: "#21262D", border: "1px solid rgba(255,107,0,0.15)" }}>
+                    <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl" style={{ background: "rgba(255,107,0,0.15)", border: "1px solid rgba(255,107,0,0.3)" }}>
+                      <p className="text-lg font-black leading-none" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{formatarData(String(e.data_evento))}</p>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold text-slate-900">{e.nome}</p>
-                      <p className="text-xs text-slate-500">📍 {e.cidade} — {e.estado}</p>
-                      {e.distancia && <p className="mt-0.5 text-xs font-semibold text-orange-600">{e.distancia}</p>}
+                      <p className="font-black truncate" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", fontSize: "16px" }}>{e.nome}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {e.cidade} — {e.estado}</p>
+                      {e.distancia && <p className="text-xs font-bold mt-0.5" style={{ color: "#FF6B00" }}>{e.distancia}</p>}
                     </div>
                   </div>
                 ))}
               </div>
-            </section>
-          )}
-
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { href: "/eventos", emoji: "🏁", titulo: "Eventos", desc: "Corridas e provas no Brasil" },
-              { href: "/encontros", emoji: "🏃", titulo: "Treinos", desc: "Treinos em grupo na sua cidade" },
-              { href: "/loja", emoji: "🛍", titulo: "Loja", desc: "Roupas e acessórios" },
-              { href: "/meus-treinos", emoji: "📋", titulo: "Meus treinos", desc: "Gerencie o que criou" },
-            ].map((item) => (
-              <Link key={item.href} href={item.href}
-                className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-orange-200">
-                <span className="text-2xl">{item.emoji}</span>
-                <h3 className="mt-2 font-bold text-slate-900">{item.titulo}</h3>
-                <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
-                <p className="mt-3 text-xs font-semibold text-orange-500 transition-transform group-hover:translate-x-1">Acessar →</p>
-              </Link>
-            ))}
+            </div>
           </section>
+        )}
 
-          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-orange-500 to-amber-400 p-7 text-white shadow-lg">
-            <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-lg font-bold">Equipado para correr? 🔥</p>
-                <p className="mt-1 text-sm text-orange-100">Conjuntos, calçados e acessórios da Moda Run.</p>
+        {/* CARDS NAVEGAÇÃO */}
+        <section className="px-4 py-12" style={{ background: "#161B22" }}>
+          <div className="mx-auto max-w-6xl">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { href: "/eventos", icon: "🏁", label: "EVENTOS", desc: "Corridas e provas no Brasil", color: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
+                { href: "/encontros", icon: "⚡", label: "TREINOS", desc: "Grupos de corrida na sua cidade", color: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
+                { href: "/loja", icon: "🛒", label: "LOJA", desc: "Roupas, calçados e acessórios", color: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
+                { href: "/meus-treinos", icon: "📋", label: "MEUS TREINOS", desc: "Treinos que você organizou", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
+              ].map((item) => (
+                <Link key={item.href} href={item.href}
+                  className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1"
+                  style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                  <span className="text-3xl block mb-3">{item.icon}</span>
+                  <h3 className="font-black text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: item.color, letterSpacing: "0.03em" }}>{item.label}</h3>
+                  <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{item.desc}</p>
+                  <p className="mt-4 text-xs font-black transition-transform group-hover:translate-x-1" style={{ color: item.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>ACESSAR →</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* BANNER LOJA */}
+        <section className="px-4 py-12" style={{ background: "#0D1117" }}>
+          <div className="mx-auto max-w-6xl">
+            <div className="relative overflow-hidden rounded-3xl p-8 sm:p-12" style={{ background: "linear-gradient(135deg, #161B22 0%, #21262D 100%)", border: "1px solid rgba(92,200,0,0.2)" }}>
+              <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
+              <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #FF6B00, transparent)" }} />
+              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
+                    🛒 MODA RUN STORE
+                  </div>
+                  <h2 className="text-3xl font-black sm:text-4xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
+                    EQUIPADO PARA<br /><span style={{ color: "#5CC800" }}>CORRER MELHOR?</span>
+                  </h2>
+                  <p className="mt-2 text-sm" style={{ color: "#8B949E" }}>Conjuntos, calçados e acessórios selecionados para corredores.</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-3">
+                  <a href="https://wa.me/5594920009526?text=Olá! Vim pelo app Moda Run." target="_blank" rel="noreferrer"
+                    className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105"
+                    style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    💬 WHATSAPP
+                  </a>
+                  <Link href="/loja"
+                    className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105"
+                    style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    VER LOJA →
+                  </Link>
+                </div>
               </div>
-              <div className="flex shrink-0 gap-2">
-                <a href="https://wa.me/5594920009526?text=Olá! Vim pelo app Moda Run." target="_blank" rel="noreferrer"
-                  className="rounded-2xl bg-white px-5 py-2.5 text-sm font-bold text-orange-600 hover:shadow-md transition">💬 WhatsApp</a>
-                <Link href="/loja" className="rounded-2xl border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition">Ver loja</Link>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA CADASTRO */}
+        {!user && (
+          <section className="px-4 py-16" style={{ background: "#161B22" }}>
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-4xl font-black sm:text-5xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
+                PRONTO PARA<br /><span style={{ color: "#5CC800" }}>CORRER?</span>
+              </h2>
+              <p className="mt-3 text-base" style={{ color: "#8B949E" }}>Crie sua conta gratuita e junte-se à comunidade Moda Run.</p>
+              <div className="mt-6 flex justify-center gap-3">
+                <Link href="/cadastro"
+                  className="rounded-xl px-8 py-4 font-black text-base transition-all hover:scale-105"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 0 40px rgba(92,200,0,0.2)" }}>
+                  🚀 CRIAR CONTA GRÁTIS
+                </Link>
+                <Link href="/login"
+                  className="rounded-xl px-8 py-4 font-black text-base transition-all hover:scale-105"
+                  style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  JÁ TENHO CONTA
+                </Link>
               </div>
             </div>
           </section>
+        )}
 
-          {!user && (
-            <section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-              <p className="text-2xl font-bold text-slate-900">Pronto para correr? 🏃</p>
-              <p className="mt-2 text-sm text-slate-500">Crie sua conta gratuita e comece a organizar treinos com sua comunidade.</p>
-              <div className="mt-5 flex justify-center gap-3">
-                <Link href="/cadastro" className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-orange-600">Criar conta grátis</Link>
-                <Link href="/login" className="rounded-2xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Já tenho conta</Link>
-              </div>
-            </section>
-          )}
-        </div>
       </main>
     </>
   );

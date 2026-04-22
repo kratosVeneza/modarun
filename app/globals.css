@@ -1,18 +1,61 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap');
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Moda Run Brand Colors */
+  --mr-green: #5CC800;
+  --mr-green-dark: #4aaa00;
+  --mr-green-light: #7ddd1a;
+  --mr-orange: #FF6B00;
+  --mr-orange-light: #FF8C33;
+  --mr-gold: #FFB800;
+  --mr-dark: #0D1117;
+  --mr-dark-2: #161B22;
+  --mr-dark-3: #21262D;
+  --mr-dark-4: #30363D;
+  --mr-text: #E6EDF3;
+  --mr-text-muted: #8B949E;
+  --background: #0D1117;
+  --foreground: #E6EDF3;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-}
+* { box-sizing: border-box; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--mr-dark);
+  color: var(--mr-text);
+  font-family: 'Barlow', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, .font-display {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--mr-dark-2); }
+::-webkit-scrollbar-thumb { background: var(--mr-dark-4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mr-green); }
+
+/* Input focus */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+}
+
+/* Animations */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(92, 200, 0, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(92, 200, 0, 0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up { animation: slide-up 0.4s ease forwards; }
