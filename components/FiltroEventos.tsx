@@ -1,10 +1,11 @@
 "use client";
+import React from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const estados = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
-export default function FiltroEventos({ cidadeInicial, estadoInicial }: { cidadeInicial: string; estadoInicial: string }) {
+export default function FiltroEventos({ cidadeInicial, estadoInicial }: { cidadeInicial: string; estadoInicial: string }): React.JSX.Element {
   const router = useRouter();
   const [cidade, setCidade] = useState(cidadeInicial);
   const [estado, setEstado] = useState(estadoInicial);
