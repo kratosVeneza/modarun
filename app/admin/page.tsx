@@ -13,6 +13,12 @@ type VariacaoCor = {
   tamanhos: string[]; // tamanhos disponíveis NESSA cor
 };
 
+type Banner = {
+  id: string; titulo?: string; subtitulo?: string;
+  imagem_url: string; link_url?: string; link_texto?: string;
+  ativo: boolean; ordem: number;
+};
+
 type Evento = {
   id: number; nome: string; cidade: string; estado: string;
   data_evento: string; distancia?: string; local?: string;
@@ -58,9 +64,10 @@ export default function AdminPage(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [aba, setAba] = useState<"eventos"|"produtos">("eventos");
+  const [aba, setAba] = useState<"eventos"|"produtos"|"banners">("eventos");
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -115,6 +122,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {aba === "eventos" && <AbaEventos eventos={eventos} setEventos={setEventos} />}
           {aba === "produtos" && <AbaProdutos produtos={produtos} setProdutos={setProdutos} />}
+          {aba === "banners" && <AbaBanners banners={banners} setBanners={setBanners} />}
         </div>
       </main>
     </>
@@ -558,6 +566,169 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AbaBanners ───────────────────────────────────────────────────────────────
+
+function AbaBanners({ banners, setBanners }: { banners: Banner[]; setBanners: (b: Banner[]) => void }): React.JSX.Element {
+  const supabase = createClient();
+  const [aberto, setAberto] = useState(false);
+  const [editando, setEditando] = useState<Banner | null>(null);
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0 });
+  const [loading, setLoading] = useState(false);
+  const [uploadando, setUploadando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0 }); setErro(""); setAberto(true); }
+  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem }); setErro(""); setAberto(true); }
+
+  async function uploadImagem(file: File) {
+    setUploadando(true);
+    const fd = new FormData(); fd.append("file", file);
+    const res = await fetch("/api/admin/upload-foto", { method: "POST", body: fd });
+    const result = await res.json();
+    setUploadando(false);
+    if (!res.ok) { setErro(result.error || "Erro no upload."); return; }
+    setForm(f => ({ ...f, imagem_url: result.url }));
+  }
+
+  async function salvar() {
+    if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
+    setLoading(true); setErro("");
+    const method = editando ? "PATCH" : "POST";
+    const body = editando ? { id: editando.id, ...form } : form;
+    const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const result = await res.json();
+    setLoading(false);
+    if (!res.ok) { setErro(result.error || "Erro ao salvar."); return; }
+    if (editando) setBanners(banners.map(b => b.id === editando.id ? { ...b, ...form } : b));
+    else setBanners([result.data, ...banners]);
+    setAberto(false);
+  }
+
+  async function excluir(id: string) {
+    if (!confirm("Excluir este banner?")) return;
+    setExcluindo(id);
+    await fetch("/api/admin/banners", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    setExcluindo(null);
+    setBanners(banners.filter(b => b.id !== id));
+  }
+
+  async function toggleAtivo(b: Banner) {
+    const res = await fetch("/api/admin/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: b.id, ativo: !b.ativo }) });
+    if (res.ok) setBanners(banners.map(x => x.id === b.id ? { ...x, ativo: !x.ativo } : x));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm" style={{ color: "#8B949E" }}>Banners aparecem no topo da loja em rotação automática</p>
+        <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
+          style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+          + ADICIONAR BANNER
+        </button>
+      </div>
+
+      {aberto && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8" style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)" }} onClick={e => e.target === e.currentTarget && setAberto(false)}>
+          <div className="w-full max-w-lg rounded-2xl shadow-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
+            <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid rgba(92,200,0,0.1)" }}>
+              <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{editando ? "EDITAR BANNER" : "NOVO BANNER"}</h3>
+              <button onClick={() => setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>✕</button>
+            </div>
+            <div className="space-y-4 p-6">
+              {/* Preview / Upload */}
+              <div>
+                <label style={s.lbl}>🖼 IMAGEM DO BANNER *</label>
+                {form.imagem_url ? (
+                  <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
+                    <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover" />
+                    <button onClick={() => setForm(f => ({ ...f, imagem_url: "" }))}
+                      className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                      style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => fileRef.current?.click()} disabled={uploadando}
+                    className="flex w-full flex-col items-center justify-center rounded-xl py-8 transition"
+                    style={{ border: "2px dashed rgba(92,200,0,0.3)", background: "rgba(92,200,0,0.03)", color: uploadando ? "#5CC800" : "#8B949E" }}>
+                    {uploadando ? (
+                      <><span className="h-6 w-6 animate-spin rounded-full border-2" style={{ borderColor: "rgba(92,200,0,0.3)", borderTopColor: "#5CC800" }} /><span className="mt-2 text-xs font-bold" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>ENVIANDO...</span></>
+                    ) : (
+                      <><span className="text-3xl">🖼</span><span className="mt-2 text-sm font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>CLIQUE PARA CARREGAR</span><span className="text-xs mt-1">JPG, PNG · máx. 5MB</span></>
+                    )}
+                  </button>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (f) await uploadImagem(f); e.target.value = ""; }} />
+              </div>
+
+              <div><label style={s.lbl}>TÍTULO <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="text" placeholder="Ex: Nova coleção Moda Run 2025" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} style={s.inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
+              <div><label style={s.lbl}>SUBTÍTULO <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="text" placeholder="Ex: Conjuntos com até 20% off" value={form.subtitulo} onChange={e => setForm({ ...form, subtitulo: e.target.value })} style={s.inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label style={s.lbl}>LINK <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="url" placeholder="https://..." value={form.link_url} onChange={e => setForm({ ...form, link_url: e.target.value })} style={s.inp} /></div>
+                <div><label style={s.lbl}>TEXTO DO BOTÃO</label><input type="text" placeholder="Ver mais" value={form.link_texto} onChange={e => setForm({ ...form, link_texto: e.target.value })} style={s.inp} /></div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1"><label style={s.lbl}>ORDEM</label><input type="number" min="0" value={form.ordem} onChange={e => setForm({ ...form, ordem: Number(e.target.value) })} style={s.inp} /></div>
+                <label className="flex cursor-pointer items-center gap-3 flex-1 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
+                  <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
+                  <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>✅ Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visível na loja</p></div>
+                </label>
+              </div>
+
+              {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
+              <div className="flex gap-3">
+                <button onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
+                <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black hover:brightness-110 disabled:opacity-60"
+                  style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {loading ? "SALVANDO..." : editando ? "SALVAR" : "ADICIONAR"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {banners.length === 0 ? (
+        <div className="rounded-2xl p-10 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
+          <p className="text-4xl mb-2">🖼</p>
+          <p className="font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUM BANNER CADASTRADO</p>
+          <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Adicione banners para exibir no topo da loja</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {banners.map(b => (
+            <div key={b.id} className="overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+              <div className="relative h-32">
+                <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full object-cover" />
+                <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
+                  {b.titulo && <p className="font-black text-sm text-white" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{b.titulo}</p>}
+                  {b.subtitulo && <p className="text-xs text-white/80">{b.subtitulo}</p>}
+                </div>
+                <div className="absolute top-2 right-2 flex gap-1.5">
+                  <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: b.ativo ? "rgba(92,200,0,0.9)" : "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {b.ativo ? "ATIVO" : "INATIVO"}
+                  </span>
+                  {b.ordem > 0 && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>#{b.ordem}</span>}
+                </div>
+              </div>
+              <div className="flex gap-2 p-3">
+                <button onClick={() => toggleAtivo(b)} className="flex-1 rounded-xl py-2 text-xs font-black"
+                  style={{ background: b.ativo ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.1)", color: b.ativo ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {b.ativo ? "⏸ PAUSAR" : "▶ ATIVAR"}
+                </button>
+                <button onClick={() => abrirEditar(b)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
+                <button onClick={() => excluir(b.id)} disabled={excluindo === b.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {excluindo === b.id ? "..." : "🗑️"}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
