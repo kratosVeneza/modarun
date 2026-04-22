@@ -520,8 +520,8 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
             const fotoExibir = p.variacoes_cor?.[0]?.fotos?.[0] || p.fotos?.[0];
             return (
               <div key={p.id} className="rounded-2xl overflow-hidden" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.15)" }}>
-                <div className="relative h-44" style={{ background:"#21262D" }}>
-                  {fotoExibir ? <img src={fotoExibir} alt={p.nome} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-4xl" style={{ color:"#30363D" }}>📷</div>}
+                <div className="relative h-56" style={{ background:"#21262D" }}>
+                  {fotoExibir ? <img src={fotoExibir} alt={p.nome} className="h-full w-full" style={{ objectFit:"contain", padding:"8px" }} /> : <div className="flex h-full items-center justify-center text-4xl" style={{ color:"#30363D" }}>📷</div>}
                   <div className="absolute top-3 left-3 flex gap-1.5">
                     {p.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.2)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐</span>}
                     {!p.estoque_disponivel&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,107,0,0.2)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>SEM ESTOQUE</span>}
