@@ -95,7 +95,6 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
     </article>
   );
 }
-
 export default function LojaClient({ produtos }: { produtos: Produto[] }): React.JSX.Element {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
