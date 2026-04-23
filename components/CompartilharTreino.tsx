@@ -19,12 +19,12 @@ export default function CompartilharTreino({ url }: { url: string }): React.JSX.
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={copiarLink}
         className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition-all hover:scale-105"
-        style={{ background: copiado ? "#5CC800" : "rgba(92,200,0,0.15)", color: copiado ? "#0D1117" : "#5CC800", border: "1px solid rgba(92,200,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+        style={{ background: copiado ? "#5CC800" : "#1a3a0a", color: copiado ? "#0D1117" : "#5CC800", border: "1px solid #5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
         {copiado ? "✓ COPIADO!" : "🔗 COPIAR LINK"}
       </button>
       <button type="button" onClick={compartilhar}
         className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition-all hover:scale-105"
-        style={{ background: "rgba(255,255,255,0.05)", color: "#E6EDF3", border: "1px solid rgba(255,255,255,0.15)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+        style={{ background: "#1a1a2e", color: "#E6EDF3", border: "1px solid rgba(255,255,255,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
         📤 COMPARTILHAR
       </button>
     </div>
