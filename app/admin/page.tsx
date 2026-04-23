@@ -17,6 +17,7 @@ type Banner = {
   id: string; titulo?: string; subtitulo?: string;
   imagem_url: string; link_url?: string; link_texto?: string;
   ativo: boolean; ordem: number;
+  position_x?: number; position_y?: number;
 };
 
 type Evento = {
@@ -122,7 +123,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {aba === "eventos" && <AbaEventos eventos={eventos} setEventos={setEventos} />}
           {aba === "produtos" && <AbaProdutos produtos={produtos} setProdutos={setProdutos} />}
-          {aba === "banners" && <AbaBanners banners={banners} setBanners={setBanners} />}
+          {aba === "banners" && <AbaBanners key="banners-tab" />}
         </div>
       </main>
     </>
@@ -574,19 +575,33 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
 
 // ─── AbaBanners ───────────────────────────────────────────────────────────────
 
-function AbaBanners({ banners, setBanners }: { banners: Banner[]; setBanners: (b: Banner[]) => void }): React.JSX.Element {
+function AbaBanners(): React.JSX.Element {
   const supabase = createClient();
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [carregando, setCarregando] = useState(true);
   const [aberto, setAberto] = useState(false);
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregando(true);
+      const { data } = await supabase.from("banners").select("*").order("ordem").order("criado_em", { ascending: false });
+      setBanners(data || []);
+      setCarregando(false);
+    }
+    carregar();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editando, setEditando] = useState<Banner | null>(null);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0 });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50 });
+  const [arrastando, setArrastando] = useState(false);
+  const previewRef = React.useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [uploadando, setUploadando] = useState(false);
   const [erro, setErro] = useState("");
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0 }); setErro(""); setAberto(true); }
-  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem }); setErro(""); setAberto(true); }
+  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50 }); setErro(""); setAberto(true); }
+  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem,position_x:b.position_x??50,position_y:b.position_y??50 }); setErro(""); setAberto(true); }
 
   async function uploadImagem(file: File) {
     setUploadando(true);
@@ -598,26 +613,35 @@ function AbaBanners({ banners, setBanners }: { banners: Banner[]; setBanners: (b
     setForm(f => ({ ...f, imagem_url: result.url }));
   }
 
+  async function recarregarBanners() {
+    const { data } = await supabase.from("banners").select("*").order("ordem").order("criado_em", { ascending: false });
+    setBanners(data || []);
+  }
+
   async function salvar() {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
     const body = editando ? { id: editando.id, ...form } : form;
-    const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const result = await res.json();
-    setLoading(false);
-    if (!res.ok) { setErro(result.error || "Erro ao salvar."); return; }
-    if (editando) setBanners(banners.map(b => b.id === editando.id ? { ...b, ...form } : b));
-    else setBanners([result.data, ...banners]);
-    setAberto(false);
+    try {
+      const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const result = await res.json();
+      setLoading(false);
+      if (!res.ok) { setErro(result.error || "Erro ao salvar."); return; }
+      await recarregarBanners();
+      setAberto(false);
+    } catch { setLoading(false); setErro("Erro de conexão."); }
   }
 
   async function excluir(id: string) {
     if (!confirm("Excluir este banner?")) return;
     setExcluindo(id);
-    await fetch("/api/admin/banners", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    try {
+      const res = await fetch("/api/admin/banners", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (res.ok) await recarregarBanners();
+      else { const r = await res.json(); alert(r.error || "Erro ao excluir."); }
+    } catch { alert("Erro de conexão."); }
     setExcluindo(null);
-    setBanners(banners.filter(b => b.id !== id));
   }
 
   async function toggleAtivo(b: Banner) {
@@ -647,11 +671,49 @@ function AbaBanners({ banners, setBanners }: { banners: Banner[]; setBanners: (b
               <div>
                 <label style={s.lbl}>🖼 IMAGEM DO BANNER *</label>
                 {form.imagem_url ? (
-                  <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
-                    <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover" />
-                    <button onClick={() => setForm(f => ({ ...f, imagem_url: "" }))}
-                      className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                      style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
+                  <div>
+                    <div ref={previewRef} className="relative rounded-xl overflow-hidden select-none"
+                      style={{ height: "160px", cursor: arrastando ? "grabbing" : "grab" }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setArrastando(true);
+                        const rect = previewRef.current!.getBoundingClientRect();
+                        const startX = e.clientX; const startY = e.clientY;
+                        const startPX = form.position_x ?? 50; const startPY = form.position_y ?? 50;
+                        function onMove(ev: MouseEvent) {
+                          const dx = ((ev.clientX - startX) / rect.width) * -100;
+                          const dy = ((ev.clientY - startY) / rect.height) * -100;
+                          setForm(f => ({ ...f, position_x: Math.max(0, Math.min(100, startPX + dx)), position_y: Math.max(0, Math.min(100, startPY + dy)) }));
+                        }
+                        function onUp() { setArrastando(false); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }
+                        window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+                      }}
+                      onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        const rect = previewRef.current!.getBoundingClientRect();
+                        const startX = touch.clientX; const startY = touch.clientY;
+                        const startPX = form.position_x ?? 50; const startPY = form.position_y ?? 50;
+                        function onMove(ev: TouchEvent) {
+                          ev.preventDefault();
+                          const t = ev.touches[0];
+                          const dx = ((t.clientX - startX) / rect.width) * -100;
+                          const dy = ((t.clientY - startY) / rect.height) * -100;
+                          setForm(f => ({ ...f, position_x: Math.max(0, Math.min(100, startPX + dx)), position_y: Math.max(0, Math.min(100, startPY + dy)) }));
+                        }
+                        function onEnd() { document.removeEventListener("touchmove", onMove); document.removeEventListener("touchend", onEnd); }
+                        document.addEventListener("touchmove", onMove, { passive: false }); document.addEventListener("touchend", onEnd);
+                      }}>
+                      <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover pointer-events-none"
+                        style={{ objectPosition: `${form.position_x ?? 50}% ${form.position_y ?? 50}%` }} />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition pointer-events-none"
+                        style={{ background: "rgba(0,0,0,0.3)" }}>
+                        <span className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.9)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>✋ ARRASTE PARA ENQUADRAR</span>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
+                        className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold pointer-events-auto"
+                        style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
+                    </div>
+                    <p className="mt-1.5 text-xs text-center" style={{ color: "#8B949E" }}>Arraste a imagem para ajustar o enquadramento</p>
                   </div>
                 ) : (
                   <button onClick={() => fileRef.current?.click()} disabled={uploadando}
@@ -694,7 +756,11 @@ function AbaBanners({ banners, setBanners }: { banners: Banner[]; setBanners: (b
         </div>
       )}
 
-      {banners.length === 0 ? (
+      {carregando ? (
+        <div className="flex justify-center py-10">
+          <div className="h-10 w-10 animate-spin rounded-full border-4" style={{ borderColor: "rgba(92,200,0,0.2)", borderTopColor: "#5CC800" }} />
+        </div>
+      ) : banners.length === 0 ? (
         <div className="rounded-2xl p-10 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
           <p className="text-4xl mb-2">🖼</p>
           <p className="font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUM BANNER CADASTRADO</p>
