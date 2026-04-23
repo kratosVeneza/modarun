@@ -264,105 +264,69 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
     setCsvColunas(headerFinal);
 
-    // Try to detect by header name first
-    const findByName = (terms: string[]) => headerFinal.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
-
-    // Analyze content of each column using first 5 data rows (already offset-adjusted)
+    // Detect columns by content scoring
+    type ColMap = { nome:number; cidade:number; estado:number; data:number; distancia:number; local:number; link:number; destaque:number };
+    const result: ColMap = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, local:-1, link:-1, destaque:-1 };
+    const used = new Set<number>();
+    const n = headerFinal.length;
     const dataRows = dataRowsFinal;
 
-    function detectColByContent(): { nome: number; cidade: number; estado: number; data: number; distancia: number; local: number; link: number; destaque: number } {
-      const scores: Record<string, number[]> = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, link:-1, local:-1, destaque:-1 } as unknown as Record<string, number[]>;
-      const result = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, local:-1, link:-1, destaque:-1 };
+    const colData   = Array(n).fill(0);
+    const colLink   = Array(n).fill(0);
+    const colDist   = Array(n).fill(0);
+    const colEstado = Array(n).fill(0);
+    const colIsUrl  = Array(n).fill(false);
+    const colLen    = Array(n).fill(0);
 
-      // Score each column
-      const colScores: { nome:number; cidade:number; estado:number; data:number; distancia:number; link:number }[] = headerFinal.map(() => ({ nome:0, cidade:0, estado:0, data:0, distancia:0, link:0 }));
-
-      dataRows.forEach(row => {
-        row.forEach((val, i) => {
-          if (!val) return;
-          const v = val.toLowerCase();
-
-          // Data: DD.MM, DD/MM/YYYY, YYYY-MM-DD
-          if (/^\d{1,2}[.\/\-]\d{1,2}([.\/\-]\d{2,4})?$/.test(val)) colScores[i].data += 3;
-
-          // Link: starts with http
-          if (v.startsWith("http")) colScores[i].link += 3;
-
-          // Distancia: contains km
-          if (/\d+\s*km/i.test(val) || /^\d+$/.test(val) && parseInt(val) < 200) colScores[i].distancia += 2;
-
-          // Estado: 2 uppercase letters
-          if (/^[A-Z]{2}$/.test(val.trim())) colScores[i].estado += 3;
-
-          // Cidade: capitalized word, no numbers, no http
-          if (!v.startsWith("http") && /^[A-ZÀ-Ú]/.test(val) && !/\d/.test(val) && val.length > 2 && val.length < 40) colScores[i].cidade += 1;
-
-          // Nome: longer text, capitalized, no http
-          if (!v.startsWith("http") && val.length > 10 && /[a-zA-ZÀ-Ú]/.test(val)) colScores[i].nome += 1;
-        });
+    dataRows.forEach((row: string[]) => {
+      row.forEach((val: string, i: number) => {
+        if (i >= n || !val) return;
+        const v = val.toLowerCase();
+        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(val)) colData[i] += 3;
+        if (v.startsWith("http")) { colLink[i] += 3; colIsUrl[i] = true; }
+        if (/\d+\s*km/i.test(val)) colDist[i] += 2;
+        if (/^[A-Z]{2}$/.test(val.trim())) colEstado[i] += 3;
+        colLen[i] += val.length;
       });
+    });
 
-      // Pick best column for each field (highest score, no reuse)
-      const used = new Set<number>();
-
-      const pick = (field: keyof typeof result, scoreKey: keyof typeof colScores[0], minScore: number) => {
-        let best = -1, bestScore = minScore - 1;
-        colScores.forEach((s, i) => {
-          if (!used.has(i) && s[scoreKey] > bestScore) { best = i; bestScore = s[scoreKey]; }
-        });
-        if (best >= 0) { result[field] = best; used.add(best); }
-      };
-
-      pick("data", "data", 2);
-      pick("distancia", "distancia", 1);
-      pick("estado", "estado", 2);
-
-      // For links: pick the one with highest link score (longest URL = most specific)
-      const linkCols = headerFinal.map((_, i) => {
-        if (used.has(i)) return null;
-        const score = colScores[i].link;
-        const avgLen = dataRows.reduce((acc, r) => acc + (r[i]?.length || 0), 0) / dataRows.length;
-        return { i, score, avgLen };
-      }).filter(Boolean) as { i: number; score: number; avgLen: number }[];
-      // Among link columns, pick the longest one (more specific URL)
-      const linkCandidates = linkCols.filter(c => c.score >= 2).sort((a, b) => b.avgLen - a.avgLen);
-      if (linkCandidates.length > 0) { result.link = linkCandidates[0].i; used.add(linkCandidates[0].i); }
-
-      // For cidade and nome, use remaining text columns
-      // Cidade: shortest text, Nome: longest text (but not a URL)
-      const textCols = headerFinal.map((_, i) => {
-        if (used.has(i)) return null;
-        const vals = dataRowsRaw.map(r => r[i] || "");
-        const isUrl = vals.some(v => v.startsWith("http"));
-        if (isUrl) return null;
-        const avgLen = vals.reduce((acc, v) => acc + v.length, 0) / vals.length;
-        return { i, avgLen };
-      }).filter(Boolean) as { i: number; avgLen: number }[];
-
-      textCols.sort((a, b) => a.avgLen - b.avgLen);
-      if (textCols.length > 0) { result.cidade = textCols[0].i; used.add(textCols[0].i); }
-      if (textCols.length > 1) { result.nome = textCols[textCols.length - 1].i; used.add(textCols[textCols.length - 1].i); }
-
-      return result;
-    }
-
-    // First try by header name
-    const byName = {
-      nome: findByName(["nome","event","corrida","prova","titulo","name"]),
-      cidade: findByName(["cidade","city","municipio","location"]),
-      estado: findByName(["estado","uf","state"]),
-      data: findByName(["data","date","dia","quando"]),
-      distancia: findByName(["distancia","distância","km","distance","percurso"]),
-      local: findByName(["local","endereco","endereço","place","venue"]),
-      link: findByName(["link","url","inscricao","inscrição","site","href"]),
-      destaque: findByName(["destaque","featured"]),
+    const pickBest = (scores: number[], min: number) => {
+      let best = -1, bestScore = min - 1;
+      scores.forEach((s, i) => { if (!used.has(i) && s > bestScore) { best = i; bestScore = s; } });
+      return best;
     };
 
-    // If header names didn't help (generic like "tipo4"), use content analysis
-    const namedCount = Object.values(byName).filter(v => v >= 0).length;
-    const finalMap = namedCount >= 3 ? byName : { ...detectColByContent(), local: byName.local, destaque: byName.destaque };
+    const d = pickBest(colData, 2); if (d >= 0) { result.data = d; used.add(d); }
+    const dist = pickBest(colDist, 1); if (dist >= 0) { result.distancia = dist; used.add(dist); }
+    const est = pickBest(colEstado, 2); if (est >= 0) { result.estado = est; used.add(est); }
 
-    setCsvMap(finalMap);
+    // Best link = highest link score with longest URL
+    const linkScore = colLink.map((s, i) => used.has(i) ? -1 : s >= 2 ? colLen[i] : -1);
+    const lk = pickBest(linkScore, 0); if (lk >= 0) { result.link = lk; used.add(lk); }
+    // Skip remaining URL columns
+    colIsUrl.forEach((isUrl, i) => { if (isUrl && !used.has(i)) used.add(i); });
+
+    // Cidade = shortest remaining text, Nome = longest remaining text
+    const remaining = colLen.map((len, i) => used.has(i) ? null : { i, len }).filter(Boolean) as {i:number,len:number}[];
+    remaining.sort((a, b) => a.len - b.len);
+    if (remaining.length > 0) { result.cidade = remaining[0].i; used.add(remaining[0].i); }
+    if (remaining.length > 1) { result.nome = remaining[remaining.length-1].i; }
+
+    // Override with header name matches if found
+    const findByName = (terms: string[]) => headerFinal.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
+    const named = {
+      nome: findByName(["nome","event","corrida","prova","titulo","name"]),
+      cidade: findByName(["cidade","city","municipio"]),
+      estado: findByName(["estado","uf","state"]),
+      data: findByName(["data","date","dia"]),
+      distancia: findByName(["distancia","distância","km","distance"]),
+      local: findByName(["local","endereco","place"]),
+      link: findByName(["link","url","inscricao","inscrição","href"]),
+      destaque: findByName(["destaque","featured"]),
+    };
+    (Object.keys(named) as (keyof ColMap)[]).forEach(k => { if (named[k] >= 0) result[k] = named[k]; });
+
+    setCsvMap(result);
   }
 
   async function importarCSV() {
