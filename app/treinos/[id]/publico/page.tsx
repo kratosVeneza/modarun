@@ -191,7 +191,6 @@ export default function TreinoPage() {
               </div>
             )}
           </section>
-
           <section className="rounded-3xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-lg">
             <p className="text-sm font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>Moda Run Store</p>
             <p className="mt-1 text-lg font-bold">Equipado para esse treino? 🏃‍♂️</p>
