@@ -237,26 +237,29 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       return !v.includes("adsbygoogle") && !v.includes("googlesyndication") && !v.includes("doubleclick") && l.trim().replace(/[",]/g,"").trim().length > 0;
     });
 
-    if (linhasLimpas.length < 2) return;
+    if (linhasLimpas.length < 1) return;
 
-    const header = linhasLimpas[0].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
+    // Parse all cleaned lines
+    const todasCols = linhasLimpas.map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
 
-    // Detect offset: find first column that looks like real data (not URLs, not empty)
-    // by checking data rows
-    const dataRowsRaw = linhasLimpas.slice(1, 6).map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
-    
-    // Detect offset: find the first column index that has a date pattern DD.MM or DD/MM
-    // Skip columns that are all URLs or all empty
+    // Detect offset: find the first column that has a date pattern DD.MM or DD/MM in any row
     let offset = 0;
-    outer: for (let i = 0; i < Math.min(8, header.length); i++) {
-      for (const row of dataRowsRaw) {
-        const v = (row[i] || "").trim();
-        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(v)) { offset = i; break outer; }
+    outerOffset: for (let i = 0; i < Math.min(8, (todasCols[0] || []).length); i++) {
+      for (const row of todasCols) {
+        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(row[i] || "")) { offset = i; break outerOffset; }
       }
     }
 
-    // Trim header and data to start at offset
-    const headerFinal = header.slice(offset);
+    // Check if first line is a real header (non-numeric, non-url) or data
+    const primeiraLinha = todasCols[0] || [];
+    const primeiroValorOffset = primeiraLinha[offset] || "";
+    const primeiraEhHeader = !/^\d{1,2}[.\/\-]\d{1,2}/.test(primeiroValorOffset);
+
+    const headerRaw = primeiraEhHeader ? primeiraLinha : Array.from({length: todasCols[0].length}, (_, i) => `col${i+1}`);
+    const dataRowsRaw = primeiraEhHeader ? todasCols.slice(1, 7) : todasCols.slice(0, 6);
+
+    // Trim to offset
+    const headerFinal = headerRaw.slice(offset);
     const dataRowsFinal = dataRowsRaw.map(r => r.slice(offset));
 
     setCsvColunas(headerFinal);
