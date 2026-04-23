@@ -673,7 +673,7 @@ function AbaBanners(): React.JSX.Element {
                   <div>
                     <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
                       <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover"
-                        style={{ objectPosition: `${form.position_x ?? 50}% ${form.position_y ?? 50}%` }} />
+                        style={{ objectPosition: `${Number(form.position_x ?? 50)}% ${Number(form.position_y ?? 50)}%` }} />
                       <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
                         className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
                         style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>

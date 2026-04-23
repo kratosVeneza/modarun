@@ -17,6 +17,7 @@ type Produto = {
 type Banner = {
   id: string; titulo?: string; subtitulo?: string;
   imagem_url: string; link_url?: string; link_texto?: string; ativo: boolean; ordem: number;
+  position_x?: number; position_y?: number;
 };
 
 function parseVariacoes(raw: unknown): VariacaoCor[] {
@@ -54,8 +55,9 @@ function BannerRotativo({ banners }: { banners: Banner[] }): React.JSX.Element {
 
   const b = banners[atual];
   return (
-    <div className="relative overflow-hidden rounded-2xl" style={{ height: "200px", background: "#21262D" }}>
-      <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full object-cover transition-opacity duration-700" />
+    <div className="relative overflow-hidden rounded-2xl" style={{ height: "280px", background: "#21262D" }}>
+      <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full object-cover transition-opacity duration-700"
+        style={{ objectPosition: `${parseFloat(String(b.position_x ?? 50))}% ${parseFloat(String(b.position_y ?? 50))}%` }} />
       {(b.titulo || b.subtitulo || b.link_url) && (
         <div className="absolute inset-0 flex flex-col justify-end p-5" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 60%)" }}>
           {b.titulo && <p className="font-black text-xl leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#fff" }}>{b.titulo}</p>}
