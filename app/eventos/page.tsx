@@ -41,6 +41,7 @@ export default function EventosPage(): React.JSX.Element {
   const [error, setError] = useState("");
   const [busca, setBusca] = useState(searchParams.get("cidade") || "");
   const [estadoSelecionado, setEstadoSelecionado] = useState(searchParams.get("estado") || "");
+  const [cidadePorEstado, setCidadePorEstado] = useState<Record<string, string>>({});
 
   const cidadeFiltro = searchParams.get("cidade") || "";
   const estadoFiltro = searchParams.get("estado") || "";
@@ -217,19 +218,19 @@ export default function EventosPage(): React.JSX.Element {
               {/* Cards dos eventos com filtro por cidade */}
               {(() => {
                 const cidades = [...new Set(evs.map(e => e.cidade))].sort();
-                const [cidadeAtiva, setCidadeAtiva] = React.useState("");
+                const cidadeAtiva = cidadePorEstado[uf] || "";
                 const evsFiltrados = cidadeAtiva ? evs.filter(e => e.cidade === cidadeAtiva) : evs;
                 return (
                   <>
                     {cidades.length > 1 && (
                       <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                        <button onClick={() => setCidadeAtiva("")}
+                        <button onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: "" }))}
                           className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
                           style={{ background: cidadeAtiva === "" ? "#FF6B00" : "rgba(255,107,0,0.08)", color: cidadeAtiva === "" ? "#fff" : "#8B949E", border: cidadeAtiva === "" ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                           TODAS ({evs.length})
                         </button>
                         {cidades.map(c => (
-                          <button key={c} onClick={() => setCidadeAtiva(cidadeAtiva === c ? "" : c)}
+                          <button key={c} onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: prev[uf] === c ? "" : c }))}
                             className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
                             style={{ background: cidadeAtiva === c ? "#FF6B00" : "rgba(255,107,0,0.08)", color: cidadeAtiva === c ? "#fff" : "#8B949E", border: cidadeAtiva === c ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                             {c} ({evs.filter(e => e.cidade === c).length})
