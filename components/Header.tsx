@@ -36,7 +36,7 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
         <img
           src="/logo-moda-run.png"
           alt="Moda Run"
-          style={{ height: "42px", width: "auto", objectFit: "contain", maxWidth: "180px" }}
+          style={{ height: "56px", width: "auto", objectFit: "contain", maxWidth: "220px" }}
           onError={() => setLogoError(true)}
         />
       ) : (
