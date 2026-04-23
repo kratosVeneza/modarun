@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
@@ -10,29 +10,35 @@ type Treino = { id: number; titulo: string; cidade: string; estado: string; data
 
 function formatarData(data: string) {
   if (!data) return "—";
-  const [ano, mes, dia] = String(data).split("-");
-  return `${dia}/${mes}/${ano}`;
+  const [, mes, dia] = String(data).split("-");
+  return `${dia}/${mes}`;
 }
 
 export default function PerfilPage(): React.JSX.Element {
   const router = useRouter();
   const supabase = createClient();
   const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId] = useState("");
   const [nomeExibicao, setNomeExibicao] = useState("");
   const [nomeEditando, setNomeEditando] = useState(false);
   const [nomeTemp, setNomeTemp] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [treinos, setTreinos] = useState<Treino[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvandoNome, setSalvandoNome] = useState(false);
+  const [uploadandoFoto, setUploadandoFoto] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function carregar() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserEmail(user.email || "");
+      setUserId(user.id);
       const nome = user.user_metadata?.nome_exibicao || user.email?.split("@")[0] || "Corredor";
       setNomeExibicao(nome); setNomeTemp(nome);
+      setAvatarUrl(user.user_metadata?.avatar_url || null);
       const { data: adminRow } = await supabase.from("admins").select("email").eq("email", user.email?.toLowerCase() ?? "").single();
       setIsAdmin(!!adminRow);
       const { data } = await supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, tipo_treino, km_planejado, distancia").eq("user_id", user.id).order("data_encontro", { ascending: false });
@@ -46,6 +52,28 @@ export default function PerfilPage(): React.JSX.Element {
     setSalvandoNome(true);
     await supabase.auth.updateUser({ data: { nome_exibicao: nomeTemp.trim() } });
     setNomeExibicao(nomeTemp.trim()); setNomeEditando(false); setSalvandoNome(false);
+  }
+
+  async function uploadFoto(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 3 * 1024 * 1024) { alert("Imagem muito grande. Máximo 3MB."); return; }
+    setUploadandoFoto(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const fileName = `${userId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, file, { upsert: true, contentType: file.type });
+      if (uploadError) { alert("Erro no upload: " + uploadError.message); setUploadandoFoto(false); return; }
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      setAvatarUrl(publicUrl);
+    } catch { alert("Erro ao fazer upload."); }
+    setUploadandoFoto(false);
+  }
+
+  async function removerFoto() {
+    if (!confirm("Remover foto de perfil?")) return;
+    await supabase.auth.updateUser({ data: { avatar_url: null } });
+    setAvatarUrl(null);
   }
 
   async function handleLogout() {
@@ -69,21 +97,56 @@ export default function PerfilPage(): React.JSX.Element {
       <Header userEmail={userEmail} isAdmin={isAdmin} />
       <main style={{ background: "#0D1117", minHeight: "100vh" }}>
 
-        {/* Hero do perfil */}
+        {/* Hero */}
         <section className="relative overflow-hidden px-4 py-10" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
           <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
           <div className="relative mx-auto max-w-3xl">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              {/* Avatar */}
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl text-3xl font-black"
-                style={{ background: "linear-gradient(135deg, #5CC800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", boxShadow: "0 0 30px rgba(92,200,0,0.3)" }}>
-                {inicial}
+
+              {/* Avatar com upload */}
+              <div className="relative shrink-0 group">
+                <div className="relative h-24 w-24 rounded-2xl overflow-hidden"
+                  style={{ boxShadow: avatarUrl ? "0 0 0 3px #5CC800" : "0 0 0 3px rgba(92,200,0,0.3)" }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={nomeExibicao} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-4xl font-black"
+                      style={{ background: "linear-gradient(135deg, #5CC800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {inicial}
+                    </div>
+                  )}
+                  {/* Overlay de edição */}
+                  <button onClick={() => fileRef.current?.click()} disabled={uploadandoFoto}
+                    className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "rgba(0,0,0,0.65)" }}>
+                    {uploadandoFoto ? (
+                      <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    ) : (
+                      <>
+                        <span className="text-xl">📷</span>
+                        <span className="text-xs font-black mt-1" style={{ color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>TROCAR</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {/* Botão remover foto */}
+                {avatarUrl && !uploadandoFoto && (
+                  <button onClick={removerFoto}
+                    className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "#FF6B00", color: "#fff" }}>
+                    ✕
+                  </button>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.target.value = ""; }} />
               </div>
+
+              {/* Info */}
               <div className="flex-1">
                 {nomeEditando ? (
                   <div className="flex items-center gap-2">
                     <input type="text" value={nomeTemp} onChange={e => setNomeTemp(e.target.value)} autoFocus
-                      className="flex-1 rounded-xl px-4 py-2 text-lg font-black"
+                      className="flex-1 rounded-xl px-4 py-2 text-xl font-black"
                       style={{ background: "#21262D", border: "1px solid #5CC800", color: "#E6EDF3", outline: "none", fontFamily: "'Barlow Condensed', sans-serif" }} />
                     <button onClick={salvarNome} disabled={salvandoNome}
                       className="rounded-xl px-4 py-2 text-sm font-black"
@@ -104,7 +167,7 @@ export default function PerfilPage(): React.JSX.Element {
                     </button>
                   </div>
                 )}
-                <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>{userEmail}</p>
+                <p className="mt-0.5 text-sm" style={{ color: "#8B949E" }}>{userEmail}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="rounded-lg px-3 py-1 text-xs font-black"
                     style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -115,9 +178,13 @@ export default function PerfilPage(): React.JSX.Element {
                     ⚙️ ADMIN
                   </span>}
                 </div>
+                <p className="mt-2 text-xs" style={{ color: "#8B949E" }}>
+                  Clique na foto para trocar • JPG, PNG • máx. 3MB
+                </p>
               </div>
+
               <button onClick={handleLogout}
-                className="shrink-0 rounded-xl px-4 py-2 text-sm font-black"
+                className="shrink-0 self-start rounded-xl px-4 py-2 text-sm font-black"
                 style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                 SAIR
               </button>
@@ -156,7 +223,7 @@ export default function PerfilPage(): React.JSX.Element {
               <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(92,200,0,0.2)" }}>
                 <p className="text-sm" style={{ color: "#8B949E" }}>Você ainda não criou treinos.</p>
                 <Link href="/encontros" className="mt-3 inline-flex rounded-xl px-4 py-2 text-sm font-black"
-                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
                   CRIAR PRIMEIRO TREINO
                 </Link>
               </div>
