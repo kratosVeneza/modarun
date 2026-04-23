@@ -61,7 +61,8 @@ export default function EventosPage(): React.JSX.Element {
   useEffect(() => {
     async function carregarEventos() {
       setLoading(true);
-      let query = supabase.from("eventos").select("*").order("data_evento", { ascending: true });
+      const hoje = new Date().toISOString().split("T")[0];
+      let query = supabase.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true });
       if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
       if (estadoFiltro) query = query.ilike("estado", `%${estadoFiltro}%`);
       const { data, error: err } = await query;
