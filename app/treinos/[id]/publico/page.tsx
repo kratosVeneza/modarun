@@ -48,6 +48,7 @@ export default function TreinoPublicoPage() {
   const [cancelarId, setCancelarId] = useState<number | null>(null);
   const [cancelarNome, setCancelarNome] = useState("");
   const [cancelarNomeInput, setCancelarNomeInput] = useState("");
+  const [cancelarWhatsappInput, setCancelarWhatsappInput] = useState("");
   const [cancelando, setCancelando] = useState(false);
   const [cancelarErro, setCancelarErro] = useState("");
 
@@ -88,13 +89,13 @@ export default function TreinoPublicoPage() {
     setCancelando(true); setCancelarErro("");
     const res = await fetch("/api/cancelar-participacao", {
       method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ participante_id: cancelarId, nome: cancelarNomeInput.trim() }),
+      body: JSON.stringify({ participante_id: cancelarId, nome: cancelarNomeInput.trim(), whatsapp: cancelarWhatsappInput.trim() }),
     });
     const result = await res.json();
     setCancelando(false);
     if (!res.ok) { setCancelarErro(result.error || "Erro ao cancelar."); return; }
     setTreino(t => t ? { ...t, encontro_participantes: (t.encontro_participantes || []).filter(p => p.id !== cancelarId) } : t);
-    setCancelarModal(false); setCancelarNomeInput(""); setCancelarId(null); setCancelarNome("");
+    setCancelarModal(false); setCancelarNomeInput(""); setCancelarWhatsappInput(""); setCancelarId(null); setCancelarNome("");
   }
 
   const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", width: "100%" } as React.CSSProperties;
@@ -123,12 +124,30 @@ export default function TreinoPublicoPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.3)" }}>
             <h3 className="font-black text-lg mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>CANCELAR PARTICIPAÇÃO</h3>
-            <p className="text-sm mb-4" style={{ color: "#8B949E" }}>Digite seu nome <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong> para confirmar o cancelamento.</p>
-            <input type="text" placeholder="Seu nome" value={cancelarNomeInput} onChange={e => setCancelarNomeInput(e.target.value)}
-              style={inp} onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+            {(() => {
+              const p = participantes.find(x => x.id === cancelarId);
+              const temWhatsapp = !!p?.whatsapp;
+              return temWhatsapp ? (
+                <>
+                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>
+                    Informe o <strong style={{ color: "#E6EDF3" }}>WhatsApp</strong> cadastrado para confirmar o cancelamento de <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong>.
+                  </p>
+                  <input type="tel" placeholder="(00) 00000-0000" value={cancelarWhatsappInput} onChange={e => setCancelarWhatsappInput(e.target.value)}
+                    style={inp} onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+                </>
+              ) : (
+                <>
+                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>
+                    Digite seu nome <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong> para confirmar o cancelamento.
+                  </p>
+                  <input type="text" placeholder="Seu nome" value={cancelarNomeInput} onChange={e => setCancelarNomeInput(e.target.value)}
+                    style={inp} onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+                </>
+              );
+            })()}
             {cancelarErro && <p className="mt-2 text-sm" style={{ color: "#FF6B00" }}>{cancelarErro}</p>}
             <div className="flex gap-3 mt-4">
-              <button type="button" onClick={() => { setCancelarModal(false); setCancelarNomeInput(""); setCancelarErro(""); }}
+              <button type="button" onClick={() => { setCancelarModal(false); setCancelarNomeInput(""); setCancelarWhatsappInput(""); setCancelarErro(""); }}
                 className="flex-1 rounded-xl py-3 text-sm font-black"
                 style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                 VOLTAR
