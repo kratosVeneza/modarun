@@ -35,9 +35,12 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
   const polylineRef = useRef<unknown>(null);
   const LRef = useRef<unknown>(null);
 
+  // Use ref to always call latest onDistanciaChange
+  const onDistanciaRef = useRef(onDistanciaChange);
+  onDistanciaRef.current = onDistanciaChange;
   const atualizarDistancia = useCallback((ponto: LatLng | null, rota: LatLng[]) => {
-    onDistanciaChange(calcularDistancia(ponto, rota));
-  }, [onDistanciaChange]);
+    onDistanciaRef.current(calcularDistancia(ponto, rota));
+  }, []);
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -58,11 +61,10 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
       const map = L.default.map(containerRef.current!, { center: [-3.767, -49.672], zoom: 14, zoomControl: true });
       mapRef.current = map;
 
-      // Dark tile layer
-      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 20,
+      // OpenStreetMap standard tile - best readability
+      L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+        maxZoom: 19,
       }).addTo(map);
 
       map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
