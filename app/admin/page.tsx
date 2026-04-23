@@ -244,11 +244,15 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     // Detect offset: find first column that looks like real data (not URLs, not empty)
     // by checking data rows
     const dataRowsRaw = linhasLimpas.slice(1, 6).map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
+    
+    // Detect offset: find the first column index that has a date pattern DD.MM or DD/MM
+    // Skip columns that are all URLs or all empty
     let offset = 0;
-    for (let i = 0; i < Math.min(5, header.length); i++) {
-      const vals = dataRowsRaw.map(r => r[i] || "");
-      const hasDate = vals.some(v => /^\d{1,2}[.\/\-]\d{1,2}/.test(v));
-      if (hasDate) { offset = i; break; }
+    outer: for (let i = 0; i < Math.min(8, header.length); i++) {
+      for (const row of dataRowsRaw) {
+        const v = (row[i] || "").trim();
+        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(v)) { offset = i; break outer; }
+      }
     }
 
     // Trim header and data to start at offset
