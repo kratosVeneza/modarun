@@ -3,8 +3,6 @@ import { getAdminStatus } from "@/utils/supabase/isAdmin";
 import EncontroForm from "@/components/EncontroForm";
 import FiltroEncontros from "@/components/FiltroEncontros";
 import ParticiparEncontro from "@/components/ParticiparEncontro";
-import BannerModaRun from "@/components/BannerModaRun";
-import KitCorrida from "@/components/KitCorrida";
 import Header from "@/components/Header";
 
 type SearchParams = Promise<{ cidade?: string }>;
@@ -18,7 +16,6 @@ function formatarData(data: string) {
 export default async function EncontrosPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const cidadeFiltro = params.cidade?.trim() || "";
-
   const { user, isAdmin } = await getAdminStatus();
 
   let query = supabase
@@ -27,141 +24,149 @@ export default async function EncontrosPage({ searchParams }: { searchParams: Se
     .order("data_encontro", { ascending: true });
 
   if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
-
   const { data, error } = await query;
-
-  if (error) {
-    return (
-      <>
-        <Header userEmail={user?.email} isAdmin={isAdmin} />
-        <main className="min-h-screen px-4 py-8">
-          <div className="mx-auto max-w-5xl rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
-            <h1 className="text-2xl font-bold text-slate-900">Treinos em Grupo</h1>
-            <p className="mt-2 text-red-600">Erro ao carregar: {error.message}</p>
-          </div>
-        </main>
-      </>
-    );
-  }
 
   return (
     <>
       <Header userEmail={user?.email} isAdmin={isAdmin} />
-
-      <main className="min-h-screen px-4 py-8">
+      <main className="min-h-screen px-4 py-8" style={{ background: "#0D1117" }}>
         <div className="mx-auto max-w-5xl space-y-6">
 
-          <section className="rounded-[28px] bg-gradient-to-r from-orange-500 to-amber-500 p-8 text-white shadow-lg">
-            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">Moda Run</span>
-            <h1 className="mt-4 text-3xl font-bold sm:text-5xl">Treinos em Grupo</h1>
-            <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-              Organize corridas, marque pontos de encontro e treine com outras pessoas na sua cidade.
-            </p>
-          </section>
-
-          <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm">
-            Crie um treino e defina o ponto de encontro para correr com outras pessoas 🏃‍♂️
-          </div>
-
-          <EncontroForm />
-
-          <BannerModaRun />
-
-          <FiltroEncontros cidadeInicial={cidadeFiltro} />
-
-          <section className="space-y-5">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Lista de treinos</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {cidadeFiltro ? `Mostrando treinos para: ${cidadeFiltro}` : "Veja treinos disponíveis e escolha um ponto de encontro para correr"}
+          {/* Hero */}
+          <section className="relative overflow-hidden rounded-2xl px-6 py-10" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
+            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
+            <div className="relative">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black"
+                style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
+                ⚡ MODA RUN
+              </div>
+              <h1 className="text-4xl font-black sm:text-5xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", lineHeight: 1 }}>
+                TREINOS EM GRUPO
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm" style={{ color: "#8B949E" }}>
+                Organize corridas, marque pontos de encontro e treine com outras pessoas na sua cidade.
               </p>
             </div>
+          </section>
 
-            {data && data.length === 0 && (
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-                Nenhum treino encontrado para esse filtro.
+          {/* Formulário criar treino */}
+          <EncontroForm />
+
+          {/* Filtro */}
+          <FiltroEncontros cidadeInicial={cidadeFiltro} />
+
+          {/* Lista */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="text-xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
+                  LISTA DE TREINOS
+                </h2>
+              </div>
+              <span className="text-sm" style={{ color: "#8B949E" }}>
+                {error ? "Erro ao carregar" : cidadeFiltro ? `Filtrando: ${cidadeFiltro}` : `${data?.length || 0} treino${data?.length !== 1 ? "s" : ""}`}
+              </span>
+            </div>
+
+            {(!data || data.length === 0) && (
+              <div className="rounded-2xl p-8 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
+                <p className="text-3xl mb-2">🏃</p>
+                <p className="font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {cidadeFiltro ? `Nenhum treino em "${cidadeFiltro}"` : "NENHUM TREINO AINDA"}
+                </p>
+                <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Seja o primeiro a criar um treino!</p>
               </div>
             )}
 
             <div className="grid gap-4">
-              {data?.map((e) => (
-                <article key={e.id} className="group overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-lg transition">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-xl font-bold text-slate-900">{e.titulo}</h3>
-                        {e.tipo_treino && (
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">{e.tipo_treino}</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-600">{e.cidade} - {e.estado}</p>
-                      <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        Participantes: {e.encontro_participantes?.length || 0}
-                      </div>
-                    </div>
-                    <ParticiparEncontro encontroId={e.id} />
-                  </div>
+              {data?.map((e) => {
+                const participantes = e.encontro_participantes || [];
+                return (
+                  <article key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
+                    style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
+                    <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg, #5CC800, #FF6B00)" }} />
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <InfoItem label="Data" value={formatarData(String(e.data_encontro))} />
-                    <InfoItem label="Horário" value={String(e.horario || "—")} />
-                    <InfoItem label="Local de saída" value={e.local_saida || "—"} />
-                    {e.distancia && <InfoItem label="Distância" value={e.distancia} />}
-                    {e.ritmo && <InfoItem label="Ritmo" value={e.ritmo} />}
-                    {e.distancia && <KitCorrida distancia={e.distancia} />}
-                    {e.organizador_nome && <InfoItem label="Organizador" value={e.organizador_nome} />}
-                  </div>
-
-                  {e.percurso && (
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-700">Percurso</p>
-                      <p className="mt-1 text-sm text-slate-600">{e.percurso}</p>
-                    </div>
-                  )}
-
-                  {e.observacoes && (
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-700">Observações</p>
-                      <p className="mt-1 text-sm text-slate-600">{e.observacoes}</p>
-                    </div>
-                  )}
-
-                  {e.encontro_participantes && e.encontro_participantes.length > 0 && (
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-700">Participantes</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {e.encontro_participantes.map((p: { id: number; nome: string }) => (
-                          <span key={p.id} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                            {p.nome}
+                    <div className="p-5">
+                      {/* Header do card */}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h3 className="font-black text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{e.titulo}</h3>
+                            {e.tipo_treino && (
+                              <span className="rounded-lg px-2.5 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{e.tipo_treino}</span>
+                            )}
+                          </div>
+                          <p className="text-sm" style={{ color: "#8B949E" }}>📍 {e.cidade} — {e.estado}</p>
+                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-black"
+                            style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            👥 {participantes.length} participante{participantes.length !== 1 ? "s" : ""}
                           </span>
+                        </div>
+                        <ParticiparEncontro encontroId={e.id} />
+                      </div>
+
+                      {/* Info grid */}
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {[
+                          ["📅", "DATA", formatarData(String(e.data_encontro))],
+                          ["⏰", "HORÁRIO", String(e.horario || "—")],
+                          ["🏁", "LOCAL", e.local_saida || "—"],
+                          ...(e.distancia || e.km_planejado ? [["📏", "DISTÂNCIA", e.distancia || `${e.km_planejado}km`]] : []),
+                          ...(e.ritmo ? [["🎯", "RITMO", e.ritmo]] : []),
+                          ...(e.organizador_nome ? [["🏃", "ORGANIZADOR", e.organizador_nome]] : []),
+                        ].map(([icon, label, value]) => (
+                          <div key={String(label)} className="rounded-xl p-3" style={{ background: "#21262D" }}>
+                            <p className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>{icon} {label}</p>
+                            <p className="mt-0.5 text-sm font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{value}</p>
+                          </div>
                         ))}
                       </div>
-                    </div>
-                  )}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <a href={`/treinos/${e.id}`} className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                      Abrir treino
-                    </a>
-                    <a href="/loja" className="rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
-                      🔥 Ver kit ideal para essa corrida
-                    </a>
-                  </div>
-                </article>
-              ))}
+                      {/* Participantes */}
+                      {participantes.length > 0 && (
+                        <div className="mt-3 rounded-xl p-3" style={{ background: "#21262D" }}>
+                          <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>👥 PARTICIPANTES</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {participantes.map((p: { id: number; nome: string }) => (
+                              <span key={p.id} className="rounded-lg px-2.5 py-1 text-xs font-bold"
+                                style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                {p.nome}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Observações / percurso */}
+                      {(e.percurso || e.observacoes) && (
+                        <div className="mt-3 rounded-xl p-3" style={{ background: "#21262D" }}>
+                          {e.percurso && <p className="text-xs" style={{ color: "#8B949E" }}>🗺 <strong style={{ color: "#E6EDF3" }}>Percurso:</strong> {e.percurso}</p>}
+                          {e.observacoes && <p className="text-xs mt-1" style={{ color: "#8B949E" }}>📝 <strong style={{ color: "#E6EDF3" }}>Obs:</strong> {e.observacoes}</p>}
+                        </div>
+                      )}
+
+                      {/* Botões */}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <a href={`/treinos/${e.id}`}
+                          className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+                          style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                          ⚡ ABRIR TREINO
+                        </a>
+                        <a href="/loja"
+                          className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+                          style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                          🛒 VER LOJA
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
         </div>
       </main>
     </>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-800">{value}</p>
-    </div>
   );
 }
