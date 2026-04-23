@@ -215,31 +215,26 @@ export default function EventosPage(): React.JSX.Element {
                 </span>
               </div>
 
-              {/* Cards dos eventos com filtro por cidade */}
-              {(() => {
-                const cidades = [...new Set(evs.map(e => e.cidade))].sort();
-                const cidadeAtiva = cidadePorEstado[uf] || "";
-                const evsFiltrados = cidadeAtiva ? evs.filter(e => e.cidade === cidadeAtiva) : evs;
-                return (
-                  <>
-                    {cidades.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                        <button onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: "" }))}
-                          className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
-                          style={{ background: cidadeAtiva === "" ? "#FF6B00" : "rgba(255,107,0,0.08)", color: cidadeAtiva === "" ? "#fff" : "#8B949E", border: cidadeAtiva === "" ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          TODAS ({evs.length})
-                        </button>
-                        {cidades.map(c => (
-                          <button key={c} onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: prev[uf] === c ? "" : c }))}
-                            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
-                            style={{ background: cidadeAtiva === c ? "#FF6B00" : "rgba(255,107,0,0.08)", color: cidadeAtiva === c ? "#fff" : "#8B949E", border: cidadeAtiva === c ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            {c} ({evs.filter(e => e.cidade === c).length})
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="grid gap-3">
-                    {evsFiltrados.map(evento => (
+              {/* Filtro por cidade dentro do estado */}
+              {[...new Set(evs.map(e => e.cidade))].sort().length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  <button onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: "" }))}
+                    className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
+                    style={{ background: !cidadePorEstado[uf] ? "#FF6B00" : "rgba(255,107,0,0.08)", color: !cidadePorEstado[uf] ? "#fff" : "#8B949E", border: !cidadePorEstado[uf] ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    TODAS ({evs.length})
+                  </button>
+                  {[...new Set(evs.map(e => e.cidade))].sort().map(c => (
+                    <button key={c} onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: prev[uf] === c ? "" : c }))}
+                      className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
+                      style={{ background: cidadePorEstado[uf] === c ? "#FF6B00" : "rgba(255,107,0,0.08)", color: cidadePorEstado[uf] === c ? "#fff" : "#8B949E", border: cidadePorEstado[uf] === c ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {c} ({evs.filter(e => e.cidade === c).length})
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid gap-3">
+              {(cidadePorEstado[uf] ? evs.filter(e => e.cidade === cidadePorEstado[uf]) : evs).map(evento => (
                   <article key={evento.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
                     style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
                     <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#5CC800,#FF6B00)" }} />
@@ -269,11 +264,8 @@ export default function EventosPage(): React.JSX.Element {
                       </div>
                     </div>
                   </article>
-                ))}
-                    </div>
-                  </>
-                );
-              })()}
+              ))}
+              </div>
             </section>
           ))}
 
