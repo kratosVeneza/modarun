@@ -1,233 +1,183 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  MapContainer,
-  Marker,
-  Polyline,
-  TileLayer,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
-import L, { type LatLngExpression } from "leaflet";
-
-delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+import { useEffect, useRef, useCallback } from "react";
 
 type LatLng = { lat: number; lng: number };
-
 type Props = {
   pontoEncontro: LatLng | null;
-  setPontoEncontro: (value: LatLng | null) => void;
+  setPontoEncontro: (p: LatLng | null) => void;
   rotaCoords: LatLng[];
-  setRotaCoords: (value: LatLng[]) => void;
-  onDistanciaChange?: (km: number) => void;
+  setRotaCoords: (r: LatLng[]) => void;
+  onDistanciaChange: (d: number) => void;
 };
 
-type CliqueProps = {
-  onClique: (ponto: LatLng) => void;
-};
-
-function haversineKm(a: LatLng, b: LatLng): number {
+function haversine(a: LatLng, b: LatLng): number {
   const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
   const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function calcularDistanciaTotal(pontoEncontro: LatLng | null, rota: LatLng[]): number {
-  const todos = pontoEncontro ? [pontoEncontro, ...rota] : rota;
+function calcularDistancia(ponto: LatLng | null, rota: LatLng[]): number {
+  if (!ponto) return 0;
+  const todos = [ponto, ...rota];
   let total = 0;
-  for (let i = 1; i < todos.length; i++) {
-    total += haversineKm(todos[i - 1], todos[i]);
-  }
+  for (let i = 1; i < todos.length; i++) total += haversine(todos[i - 1], todos[i]);
   return total;
 }
 
-const iconePontoEncontro = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
+export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rotaCoords, setRotaCoords, onDistanciaChange }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<unknown>(null);
+  const pontoMarkerRef = useRef<unknown>(null);
+  const rotaMarcadoresRef = useRef<unknown[]>([]);
+  const polylineRef = useRef<unknown>(null);
+  const LRef = useRef<unknown>(null);
 
-const iconeRota = new L.DivIcon({
-  className: "",
-  html: `<div style="width:14px;height:14px;background:#2563eb;border:2px solid white;border-radius:9999px;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
+  const atualizarDistancia = useCallback((ponto: LatLng | null, rota: LatLng[]) => {
+    onDistanciaChange(calcularDistancia(ponto, rota));
+  }, [onDistanciaChange]);
 
-function AjustarMapa() {
-  const map = useMap();
   useEffect(() => {
-    const t = setTimeout(() => map.invalidateSize(), 300);
-    return () => clearTimeout(t);
-  }, [map]);
-  return null;
-}
+    if (mapRef.current || !containerRef.current) return;
 
-// Componente simples — só captura o clique e delega para o pai decidir o que fazer
-function CliqueMapa({ onClique }: CliqueProps) {
-  useMapEvents({
-    click(e) {
-      onClique({ lat: e.latlng.lat, lng: e.latlng.lng });
-    },
-  });
-  return null;
-}
+    import("leaflet").then((L) => {
+      if (mapRef.current || !containerRef.current) return;
+      LRef.current = L.default;
 
-export default function MapaTreinoEditor({
-  pontoEncontro,
-  setPontoEncontro,
-  rotaCoords,
-  setRotaCoords,
-  onDistanciaChange,
-}: Props) {
-  const [mounted, setMounted] = useState(false);
-  // Estado interno para a distância — garante re-render do badge dentro deste componente
-  const [distanciaKm, setDistanciaKm] = useState(0);
-  // Ref para sempre ter os valores mais recentes dentro do callback do mapa
-  const pontoRef = useRef(pontoEncontro);
-  const rotaRef = useRef(rotaCoords);
-  pontoRef.current = pontoEncontro;
-  rotaRef.current = rotaCoords;
+      const DefaultIcon = L.default.Icon.Default.prototype as unknown as Record<string, unknown>;
+      delete DefaultIcon._getIconUrl;
+      L.default.Icon.Default.mergeOptions({
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
 
-  useEffect(() => { setMounted(true); }, []);
+      // Default to Tucuruí/PA
+      const map = L.default.map(containerRef.current!, { center: [-3.767, -49.672], zoom: 14, zoomControl: true });
+      mapRef.current = map;
 
-  // Sempre que pontoEncontro ou rotaCoords mudam (ex: desfazer), recalcula
-  useEffect(() => {
-    const d = calcularDistanciaTotal(pontoEncontro, rotaCoords);
-    setDistanciaKm(d);
-    onDistanciaChange?.(d);
-  }, [pontoEncontro, rotaCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+      // Dark tile layer
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 20,
+      }).addTo(map);
 
-  function handleClique(novoPonto: LatLng) {
-    if (pontoRef.current === null) {
-      setPontoEncontro(novoPonto);
-      // Com só 1 ponto ainda não há distância — o useEffect cuida do recálculo
-    } else {
-      const novaRota = [...rotaRef.current, novoPonto];
+      map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
+        const latlng: LatLng = { lat: e.latlng.lat, lng: e.latlng.lng };
+        const L2 = LRef.current as typeof L.default;
+        const map2 = mapRef.current as ReturnType<typeof L.default.map>;
+
+        if (!pontoMarkerRef.current) {
+          // Primeiro clique = ponto de encontro
+          const greenIcon = L2.divIcon({
+            className: "",
+            html: `<div style="width:20px;height:20px;background:#5CC800;border:3px solid #fff;border-radius:50%;box-shadow:0 0 10px rgba(92,200,0,0.6);"></div>`,
+            iconSize: [20, 20], iconAnchor: [10, 10],
+          });
+          pontoMarkerRef.current = L2.marker([latlng.lat, latlng.lng], { icon: greenIcon }).addTo(map2);
+          setPontoEncontro(latlng);
+          atualizarDistancia(latlng, rotaCoords);
+        } else {
+          // Cliques seguintes = rota
+          const rotaIcon = L2.divIcon({
+            className: "",
+            html: `<div style="width:12px;height:12px;background:#FF6B00;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(255,107,0,0.5);"></div>`,
+            iconSize: [12, 12], iconAnchor: [6, 6],
+          });
+          const marker = L2.marker([latlng.lat, latlng.lng], { icon: rotaIcon }).addTo(map2);
+          rotaMarcadoresRef.current.push(marker);
+          const novaRota = [...rotaCoords, latlng];
+          setRotaCoords(novaRota);
+
+          // Update polyline
+          if (polylineRef.current) (polylineRef.current as { remove: () => void }).remove();
+          const ponto = pontoEncontro;
+          if (ponto) {
+            const pontos: [number, number][] = [[ponto.lat, ponto.lng], ...novaRota.map(p => [p.lat, p.lng] as [number, number])];
+            polylineRef.current = L2.polyline(pontos, { color: "#5CC800", weight: 3, opacity: 0.8, dashArray: "8, 4" }).addTo(map2);
+          }
+          atualizarDistancia(pontoEncontro, novaRota);
+        }
+      });
+
+      setTimeout(() => map.invalidateSize(), 100);
+    });
+
+    return () => {
+      if (mapRef.current) {
+        (mapRef.current as { remove: () => void }).remove();
+        mapRef.current = null;
+        pontoMarkerRef.current = null;
+        rotaMarcadoresRef.current = [];
+        polylineRef.current = null;
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function desfazerUltimoPonto() {
+    if (rotaMarcadoresRef.current.length > 0) {
+      const ultimo = rotaMarcadoresRef.current.pop();
+      (ultimo as { remove: () => void }).remove();
+      const novaRota = rotaCoords.slice(0, -1);
       setRotaCoords(novaRota);
+      if (polylineRef.current) (polylineRef.current as { remove: () => void }).remove();
+      if (pontoEncontro && novaRota.length > 0) {
+        const L2 = LRef.current as { polyline: (p: [number,number][], opts: object) => { addTo: (m: unknown) => unknown } };
+        const pontos: [number, number][] = [[pontoEncontro.lat, pontoEncontro.lng], ...novaRota.map(p => [p.lat, p.lng] as [number, number])];
+        polylineRef.current = L2.polyline(pontos, { color: "#5CC800", weight: 3, opacity: 0.8, dashArray: "8, 4" }).addTo(mapRef.current as unknown);
+      }
+      atualizarDistancia(pontoEncontro, novaRota);
+    } else if (pontoMarkerRef.current) {
+      (pontoMarkerRef.current as { remove: () => void }).remove();
+      pontoMarkerRef.current = null;
+      setPontoEncontro(null);
+      atualizarDistancia(null, []);
     }
   }
 
-  function desfazerUltimoPonto() {
-    setRotaCoords(rotaCoords.slice(0, -1));
-  }
-
-  function limparTudo() {
-    setPontoEncontro(null);
+  function limparRota() {
+    rotaMarcadoresRef.current.forEach(m => (m as { remove: () => void }).remove());
+    rotaMarcadoresRef.current = [];
+    if (pontoMarkerRef.current) {
+      (pontoMarkerRef.current as { remove: () => void }).remove();
+      pontoMarkerRef.current = null;
+    }
+    if (polylineRef.current) {
+      (polylineRef.current as { remove: () => void }).remove();
+      polylineRef.current = null;
+    }
     setRotaCoords([]);
-  }
-
-  const center = useMemo<LatLngExpression>(() => {
-    if (pontoEncontro) return [pontoEncontro.lat, pontoEncontro.lng];
-    return [-3.7657, -49.6725];
-  }, [pontoEncontro]);
-
-  const positions: LatLngExpression[] = [
-    ...(pontoEncontro ? [[pontoEncontro.lat, pontoEncontro.lng] as LatLngExpression] : []),
-    ...rotaCoords.map((p) => [p.lat, p.lng] as LatLngExpression),
-  ];
-
-  if (!mounted) {
-    return (
-      <div className="space-y-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-sm font-semibold text-slate-900">Mapa do treino</p>
-          <p className="mt-1 text-sm text-slate-500">Carregando mapa...</p>
-        </div>
-      </div>
-    );
+    setPontoEncontro(null);
+    atualizarDistancia(null, []);
   }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-start justify-between gap-4">
+    <div className="space-y-2">
+      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.2)" }}>
+        <div className="flex items-center justify-between px-3 py-2" style={{ background: "#21262D", borderBottom: "1px solid rgba(92,200,0,0.15)" }}>
           <div>
-            <p className="text-sm font-semibold text-slate-900">Mapa do treino</p>
-            <p className="mt-1 text-sm text-slate-500">
-              {pontoEncontro === null
-                ? "Clique no mapa para marcar o ponto de encontro."
-                : "Clique para adicionar pontos ao percurso."}
+            <p className="text-xs font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>🗺 MAPA DO TREINO</p>
+            <p className="text-xs" style={{ color: "#8B949E" }}>
+              {!pontoEncontro ? "1° clique = ponto de encontro 📍" : "Próximos cliques = traçar rota 🟠"}
             </p>
           </div>
-
-          {distanciaKm > 0 && (
-            <div className="shrink-0 rounded-2xl bg-orange-50 border border-orange-200 px-3 py-2 text-center">
-              <p className="text-xs text-orange-500 font-medium">Percurso</p>
-              <p className="text-lg font-bold text-orange-600 leading-tight">
-                {distanciaKm.toFixed(2)} km
-              </p>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button type="button" onClick={desfazerUltimoPonto}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all"
+              style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              ↩ DESFAZER
+            </button>
+            <button type="button" onClick={limparRota}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all"
+              style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              🗑 LIMPAR
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div style={{ height: "420px", width: "100%" }}>
-          <MapContainer
-            key="mapa-treino-editor"
-            center={center}
-            zoom={13}
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom={true}
-          >
-            <AjustarMapa />
-            <TileLayer
-              attribution="&copy; OpenStreetMap contributors"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <CliqueMapa onClique={handleClique} />
-
-            {pontoEncontro && (
-              <Marker
-                position={[pontoEncontro.lat, pontoEncontro.lng]}
-                icon={iconePontoEncontro}
-              />
-            )}
-            {rotaCoords.map((p, i) => (
-              <Marker
-                key={`${p.lat}-${p.lng}-${i}`}
-                position={[p.lat, p.lng]}
-                icon={iconeRota}
-              />
-            ))}
-            {positions.length >= 2 && (
-              <Polyline positions={positions} pathOptions={{ color: "#f97316", weight: 5 }} />
-            )}
-          </MapContainer>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={desfazerUltimoPonto}
-          disabled={rotaCoords.length === 0}
-          className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Desfazer último ponto
-        </button>
-        <button
-          type="button"
-          onClick={limparTudo}
-          disabled={pontoEncontro === null && rotaCoords.length === 0}
-          className="rounded-2xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Limpar rota
-        </button>
+        <div ref={containerRef} style={{ height: "280px", width: "100%" }} />
       </div>
     </div>
   );
