@@ -21,7 +21,6 @@ export default function ParticiparEncontro({ encontroId }: { encontroId: number 
       if (!res.ok) { setMensagem(result.error || "Erro ao participar."); setLoading(false); return; }
       setSucesso(true); setMensagem("Participação confirmada! 🎉");
       setTimeout(() => router.refresh(), 300);
-      if (result.whatsappLink) setTimeout(() => window.open(result.whatsappLink, "_blank"), 800);
       setTimeout(() => { setAberto(false); setMensagem(""); setSucesso(false); setNome(""); setWhatsapp(""); }, 2200);
     } catch { setMensagem("Erro de conexão."); }
     finally { setLoading(false); }
