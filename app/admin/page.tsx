@@ -215,7 +215,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   async function importarCSV() {
     if(!csvTexto.trim()){setImportErro("Cole o CSV primeiro.");return;}
-    if(csvMap.nome<0||csvMap.cidade<0||csvMap.estado<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade, estado e data.");return;}
+    if(csvMap.nome<0||csvMap.cidade<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade e data.");return;}
     setImportando(true);setImportErro("");setImportResultado(null);
     try {
       const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvTexto,mapeamento:csvMap})});
@@ -301,7 +301,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
                 {([
                   {key:"nome",label:"NOME *"},
                   {key:"cidade",label:"CIDADE *"},
-                  {key:"estado",label:"ESTADO *"},
+                  {key:"estado",label:"ESTADO"},
                   {key:"data",label:"DATA *"},
                   {key:"distancia",label:"DISTÂNCIA"},
                   {key:"local",label:"LOCAL"},
