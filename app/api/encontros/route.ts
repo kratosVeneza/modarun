@@ -17,9 +17,9 @@ export async function POST(request: Request) {
       tipo_treino, km_planejado, ponto_encontro_lat, ponto_encontro_lng, rota_coords,
     } = body;
 
-    if (!titulo || !cidade || !estado || !data_encontro || !horario || !local_saida) {
+    if (!titulo || !cidade || !estado || !data_encontro || !horario) {
       return NextResponse.json(
-        { error: "Preencha os campos obrigatórios: título, cidade, estado, data, horário e ponto de encontro." },
+        { error: "Preencha os campos obrigatórios: título, cidade, estado, data e horário." },
         { status: 400 }
       );
     }

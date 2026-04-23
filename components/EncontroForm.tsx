@@ -32,8 +32,8 @@ export default function EncontroForm(): React.JSX.Element {
   }
 
   function avancarEtapa() {
-    if (!form.titulo || !form.cidade || !form.estado || !form.data_encontro || !form.horario || !form.local_saida) {
-      setErro("Preencha: título, cidade, estado, data, horário e ponto de encontro."); return;
+    if (!form.titulo || !form.cidade || !form.estado || !form.data_encontro || !form.horario) {
+      setErro("Preencha: título, cidade, estado, data e horário."); return;
     }
     setErro(""); setEtapa(2);
   }
@@ -173,7 +173,7 @@ export default function EncontroForm(): React.JSX.Element {
               </div>
             </div>
             <div>
-              <label style={lbl}>PONTO DE ENCONTRO *</label>
+              <label style={lbl}>PONTO DE ENCONTRO <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>( opcional)</span></label>
               <input name="local_saida" type="text" placeholder="Ex: Entrada do Parque Municipal" value={form.local_saida} onChange={handleChange} style={inp}
                 onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
             </div>
