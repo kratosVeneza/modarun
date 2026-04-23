@@ -140,6 +140,8 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [excluindo, setExcluindo] = useState<number|null>(null);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
   const [syncAberto, setSyncAberto] = useState(false);
   const [sheetId, setSheetId] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -178,6 +180,35 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     const res = await fetch("/api/admin/eventos",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
     setExcluindo(null);
     if(res.ok) setEventos(eventos.filter(e=>e.id!==id));
+  }
+
+  function toggleSelecionado(id: number) {
+    setSelecionados(prev => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id); else novo.add(id);
+      return novo;
+    });
+  }
+
+  function toggleTodos() {
+    if (selecionados.size === eventos.length) setSelecionados(new Set());
+    else setSelecionados(new Set(eventos.map(e => e.id)));
+  }
+
+  async function excluirLote() {
+    if (selecionados.size === 0) return;
+    if (!confirm(`Excluir ${selecionados.size} evento${selecionados.size > 1 ? "s" : ""}? Esta ação não pode ser desfeita.`)) return;
+    setExcluindoLote(true);
+    const ids = [...selecionados];
+    let ok = 0;
+    for (const id of ids) {
+      const res = await fetch("/api/admin/eventos", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      if (res.ok) ok++;
+    }
+    setEventos(eventos.filter(e => !selecionados.has(e.id)));
+    setSelecionados(new Set());
+    setExcluindoLote(false);
+    if (ok < ids.length) alert(`${ok} de ${ids.length} eventos excluídos.`);
   }
 
   async function sincronizar() {
@@ -321,15 +352,35 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 justify-end">
-        <button onClick={() => { setSyncAberto(!syncAberto); setCsvAberto(false); }} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
-          style={{ background: syncAberto?"rgba(92,200,0,0.2)":"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          📊 GOOGLE SHEETS
-        </button>
-        <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
-          style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          + ADICIONAR EVENTO
-        </button>
+      <div className="flex flex-wrap gap-3 justify-between items-center">
+        <div className="flex gap-2 flex-wrap">
+          {eventos.length > 0 && (
+            <>
+              <button onClick={toggleTodos}
+                className="rounded-xl px-4 py-2.5 text-sm font-black transition-all"
+                style={{ background: selecionados.size === eventos.length ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {selecionados.size === eventos.length ? "✓ TODOS SELECIONADOS" : `☐ SELECIONAR TODOS`}
+              </button>
+              {selecionados.size > 0 && (
+                <button onClick={excluirLote} disabled={excluindoLote}
+                  className="rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+                  style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {excluindoLote ? "EXCLUINDO..." : `🗑️ EXCLUIR ${selecionados.size}`}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setSyncAberto(!syncAberto); setCsvAberto(false); }} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+            style={{ background: syncAberto?"rgba(92,200,0,0.2)":"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+            📊 SHEETS
+          </button>
+          <button onClick={abrirNovo} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+            style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+            + EVENTO
+          </button>
+        </div>
       </div>
 
       {/* Botão importar CSV */}
@@ -551,24 +602,36 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
         </div>
       ) : (
         <div className="space-y-3">
-          {eventos.map(ev => (
-            <div key={ev.id} className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.1)" }}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-black" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", fontSize:"17px" }}>{ev.nome}</h3>
-                    {ev.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
-                  </div>
-                  <p className="mt-0.5 text-sm" style={{ color:"#8B949E" }}>📍 {ev.cidade} — {ev.estado} · 📅 {fmtData(String(ev.data_evento))}{ev.distancia&&` · ${ev.distancia}`}</p>
-                  {ev.link_inscricao&&<a href={ev.link_inscricao} target="_blank" rel="noreferrer" className="text-xs font-bold hover:underline" style={{ color:"#5CC800" }}>🔗 Inscrição</a>}
+          {eventos.map(ev => {
+            const selecionado = selecionados.has(ev.id);
+            return (
+            <div key={ev.id} className="rounded-2xl p-4 transition-all cursor-pointer"
+              style={{ background: selecionado ? "rgba(92,200,0,0.08)" : "#161B22", border: selecionado ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}
+              onClick={() => toggleSelecionado(ev.id)}>
+              <div className="flex gap-3 items-start">
+                {/* Checkbox */}
+                <div className="shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded border-2 transition-all"
+                  style={{ background: selecionado ? "#5CC800" : "transparent", borderColor: selecionado ? "#5CC800" : "rgba(92,200,0,0.3)" }}>
+                  {selecionado && <span className="text-xs font-black" style={{ color: "#0D1117" }}>✓</span>}
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button onClick={()=>abrirEditar(ev)} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
-                  <button onClick={()=>excluir(ev.id)} disabled={excluindo===ev.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>{excluindo===ev.id?"...":"🗑️ EXCLUIR"}</button>
+                <div className="flex-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div onClick={e => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-black" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", fontSize:"17px" }}>{ev.nome}</h3>
+                      {ev.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
+                    </div>
+                    <p className="mt-0.5 text-sm" style={{ color:"#8B949E" }}>📍 {ev.cidade} — {ev.estado} · 📅 {fmtData(String(ev.data_evento))}{ev.distancia&&` · ${ev.distancia}`}</p>
+                    {ev.link_inscricao&&<a href={ev.link_inscricao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="text-xs font-bold hover:underline" style={{ color:"#5CC800" }}>🔗 Inscrição</a>}
+                  </div>
+                  <div className="flex shrink-0 gap-2" onClick={e => e.stopPropagation()}>
+                    <button onClick={()=>abrirEditar(ev)} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
+                    <button onClick={()=>excluir(ev.id)} disabled={excluindo===ev.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>{excluindo===ev.id?"...":"🗑️"}</button>
+                  </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
