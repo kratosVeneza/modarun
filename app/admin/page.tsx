@@ -275,7 +275,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       const result = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, local:-1, link:-1, destaque:-1 };
 
       // Score each column
-      const colScores: { nome:number; cidade:number; estado:number; data:number; distancia:number; link:number }[] = header.map(() => ({ nome:0, cidade:0, estado:0, data:0, distancia:0, link:0 }));
+      const colScores: { nome:number; cidade:number; estado:number; data:number; distancia:number; link:number }[] = headerFinal.map(() => ({ nome:0, cidade:0, estado:0, data:0, distancia:0, link:0 }));
 
       dataRows.forEach(row => {
         row.forEach((val, i) => {
@@ -318,7 +318,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       pick("estado", "estado", 2);
 
       // For links: pick the one with highest link score (longest URL = most specific)
-      const linkCols = header.map((_, i) => {
+      const linkCols = headerFinal.map((_, i) => {
         if (used.has(i)) return null;
         const score = colScores[i].link;
         const avgLen = dataRows.reduce((acc, r) => acc + (r[i]?.length || 0), 0) / dataRows.length;
@@ -330,7 +330,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
       // For cidade and nome, use remaining text columns
       // Cidade: shortest text, Nome: longest text (but not a URL)
-      const textCols = header.map((_, i) => {
+      const textCols = headerFinal.map((_, i) => {
         if (used.has(i)) return null;
         const vals = dataRowsRaw.map(r => r[i] || "");
         const isUrl = vals.some(v => v.startsWith("http"));
