@@ -592,8 +592,6 @@ function AbaBanners(): React.JSX.Element {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editando, setEditando] = useState<Banner | null>(null);
   const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50 });
-  const [arrastando, setArrastando] = useState(false);
-  const previewRef = React.useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [uploadando, setUploadando] = useState(false);
   const [erro, setErro] = useState("");
@@ -672,48 +670,33 @@ function AbaBanners(): React.JSX.Element {
                 <label style={s.lbl}>🖼 IMAGEM DO BANNER *</label>
                 {form.imagem_url ? (
                   <div>
-                    <div ref={previewRef} className="relative rounded-xl overflow-hidden select-none"
-                      style={{ height: "160px", cursor: arrastando ? "grabbing" : "grab" }}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setArrastando(true);
-                        const rect = previewRef.current!.getBoundingClientRect();
-                        const startX = e.clientX; const startY = e.clientY;
-                        const startPX = form.position_x ?? 50; const startPY = form.position_y ?? 50;
-                        function onMove(ev: MouseEvent) {
-                          const dx = ((ev.clientX - startX) / rect.width) * -100;
-                          const dy = ((ev.clientY - startY) / rect.height) * -100;
-                          setForm(f => ({ ...f, position_x: Math.max(0, Math.min(100, startPX + dx)), position_y: Math.max(0, Math.min(100, startPY + dy)) }));
-                        }
-                        function onUp() { setArrastando(false); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }
-                        window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
-                      }}
-                      onTouchStart={(e) => {
-                        const touch = e.touches[0];
-                        const rect = previewRef.current!.getBoundingClientRect();
-                        const startX = touch.clientX; const startY = touch.clientY;
-                        const startPX = form.position_x ?? 50; const startPY = form.position_y ?? 50;
-                        function onMove(ev: TouchEvent) {
-                          ev.preventDefault();
-                          const t = ev.touches[0];
-                          const dx = ((t.clientX - startX) / rect.width) * -100;
-                          const dy = ((t.clientY - startY) / rect.height) * -100;
-                          setForm(f => ({ ...f, position_x: Math.max(0, Math.min(100, startPX + dx)), position_y: Math.max(0, Math.min(100, startPY + dy)) }));
-                        }
-                        function onEnd() { document.removeEventListener("touchmove", onMove); document.removeEventListener("touchend", onEnd); }
-                        document.addEventListener("touchmove", onMove, { passive: false }); document.addEventListener("touchend", onEnd);
-                      }}>
-                      <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover pointer-events-none"
+                    <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
+                      <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover"
                         style={{ objectPosition: `${form.position_x ?? 50}% ${form.position_y ?? 50}%` }} />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition pointer-events-none"
-                        style={{ background: "rgba(0,0,0,0.3)" }}>
-                        <span className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.9)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>✋ ARRASTE PARA ENQUADRAR</span>
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
-                        className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold pointer-events-auto"
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
+                        className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
                         style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
                     </div>
-                    <p className="mt-1.5 text-xs text-center" style={{ color: "#8B949E" }}>Arraste a imagem para ajustar o enquadramento</p>
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label style={{ fontSize:"11px", fontWeight:700, color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>← POSIÇÃO HORIZONTAL →</label>
+                          <span style={{ fontSize:"11px", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{Math.round(form.position_x ?? 50)}%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value={form.position_x ?? 50}
+                          onChange={e => setForm(f => ({ ...f, position_x: Number(e.target.value) }))}
+                          className="w-full" style={{ accentColor: "#5CC800", cursor: "pointer" }} />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label style={{ fontSize:"11px", fontWeight:700, color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>↑ POSIÇÃO VERTICAL ↓</label>
+                          <span style={{ fontSize:"11px", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{Math.round(form.position_y ?? 50)}%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value={form.position_y ?? 50}
+                          onChange={e => setForm(f => ({ ...f, position_y: Number(e.target.value) }))}
+                          className="w-full" style={{ accentColor: "#5CC800", cursor: "pointer" }} />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <button onClick={() => fileRef.current?.click()} disabled={uploadando}
