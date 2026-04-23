@@ -85,7 +85,10 @@ export default function TreinoPublicoPage() {
   }
 
   async function cancelarParticipacao() {
-    if (!cancelarNomeInput.trim()) { setCancelarErro("Informe seu nome."); return; }
+    const p = participantes.find(x => x.id === cancelarId);
+    const temWhatsapp = !!p?.whatsapp;
+    if (temWhatsapp && !cancelarWhatsappInput.trim()) { setCancelarErro("Informe seu WhatsApp."); return; }
+    if (!temWhatsapp && !cancelarNomeInput.trim()) { setCancelarErro("Informe seu nome."); return; }
     setCancelando(true); setCancelarErro("");
     const res = await fetch("/api/cancelar-participacao", {
       method: "DELETE", headers: { "Content-Type": "application/json" },
