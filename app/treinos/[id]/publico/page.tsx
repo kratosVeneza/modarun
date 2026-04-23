@@ -17,6 +17,7 @@ type Treino = {
   ponto_encontro_lat?: number; ponto_encontro_lng?: number;
   rota_coords?: { lat: number; lng: number }[];
   encontro_participantes?: Participante[];
+  user_id?: string;
 };
 
 function formatarData(data: string) {
@@ -24,6 +25,8 @@ function formatarData(data: string) {
   const [ano, mes, dia] = String(data).split("-");
   return `${dia}/${mes}/${ano}`;
 }
+
+const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", width: "100%" } as React.CSSProperties;
 
 export default function TreinoPublicoPage() {
   const params = useParams();
@@ -33,17 +36,17 @@ export default function TreinoPublicoPage() {
   const [treino, setTreino] = useState<Treino | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Participar
+  // Confirmar presença
   const [modalAberto, setModalAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [sucesso, setSucesso] = useState(false);
-  const [novoParticipanteId, setNovoParticipanteId] = useState<number | null>(null);
 
-  // Cancelar
+  // Cancelar participação própria
   const [cancelarModal, setCancelarModal] = useState(false);
   const [cancelarId, setCancelarId] = useState<number | null>(null);
   const [cancelarNome, setCancelarNome] = useState("");
@@ -52,8 +55,14 @@ export default function TreinoPublicoPage() {
   const [cancelando, setCancelando] = useState(false);
   const [cancelarErro, setCancelarErro] = useState("");
 
+  // Remover participante (admin do treino)
+  const [removendoId, setRemovendoId] = useState<number | null>(null);
+
   useEffect(() => {
     async function carregar() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+
       const { data, error } = await supabase
         .from("encontros")
         .select("*, encontro_participantes(id, nome, whatsapp)")
@@ -65,6 +74,9 @@ export default function TreinoPublicoPage() {
     }
     carregar();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const participantes = treino?.encontro_participantes || [];
+  const isCriador = !!userId && treino?.user_id === userId;
 
   async function confirmar(e: React.FormEvent) {
     e.preventDefault();
@@ -78,9 +90,7 @@ export default function TreinoPublicoPage() {
     setEnviando(false);
     if (!res.ok) { setMensagem(result.error || "Erro ao confirmar."); return; }
     setSucesso(true);
-    setNovoParticipanteId(result.data?.[0]?.id || null);
-    // Add to local list
-    setTreino(t => t ? { ...t, encontro_participantes: [...(t.encontro_participantes || []), { id: result.data?.[0]?.id, nome: nome.trim(), whatsapp }] } : t);
+    setTreino(t => t ? { ...t, encontro_participantes: [...(t.encontro_participantes || []), result.data?.[0]] } : t);
     setTimeout(() => { setModalAberto(false); setSucesso(false); setNome(""); setWhatsapp(""); }, 2000);
   }
 
@@ -97,11 +107,17 @@ export default function TreinoPublicoPage() {
     const result = await res.json();
     setCancelando(false);
     if (!res.ok) { setCancelarErro(result.error || "Erro ao cancelar."); return; }
-    setTreino(t => t ? { ...t, encontro_participantes: (t.encontro_participantes || []).filter(p => p.id !== cancelarId) } : t);
-    setCancelarModal(false); setCancelarNomeInput(""); setCancelarWhatsappInput(""); setCancelarId(null); setCancelarNome("");
+    setTreino(t => t ? { ...t, encontro_participantes: (t.encontro_participantes || []).filter(x => x.id !== cancelarId) } : t);
+    setCancelarModal(false); setCancelarNomeInput(""); setCancelarWhatsappInput(""); setCancelarId(null);
   }
 
-  const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", width: "100%" } as React.CSSProperties;
+  async function removerParticipante(participanteId: number) {
+    if (!confirm("Remover este participante?")) return;
+    setRemovendoId(participanteId);
+    const { error } = await supabase.from("encontro_participantes").delete().eq("id", participanteId);
+    setRemovendoId(null);
+    if (!error) setTreino(t => t ? { ...t, encontro_participantes: (t.encontro_participantes || []).filter(x => x.id !== participanteId) } : t);
+  }
 
   if (loading) return (
     <main className="flex min-h-screen items-center justify-center" style={{ background: "#0D1117" }}>
@@ -117,34 +133,29 @@ export default function TreinoPublicoPage() {
     </main>
   );
 
-  const participantes = treino.encontro_participantes || [];
   const temMapa = treino.ponto_encontro_lat && treino.ponto_encontro_lng;
 
   return (
     <main className="min-h-screen px-4 py-8" style={{ background: "#0D1117" }}>
-      {/* Modal cancelar participação */}
+
+      {/* Modal cancelar participação própria */}
       {cancelarModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.3)" }}>
             <h3 className="font-black text-lg mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>CANCELAR PARTICIPAÇÃO</h3>
             {(() => {
               const p = participantes.find(x => x.id === cancelarId);
-              const temWhatsapp = !!p?.whatsapp;
-              return temWhatsapp ? (
+              return p?.whatsapp ? (
                 <>
-                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>
-                    Informe o <strong style={{ color: "#E6EDF3" }}>WhatsApp</strong> cadastrado para confirmar o cancelamento de <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong>.
-                  </p>
-                  <input type="tel" placeholder="(00) 00000-0000" value={cancelarWhatsappInput} onChange={e => setCancelarWhatsappInput(e.target.value)}
-                    style={inp} onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>Informe o <strong style={{ color: "#E6EDF3" }}>WhatsApp</strong> cadastrado para confirmar o cancelamento de <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong>.</p>
+                  <input type="tel" placeholder="(00) 00000-0000" value={cancelarWhatsappInput} onChange={e => setCancelarWhatsappInput(e.target.value)} style={inp}
+                    onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
                 </>
               ) : (
                 <>
-                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>
-                    Digite seu nome <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong> para confirmar o cancelamento.
-                  </p>
-                  <input type="text" placeholder="Seu nome" value={cancelarNomeInput} onChange={e => setCancelarNomeInput(e.target.value)}
-                    style={inp} onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
+                  <p className="text-sm mb-4" style={{ color: "#8B949E" }}>Digite seu nome <strong style={{ color: "#E6EDF3" }}>"{cancelarNome}"</strong> para confirmar.</p>
+                  <input type="text" placeholder="Seu nome" value={cancelarNomeInput} onChange={e => setCancelarNomeInput(e.target.value)} style={inp}
+                    onFocus={e => (e.target.style.borderColor = "#FF6B00")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
                 </>
               );
             })()}
@@ -158,14 +169,14 @@ export default function TreinoPublicoPage() {
               <button type="button" onClick={cancelarParticipacao} disabled={cancelando}
                 className="flex-1 rounded-xl py-3 text-sm font-black disabled:opacity-60"
                 style={{ background: "rgba(255,107,0,0.2)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {cancelando ? "CANCELANDO..." : "CANCELAR PRESENÇA"}
+                {cancelando ? "CANCELANDO..." : "CONFIRMAR"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal confirmar participação */}
+      {/* Modal confirmar presença */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}>
           <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
@@ -182,12 +193,12 @@ export default function TreinoPublicoPage() {
             ) : (
               <form onSubmit={confirmar} className="space-y-3">
                 <div>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#8B949E", marginBottom: "6px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>SEU NOME *</label>
+                  <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>SEU NOME *</label>
                   <input type="text" placeholder="Como você quer ser chamado" value={nome} onChange={e => setNome(e.target.value)} autoFocus style={inp}
                     onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#8B949E", marginBottom: "6px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>WHATSAPP <span style={{ fontWeight: 400 }}>(opcional)</span></label>
+                  <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>WHATSAPP <span style={{ fontWeight:400 }}>(opcional — mas ajuda a identificar você)</span></label>
                   <input type="tel" placeholder="(00) 00000-0000" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} style={inp}
                     onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} />
                 </div>
@@ -208,14 +219,24 @@ export default function TreinoPublicoPage() {
       <div className="mx-auto max-w-xl space-y-4">
         {/* Logo */}
         <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/">
             <img src="/logo-moda-run.png" alt="Moda Run" style={{ height: "40px", width: "auto" }}
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           </Link>
           <Link href="/encontros" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TREINOS →</Link>
         </div>
 
-        {/* Hero do treino */}
+        {/* Badge criador */}
+        {isCriador && (
+          <div className="rounded-xl px-4 py-2.5 flex items-center gap-2" style={{ background: "rgba(255,184,0,0.1)", border: "1px solid rgba(255,184,0,0.3)" }}>
+            <span>⚙️</span>
+            <p className="text-xs font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+              VOCÊ CRIOU ESTE TREINO — pode remover participantes pela lista abaixo
+            </p>
+          </div>
+        )}
+
+        {/* Hero */}
         <div className="relative overflow-hidden rounded-2xl p-6" style={{ background: "linear-gradient(135deg, #1a3a0a, #0f2106)", border: "1px solid rgba(92,200,0,0.3)" }}>
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
           <div className="relative">
@@ -253,14 +274,13 @@ export default function TreinoPublicoPage() {
         )}
 
         {(treino.ritmo || treino.percurso || treino.observacoes) && (
-          <div className="rounded-xl p-4 space-y-2" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+          <div className="rounded-xl p-4 space-y-1.5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
             {treino.ritmo && <p className="text-sm" style={{ color: "#8B949E" }}>🎯 <strong style={{ color: "#E6EDF3" }}>Ritmo:</strong> {treino.ritmo}</p>}
             {treino.percurso && <p className="text-sm" style={{ color: "#8B949E" }}>🗺 <strong style={{ color: "#E6EDF3" }}>Percurso:</strong> {treino.percurso}</p>}
             {treino.observacoes && <p className="text-sm" style={{ color: "#8B949E" }}>📝 <strong style={{ color: "#E6EDF3" }}>Obs:</strong> {treino.observacoes}</p>}
           </div>
         )}
 
-        {/* Mapa */}
         {temMapa && (
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.2)" }}>
             <MapaTreinoVisualizacao
@@ -295,27 +315,43 @@ export default function TreinoPublicoPage() {
                 <div key={p.id} className="flex items-center justify-between rounded-xl px-4 py-3"
                   style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.08)" }}>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-black"
-                      style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                      {i + 1}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black"
+                      style={{ background: i === 0 ? "rgba(255,184,0,0.2)" : "rgba(92,200,0,0.15)", color: i === 0 ? "#FFB800" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {i === 0 ? "👑" : i + 1}
                     </div>
-                    <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{p.nome}</p>
+                    <div>
+                      <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{p.nome}</p>
+                      {i === 0 && <p className="text-xs" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>organizador</p>}
+                    </div>
                   </div>
-                  <button type="button"
-                    onClick={() => { setCancelarId(p.id); setCancelarNome(p.nome); setCancelarModal(true); setCancelarNomeInput(""); setCancelarErro(""); }}
-                    className="rounded-lg px-3 py-1.5 text-xs font-black transition-all hover:brightness-110"
-                    style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    CANCELAR
-                  </button>
+
+                  <div className="flex gap-2">
+                    {/* Botão cancelar própria participação — para todos */}
+                    <button type="button"
+                      onClick={() => { setCancelarId(p.id); setCancelarNome(p.nome); setCancelarModal(true); setCancelarNomeInput(""); setCancelarWhatsappInput(""); setCancelarErro(""); }}
+                      className="rounded-lg px-3 py-1.5 text-xs font-black transition-all hover:brightness-110"
+                      style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      É VOCÊ?
+                    </button>
+
+                    {/* Botão remover — só para o criador do treino */}
+                    {isCriador && (
+                      <button type="button" onClick={() => removerParticipante(p.id)} disabled={removendoId === p.id}
+                        className="rounded-lg px-3 py-1.5 text-xs font-black disabled:opacity-50 transition-all hover:brightness-110"
+                        style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {removendoId === p.id ? "..." : "🗑️"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
 
-        <p className="text-center text-xs pb-4" style={{ color: "#8B949E" }}>
-          Para cancelar sua participação, clique em CANCELAR ao lado do seu nome e confirme com seu nome.
-        </p>
+          <p className="mt-4 text-xs text-center" style={{ color: "#8B949E" }}>
+            Clique em <strong style={{ color: "#5CC800" }}>É VOCÊ?</strong> ao lado do seu nome para cancelar sua participação
+          </p>
+        </div>
       </div>
     </main>
   );
