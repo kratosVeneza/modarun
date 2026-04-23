@@ -61,6 +61,28 @@ function parseCsvLine(line: string): string[] {
   return result.map(c => c.trim());
 }
 
+function isLinhaLixo(cols: string[]): boolean {
+  // Linha de anúncio ou vazia
+  const joined = cols.join("");
+  if (!joined.trim()) return true;
+  if (cols.some(c => c.includes("adsbygoogle") || c.includes("googlesyndication") || c.includes("doubleclick"))) return true;
+  return false;
+}
+
+function detectarOffsetColunas(linhas: string[][]): number {
+  // Detecta quantas colunas de lixo existem antes dos dados reais
+  // Procura a primeira coluna que tem padrão de data (DD.MM ou DD/MM)
+  for (let offset = 0; offset < 5; offset++) {
+    let dateCount = 0;
+    for (const cols of linhas.slice(0, 10)) {
+      const val = cols[offset]?.trim() || "";
+      if (/^\d{1,2}[.\/\-]\d{1,2}/.test(val)) dateCount++;
+    }
+    if (dateCount >= 2) return offset;
+  }
+  return 0;
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const supabase = await createClient();
@@ -80,18 +102,38 @@ export async function POST(request: Request): Promise<NextResponse> {
     const linhas = csv.trim().split("\n");
     if (linhas.length < 2) return NextResponse.json({ error: "CSV sem dados." }, { status: 400 });
 
+    // Parse all lines first
+    const todasLinhas = linhas.map(l => parseCsvLine(l));
+
+    // Detect column offset (for CSVs with leading garbage columns)
+    const dataOffset = detectarOffsetColunas(todasLinhas.slice(1));
+    
+    // Adjust mapeamento by offset if needed
+    const ajustarIdx = (idx: number) => idx >= 0 ? idx + dataOffset : idx;
+    const mapAjustado = {
+      nome: ajustarIdx(mapeamento.nome),
+      cidade: ajustarIdx(mapeamento.cidade),
+      estado: ajustarIdx(mapeamento.estado),
+      data: ajustarIdx(mapeamento.data),
+      distancia: ajustarIdx(mapeamento.distancia ?? -1),
+      local: ajustarIdx(mapeamento.local ?? -1),
+      link: ajustarIdx(mapeamento.link ?? -1),
+      destaque: ajustarIdx(mapeamento.destaque ?? -1),
+    };
+
     const eventos = [];
     const erros: string[] = [];
     const get = (cols: string[], idx?: number) => idx !== undefined && idx >= 0 ? cols[idx]?.trim() || "" : "";
 
-    for (let i = 1; i < linhas.length; i++) {
-      const cols = parseCsvLine(linhas[i]);
+    for (let i = 1; i < todasLinhas.length; i++) {
+      const cols = todasLinhas[i];
       if (cols.length < 2) continue;
+      if (isLinhaLixo(cols)) continue; // Skip ad/garbage lines
 
-      const nome = get(cols, mapeamento.nome);
-      const cidade = get(cols, mapeamento.cidade);
-      const estado = get(cols, mapeamento.estado);
-      const data_raw = get(cols, mapeamento.data);
+      const nome = get(cols, mapAjustado.nome);
+      const cidade = get(cols, mapAjustado.cidade);
+      const estado = get(cols, mapAjustado.estado);
+      const data_raw = get(cols, mapAjustado.data);
 
       if (!nome) { erros.push(`Linha ${i+1}: nome vazio`); continue; }
       if (!cidade) { erros.push(`Linha ${i+1}: cidade vazia`); continue; }
@@ -104,10 +146,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         cidade,
         estado: estado ? estado.toUpperCase().slice(0, 2) : (estado_padrao || "BR"),
         data_evento,
-        distancia: get(cols, mapeamento.distancia) || null,
-        local: get(cols, mapeamento.local) || null,
-        link_inscricao: get(cols, mapeamento.link) || null,
-        destaque: get(cols, mapeamento.destaque)?.toLowerCase() === "sim",
+        distancia: get(cols, mapAjustado.distancia) || null,
+        local: get(cols, mapAjustado.local) || null,
+        link_inscricao: get(cols, mapAjustado.link) || null,
+        destaque: get(cols, mapAjustado.destaque)?.toLowerCase() === "sim",
       });
     }
 
@@ -119,9 +161,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       if (existing) { await supabase.from("eventos").update(ev).eq("id", existing.id); atualizados++; }
       else { await supabase.from("eventos").insert([ev]); inseridos++; }
     }
+
     return NextResponse.json({ success: true, inseridos, atualizados, erros, total: eventos.length });
   } catch (e) {
-    console.error(e);   
+    console.error(e);
     return NextResponse.json({ error: "Erro interno." }, { status: 500 });
   }
 }
