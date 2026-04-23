@@ -61,11 +61,17 @@ function parseCsvLine(line: string): string[] {
   return result.map(c => c.trim());
 }
 
+const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+
 function isLinhaLixo(cols: string[]): boolean {
-  // Linha de anúncio ou vazia
-  const joined = cols.join("");
-  if (!joined.trim()) return true;
+  const joined = cols.join("").trim();
+  if (!joined) return true;
   if (cols.some(c => c.includes("adsbygoogle") || c.includes("googlesyndication") || c.includes("doubleclick"))) return true;
+  // Skip month-only lines
+  if (MESES.includes(joined.toLowerCase())) return true;
+  // Skip repeated header rows (contain "data" + "cidade" or "nome")
+  const lower = joined.toLowerCase();
+  if (lower.includes("data") && (lower.includes("cidade") || lower.includes("nome"))) return true;
   return false;
 }
 

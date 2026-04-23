@@ -231,10 +231,16 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     const linhas = csv.trim().split("\n");
     if (linhas.length < 2) return;
 
-    // Remove garbage lines (ads, empty)
+    // Remove garbage lines (ads, empty, month headers like "Abril", repeated headers)
+    const meses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
     const linhasLimpas = linhas.filter(l => {
       const v = l.toLowerCase();
-      return !v.includes("adsbygoogle") && !v.includes("googlesyndication") && !v.includes("doubleclick") && l.trim().replace(/[",]/g,"").trim().length > 0;
+      if (v.includes("adsbygoogle") || v.includes("googlesyndication") || v.includes("doubleclick")) return false;
+      const clean = l.trim().replace(/[",]/g,"").trim();
+      if (!clean) return false;
+      // Skip lines that are just a month name
+      if (meses.some(m => clean.toLowerCase() === m)) return false;
+      return true;
     });
 
     if (linhasLimpas.length < 1) return;
