@@ -804,12 +804,7 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
   const [editandoSugestao, setEditandoSugestao] = useState<Sugestao | null>(null);
   const [formEdicao, setFormEdicao] = useState<Sugestao | null>(null);
 
-  // IA extraction state
-  const [textoIA, setTextoIA] = useState("");
-  const [extraindo, setExtraindo] = useState(false);
-  const [erroIA, setErroIA] = useState("");
-  const [eventoExtraido, setEventoExtraido] = useState<Record<string, string | null> | null>(null);
-  const [salvandoIA, setSalvandoIA] = useState(false);
+
 
   useEffect(() => {
     async function carregar() {
@@ -854,121 +849,15 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
     setRejeitando(null);
   }
 
-  async function extrairComIA() {
-    if (!textoIA.trim()) { setErroIA("Cole algum texto sobre o evento."); return; }
-    setExtraindo(true); setErroIA(""); setEventoExtraido(null);
-    const res = await fetch("/api/admin/extrair-evento", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ texto: textoIA }),
-    });
-    const result = await res.json();
-    setExtraindo(false);
-    if (!res.ok) { setErroIA(result.error || "Erro ao extrair."); return; }
-    setEventoExtraido(result.evento);
-  }
 
-  async function salvarEventoIA() {
-    if (!eventoExtraido) return;
-    setSalvandoIA(true);
-    const res = await fetch("/api/admin/eventos", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nome: eventoExtraido.nome || "", cidade: eventoExtraido.cidade || "",
-        estado: eventoExtraido.estado || "", data_evento: eventoExtraido.data_evento || "",
-        distancia: eventoExtraido.distancia || "", local: eventoExtraido.local || "",
-        link_inscricao: eventoExtraido.link_inscricao || "", destaque: false,
-      }),
-    });
-    const result = await res.json();
-    setSalvandoIA(false);
-    if (res.ok) {
-      onAprovar(result.data);
-      setTextoIA(""); setEventoExtraido(null);
-      alert("✅ Evento adicionado com sucesso!");
-    }
-  }
 
   function fmtData(d: string) { if (!d) return "—"; try { const [a,m,dia] = d.split("-"); return `${dia}/${m}/${a}`; } catch { return d; } }
 
   return (
     <div className="space-y-6">
 
-      {/* ── EXTRAÇÃO POR IA ── */}
-      <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
-        <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl" style={{ background: "linear-gradient(90deg,#5CC800,#FF6B00)" }} />
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">🤖</span>
-          <div>
-            <h3 className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.03em" }}>ADICIONAR COM IA</h3>
-            <p className="text-xs" style={{ color: "#8B949E" }}>Cole qualquer texto, post, print ou descrição de evento — a IA extrai os dados automaticamente</p>
-          </div>
-        </div>
 
-        <textarea
-          value={textoIA}
-          onChange={e => setTextoIA(e.target.value)}
-          placeholder={`Cole aqui qualquer texto sobre o evento. Exemplos:\n\n• "Corrida de Rua - 10km - Belém/PA - 15/06/2026 - Parque da Residência - Inscrições: ticketsports.com.br/..."\n• Post do Instagram copiado\n• Email de divulgação\n• Qualquer descrição do evento`}
-          rows={5}
-          style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "12px 16px", fontSize: "13px", outline: "none", width: "100%", resize: "none", fontFamily: "monospace" }}
-          onFocus={e => (e.target.style.borderColor = "#5CC800")}
-          onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")}
-        />
-
-        {erroIA && <div className="mt-2 rounded-xl p-3 text-sm" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erroIA}</div>}
-
-        <button type="button" onClick={extrairComIA} disabled={extraindo || !textoIA.trim()}
-          className="mt-3 w-full rounded-xl py-3 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
-          style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-          {extraindo ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              EXTRAINDO COM IA...
-            </span>
-          ) : "🤖 EXTRAIR DADOS DO EVENTO"}
-        </button>
-
-        {/* Resultado da extração */}
-        {eventoExtraido && (
-          <div className="mt-4 rounded-xl p-4 space-y-3" style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.3)" }}>
-            <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>✅ DADOS EXTRAÍDOS — REVISE ANTES DE SALVAR</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ["Nome", eventoExtraido.nome],
-                ["Cidade", eventoExtraido.cidade],
-                ["Estado", eventoExtraido.estado],
-                ["Data", eventoExtraido.data_evento ? fmtData(String(eventoExtraido.data_evento)) : null],
-                ["Distância", eventoExtraido.distancia],
-                ["Local", eventoExtraido.local],
-              ].map(([l, v]) => (
-                <div key={String(l)} className="rounded-lg p-2" style={{ background: "#161B22" }}>
-                  <p className="text-xs font-bold" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>{l}</p>
-                  <p className="text-sm font-semibold mt-0.5" style={{ color: v ? "#E6EDF3" : "#FF6B00" }}>{v || "Não encontrado"}</p>
-                </div>
-              ))}
-            </div>
-            {eventoExtraido.link_inscricao && (
-              <div className="rounded-lg p-2" style={{ background: "#161B22" }}>
-                <p className="text-xs font-bold" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>LINK</p>
-                <p className="text-xs mt-0.5 truncate" style={{ color: "#5CC800" }}>{eventoExtraido.link_inscricao}</p>
-              </div>
-            )}
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={() => setEventoExtraido(null)}
-                className="flex-1 rounded-xl py-2.5 text-sm font-black"
-                style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                DESCARTAR
-              </button>
-              <button type="button" onClick={salvarEventoIA} disabled={salvandoIA}
-                className="flex-1 rounded-xl py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
-                style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {salvandoIA ? "SALVANDO..." : "✅ CONFIRMAR E ADICIONAR"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── SUGESTÕES PENDENTES ── */}
+            {/* ── SUGESTÕES PENDENTES ── */}
       <div>
         <div className="flex items-center gap-3 mb-4">
           <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
