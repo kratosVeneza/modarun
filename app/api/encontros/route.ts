@@ -41,6 +41,14 @@ export async function POST(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // Adicionar o criador como primeiro participante automaticamente
+    const nomeOrganizador = organizador_nome?.trim() || user.user_metadata?.nome_exibicao || user.email?.split("@")[0] || "Organizador";
+    await supabase.from("encontro_participantes").insert([{
+      encontro_id: data.id,
+      nome: nomeOrganizador,
+      whatsapp: null,
+    }]);
+
     return NextResponse.json({ success: true, data });
   } catch {
     return NextResponse.json({ error: "Erro interno ao criar treino." }, { status: 500 });
