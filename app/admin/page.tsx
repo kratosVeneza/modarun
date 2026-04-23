@@ -251,15 +251,29 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
         if (best >= 0) { result[field] = best; used.add(best); }
       };
 
-      pick("link", "link", 2);
       pick("data", "data", 2);
       pick("distancia", "distancia", 1);
       pick("estado", "estado", 2);
-      // For cidade and nome, use remaining columns with text
-      // Cidade tends to be shorter, nome tends to be longer
+
+      // For links: pick the one with highest link score (longest URL = most specific)
+      const linkCols = header.map((_, i) => {
+        if (used.has(i)) return null;
+        const score = colScores[i].link;
+        const avgLen = dataRows.reduce((acc, r) => acc + (r[i]?.length || 0), 0) / dataRows.length;
+        return { i, score, avgLen };
+      }).filter(Boolean) as { i: number; score: number; avgLen: number }[];
+      // Among link columns, pick the longest one (more specific URL)
+      const linkCandidates = linkCols.filter(c => c.score >= 2).sort((a, b) => b.avgLen - a.avgLen);
+      if (linkCandidates.length > 0) { result.link = linkCandidates[0].i; used.add(linkCandidates[0].i); }
+
+      // For cidade and nome, use remaining text columns
+      // Cidade: shortest text, Nome: longest text (but not a URL)
       const textCols = header.map((_, i) => {
         if (used.has(i)) return null;
-        const avgLen = dataRows.reduce((acc, r) => acc + (r[i]?.length || 0), 0) / dataRows.length;
+        const vals = dataRows.map(r => r[i] || "");
+        const isUrl = vals.some(v => v.startsWith("http"));
+        if (isUrl) return null;
+        const avgLen = vals.reduce((acc, v) => acc + v.length, 0) / vals.length;
         return { i, avgLen };
       }).filter(Boolean) as { i: number; avgLen: number }[];
 
