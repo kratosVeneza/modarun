@@ -67,10 +67,10 @@ export default function TreinoPage() {
     return (
       <>
         <Header userEmail={userEmail} isAdmin={isAdmin} />
-        <main className="min-h-screen bg-slate-50 px-4 py-8">
+        <main className="min-h-screen px-4 py-8" style={{ background: "#0D1117" }}>
           <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
             <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500" />
-            <p className="text-sm text-slate-500">Carregando treino...</p>
+            <p className="text-sm" style={{ color: "#8B949E" }}>Carregando treino...</p>
           </div>
         </main>
       </>
@@ -81,7 +81,7 @@ export default function TreinoPage() {
     return (
       <>
         <Header userEmail={userEmail} isAdmin={isAdmin} />
-        <main className="min-h-screen bg-slate-50 px-4 py-8">
+        <main className="min-h-screen px-4 py-8" style={{ background: "#0D1117" }}>
           <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
             <p className="text-4xl">🏃</p><p className="mt-3 font-semibold text-slate-700">Treino não encontrado</p>
           </div>
@@ -96,7 +96,7 @@ export default function TreinoPage() {
   return (
     <>
       <Header userEmail={userEmail} isAdmin={isAdmin} />
-      <main className="min-h-screen bg-slate-50 px-4 py-8">
+      <main className="min-h-screen px-4 py-8" style={{ background: "#0D1117" }}>
         <div className="mx-auto max-w-3xl space-y-5">
           <section className="relative overflow-hidden rounded-2xl p-6" style={{ background: "linear-gradient(135deg, #1a3a0a, #0f2106)", border: "1px solid rgba(92,200,0,0.3)" }}>
             <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
@@ -152,7 +152,7 @@ export default function TreinoPage() {
           </section>
 
           {treino.local_saida && (
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
               <h2 className="mb-2 text-base font-bold text-slate-900">📍 Ponto de encontro</h2>
               <p className="text-sm font-semibold text-slate-700">{treino.local_saida}</p>
               {treino.ponto_encontro_lat && treino.ponto_encontro_lng && <p className="mt-1 text-xs text-slate-400">{Number(treino.ponto_encontro_lat).toFixed(5)}, {Number(treino.ponto_encontro_lng).toFixed(5)}</p>}
@@ -160,7 +160,7 @@ export default function TreinoPage() {
           )}
 
           {treino.ponto_encontro_lat && treino.ponto_encontro_lng && (
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
               <h2 className="mb-3 text-base font-bold text-slate-900">🗺 Percurso</h2>
               <MapaTreinoVisualizacao pontoEncontro={{ lat: treino.ponto_encontro_lat, lng: treino.ponto_encontro_lng }} rotaCoords={treino.rota_coords || []} />
             </section>
@@ -168,33 +168,32 @@ export default function TreinoPage() {
 
           {(treino.ritmo || treino.percurso || treino.observacoes) && (
             <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-base font-bold text-slate-900">Detalhes do treino</h2>
-              {treino.ritmo && <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ritmo</p><p className="mt-0.5 text-sm text-slate-700">{treino.ritmo}</p></div>}
-              {treino.percurso && <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Percurso</p><p className="mt-0.5 text-sm text-slate-700">{treino.percurso}</p></div>}
-              {treino.observacoes && <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Observações</p><p className="mt-0.5 text-sm text-slate-700">{treino.observacoes}</p></div>}
+              <h2 className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>Detalhes do treino</h2>
+              {treino.ritmo && <div><p className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>Ritmo</p><p className="mt-0.5 text-sm text-slate-700">{treino.ritmo}</p></div>}
+              {treino.percurso && <div><p className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>Percurso</p><p className="mt-0.5 text-sm text-slate-700">{treino.percurso}</p></div>}
+              {treino.observacoes && <div><p className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>Observações</p><p className="mt-0.5 text-sm text-slate-700">{treino.observacoes}</p></div>}
             </section>
           )}
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-900">Participantes <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-600">{participantes.length}</span></h2>
+              <h2 className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>Participantes <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-600">{participantes.length}</span></h2>
               <ParticiparEncontro encontroId={treino.id} />
             </div>
-            {participantes.length === 0 ? <p className="text-sm text-slate-500">Seja o primeiro a confirmar presença!</p> : (
+            {participantes.length === 0 ? <p className="text-sm" style={{ color: "#8B949E" }}>Seja o primeiro a confirmar presença!</p> : (
               <div className="flex flex-wrap gap-2">
                 {participantes.map((p) => (
                   <span key={p.id} className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">{p.nome[0].toUpperCase()}</span>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{p.nome[0].toUpperCase()}</span>
                     {p.nome}
                   </span>
                 ))}
               </div>
             )}
-            
           </section>
 
           <section className="rounded-3xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-lg">
-            <p className="text-sm font-semibold text-orange-300">Moda Run Store</p>
+            <p className="text-sm font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>Moda Run Store</p>
             <p className="mt-1 text-lg font-bold">Equipado para esse treino? 🏃‍♂️</p>
             <p className="mt-1 text-sm text-slate-400">Veja kits e acessórios ideais para sua corrida.</p>
             <div className="mt-4 flex flex-wrap gap-2">
