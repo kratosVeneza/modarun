@@ -231,14 +231,37 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     const linhas = csv.trim().split("\n");
     if (linhas.length < 2) return;
 
-    const header = linhas[0].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
-    setCsvColunas(header);
+    // Remove garbage lines (ads, empty)
+    const linhasLimpas = linhas.filter(l => {
+      const v = l.toLowerCase();
+      return !v.includes("adsbygoogle") && !v.includes("googlesyndication") && !v.includes("doubleclick") && l.trim().replace(/[",]/g,"").trim().length > 0;
+    });
+
+    if (linhasLimpas.length < 2) return;
+
+    const header = linhasLimpas[0].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
+
+    // Detect offset: find first column that looks like real data (not URLs, not empty)
+    // by checking data rows
+    const dataRowsRaw = linhasLimpas.slice(1, 6).map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
+    let offset = 0;
+    for (let i = 0; i < Math.min(5, header.length); i++) {
+      const vals = dataRowsRaw.map(r => r[i] || "");
+      const hasDate = vals.some(v => /^\d{1,2}[.\/\-]\d{1,2}/.test(v));
+      if (hasDate) { offset = i; break; }
+    }
+
+    // Trim header and data to start at offset
+    const headerFinal = header.slice(offset);
+    const dataRowsFinal = dataRowsRaw.map(r => r.slice(offset));
+
+    setCsvColunas(headerFinal);
 
     // Try to detect by header name first
-    const findByName = (terms: string[]) => header.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
+    const findByName = (terms: string[]) => headerFinal.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
 
-    // Analyze content of each column using first 5 data rows
-    const dataRows = linhas.slice(1, 6).map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
+    // Analyze content of each column using first 5 data rows (already offset-adjusted)
+    const dataRows = dataRowsFinal;
 
     function detectColByContent(): { nome: number; cidade: number; estado: number; data: number; distancia: number; local: number; link: number; destaque: number } {
       const scores: Record<string, number[]> = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, link:-1, local:-1, destaque:-1 } as unknown as Record<string, number[]>;
@@ -302,7 +325,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       // Cidade: shortest text, Nome: longest text (but not a URL)
       const textCols = header.map((_, i) => {
         if (used.has(i)) return null;
-        const vals = dataRows.map(r => r[i] || "");
+        const vals = dataRowsRaw.map(r => r[i] || "");
         const isUrl = vals.some(v => v.startsWith("http"));
         if (isUrl) return null;
         const avgLen = vals.reduce((acc, v) => acc + v.length, 0) / vals.length;
@@ -340,7 +363,27 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(csvMap.nome<0||csvMap.cidade<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade e data.");return;}
     setImportando(true);setImportErro("");setImportResultado(null);
     try {
-      const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvTexto,mapeamento:csvMap,estado_padrao:estadoPadrao||"BR"})});
+      // Clean CSV before sending: remove garbage lines and apply offset
+    const linhasOriginais = csvTexto.trim().split("\n");
+    const linhasLimpas = linhasOriginais.filter(l => {
+      const v = l.toLowerCase();
+      return !v.includes("adsbygoogle") && !v.includes("googlesyndication") && !v.includes("doubleclick") && l.trim().replace(/[",]/g,"").trim().length > 0;
+    });
+    // Detect offset from first data line
+    let csvOffset = 0;
+    if (linhasLimpas.length > 1) {
+      const firstDataCols = linhasLimpas[1].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
+      for (let i = 0; i < Math.min(5, firstDataCols.length); i++) {
+        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(firstDataCols[i])) { csvOffset = i; break; }
+      }
+    }
+    // Rebuild CSV without garbage columns
+    const csvLimpo = linhasLimpas.map((l, idx) => {
+      const cols = l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
+      const trimmed = cols.slice(csvOffset);
+      return trimmed.map(c => `"${c}"`).join(",");
+    }).join("\n");
+    const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvLimpo,mapeamento:csvMap,estado_padrao:estadoPadrao||"BR"})});
       const result = await res.json();
       if(!res.ok){setImportErro(result.error||"Erro ao importar.");setImportando(false);return;}
       setImportResultado(result);
