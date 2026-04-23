@@ -40,10 +40,6 @@ export default async function HomePage(): Promise<React.JSX.Element> {
 
           <div className="relative mx-auto max-w-6xl">
             <div className="max-w-3xl">
-              <div className="mb-5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-moda-run.png" alt="Moda Run" style={{ height:"56px", width:"auto", objectFit:"contain", maxWidth:"280px" }} />
-              </div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
                 ⚡ RUNNING & PERFORMANCE
               </div>
