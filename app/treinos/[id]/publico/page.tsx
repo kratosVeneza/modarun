@@ -190,6 +190,7 @@ export default function TreinoPage() {
                 ))}
               </div>
             )}
+            
           </section>
 
           <section className="rounded-3xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-lg">
