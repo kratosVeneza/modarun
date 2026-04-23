@@ -620,7 +620,8 @@ function AbaBanners(): React.JSX.Element {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
-    const body = editando ? { id: editando.id, ...form } : form;
+    const formComPosicao = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50 };
+    const body = editando ? { id: editando.id, ...formComPosicao } : formComPosicao;
     try {
       const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
@@ -728,8 +729,8 @@ function AbaBanners(): React.JSX.Element {
 
               {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
               <div className="flex gap-3">
-                <button onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
-                <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black hover:brightness-110 disabled:opacity-60"
+                <button type="button" onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
+                <button type="button" onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black hover:brightness-110 disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
                   {loading ? "SALVANDO..." : editando ? "SALVAR" : "ADICIONAR"}
                 </button>
