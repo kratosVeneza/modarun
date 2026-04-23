@@ -140,6 +140,20 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [excluindo, setExcluindo] = useState<number|null>(null);
+  const [syncAberto, setSyncAberto] = useState(false);
+  const [sheetId, setSheetId] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncResultado, setSyncResultado] = useState<{inseridos:number;atualizados:number;total:number;erros:string[]} | null>(null);
+  const [syncErro, setSyncErro] = useState("");
+  // CSV import
+  const [csvAberto, setCsvAberto] = useState(false);
+  const [csvTexto, setCsvTexto] = useState("");
+  const [csvColunas, setCsvColunas] = useState<string[]>([]);
+  const [csvMap, setCsvMap] = useState({ nome:-1,cidade:-1,estado:-1,data:-1,distancia:-1,local:-1,link:-1,destaque:-1 });
+  const [importando, setImportando] = useState(false);
+  const [importResultado, setImportResultado] = useState<{inseridos:number;atualizados:number;total:number;erros:string[]} | null>(null);
+  const [importErro, setImportErro] = useState("");
+  const csvFileRef = useRef<HTMLInputElement>(null);
 
   function abrirNovo() { setEditando(null); setForm(eventoVazio); setErro(""); setAberto(true); }
   function abrirEditar(e: Evento) { setEditando(e); setForm({ nome:e.nome,cidade:e.cidade,estado:e.estado,data_evento:String(e.data_evento),distancia:e.distancia||"",local:e.local||"",link_inscricao:e.link_inscricao||"",destaque:e.destaque||false }); setErro(""); setAberto(true); }
@@ -166,14 +180,239 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(res.ok) setEventos(eventos.filter(e=>e.id!==id));
   }
 
+  async function sincronizar() {
+    if(!sheetId.trim()){setSyncErro("Informe o ID da planilha.");return;}
+    setSyncing(true);setSyncErro("");setSyncResultado(null);
+    try {
+      const res = await fetch("/api/sync-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sheet_id:sheetId.trim()})});
+      const result = await res.json();
+      if(!res.ok){setSyncErro(result.error||"Erro ao sincronizar.");setSyncing(false);return;}
+      setSyncResultado(result);
+      // Reload events from DB
+      const { data: ev } = await (await import("@/utils/supabase/client")).createClient().from("eventos").select("*").order("data_evento",{ascending:true});
+      setEventos(ev||[]);
+    } catch { setSyncErro("Erro de conexão."); }
+    setSyncing(false);
+  }
+
+  function parseCsvPreview(csv: string) {
+    const linhas = csv.trim().split("\n");
+    if (linhas.length < 1) return;
+    const header = linhas[0].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
+    setCsvColunas(header);
+    const find = (terms: string[]) => header.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
+    setCsvMap({
+      nome: find(["nome","event","corrida","prova","titulo"]),
+      cidade: find(["cidade","city","municipio"]),
+      estado: find(["estado","uf","state"]),
+      data: find(["data","date","dia"]),
+      distancia: find(["distancia","distância","km","distance"]),
+      local: find(["local","endereco","endereço","place"]),
+      link: find(["link","url","inscricao","inscrição","site"]),
+      destaque: find(["destaque","featured"]),
+    });
+  }
+
+  async function importarCSV() {
+    if(!csvTexto.trim()){setImportErro("Cole o CSV primeiro.");return;}
+    if(csvMap.nome<0||csvMap.cidade<0||csvMap.estado<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade, estado e data.");return;}
+    setImportando(true);setImportErro("");setImportResultado(null);
+    try {
+      const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvTexto,mapeamento:csvMap})});
+      const result = await res.json();
+      if(!res.ok){setImportErro(result.error||"Erro ao importar.");setImportando(false);return;}
+      setImportResultado(result);
+      const supabaseClient = (await import("@/utils/supabase/client")).createClient();
+      const { data: ev } = await supabaseClient.from("eventos").select("*").order("data_evento",{ascending:true});
+      setEventos(ev||[]);
+    } catch { setImportErro("Erro de conexão."); }
+    setImportando(false);
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap gap-3 justify-end">
+        <button onClick={() => { setSyncAberto(!syncAberto); setCsvAberto(false); }} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
+          style={{ background: syncAberto?"rgba(92,200,0,0.2)":"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          📊 GOOGLE SHEETS
+        </button>
         <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
           style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
           + ADICIONAR EVENTO
         </button>
       </div>
+
+      {/* Botão importar CSV */}
+      <div className="flex flex-wrap gap-3 justify-end" style={{ marginTop:"-8px" }}>
+        <button onClick={() => { setCsvAberto(!csvAberto); setSyncAberto(false); }} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
+          style={{ background: csvAberto?"rgba(255,184,0,0.2)":"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          📥 IMPORTAR CSV
+        </button>
+      </div>
+
+      {/* Painel de importação CSV */}
+      {csvAberto && (
+        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(255,184,0,0.2)" }}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl mt-0.5">📥</span>
+            <div>
+              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>IMPORTAR CSV</h3>
+              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Cole o conteúdo CSV ou carregue um arquivo. O sistema detecta as colunas automaticamente.</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button type="button" onClick={() => csvFileRef.current?.click()}
+              className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+              style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif" }}>
+              📂 CARREGAR ARQUIVO
+            </button>
+            <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const text = ev.target?.result as string;
+                  setCsvTexto(text); parseCsvPreview(text);
+                };
+                reader.readAsText(file, "UTF-8");
+                e.target.value = "";
+              }} />
+          </div>
+
+          <div>
+            <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>
+              OU COLE O CSV AQUI
+            </label>
+            <textarea value={csvTexto} rows={5} placeholder={"nome,cidade,estado,data,distancia\nCorrida das Flores,Belém,PA,15/06/2026,10km\n..."}
+              onChange={e => { setCsvTexto(e.target.value); if(e.target.value.includes("\n")) parseCsvPreview(e.target.value); }}
+              style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"12px 16px", fontSize:"12px", outline:"none", width:"100%", resize:"none", fontFamily:"monospace" }}
+              onFocus={e=>(e.target.style.borderColor="#FFB800")} onBlur={e=>(e.target.style.borderColor="rgba(255,184,0,0.2)")} />
+          </div>
+
+          {/* Mapeamento de colunas */}
+          {csvColunas.length > 0 && (
+            <div>
+              <p className="text-xs font-black mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                🗂 MAPEAR COLUNAS — Qual coluna corresponde a cada campo?
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {([
+                  {key:"nome",label:"NOME *"},
+                  {key:"cidade",label:"CIDADE *"},
+                  {key:"estado",label:"ESTADO *"},
+                  {key:"data",label:"DATA *"},
+                  {key:"distancia",label:"DISTÂNCIA"},
+                  {key:"local",label:"LOCAL"},
+                  {key:"link",label:"LINK"},
+                  {key:"destaque",label:"DESTAQUE"},
+                ] as {key:keyof typeof csvMap,label:string}[]).map(campo => (
+                  <div key={campo.key}>
+                    <label style={{ display:"block", fontSize:"10px", fontWeight:700, color: campo.label.includes("*")?"#FFB800":"#8B949E", marginBottom:"4px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                      {campo.label}
+                    </label>
+                    <select value={csvMap[campo.key]} onChange={e => setCsvMap({...csvMap,[campo.key]:Number(e.target.value)})}
+                      style={{ background:"#21262D", border:`1px solid ${campo.label.includes("*")?"rgba(255,184,0,0.3)":"rgba(92,200,0,0.15)"}`, color:"#E6EDF3", borderRadius:"10px", padding:"6px 10px", fontSize:"12px", outline:"none", width:"100%" }}>
+                      <option value={-1}>— ignorar —</option>
+                      {csvColunas.map((col,i) => <option key={i} value={i}>{col || `Coluna ${i+1}`}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {importErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{importErro}</div>}
+
+          {importResultado && (
+            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
+              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ IMPORTAÇÃO CONCLUÍDA</p>
+              <div className="flex gap-4">
+                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
+              </div>
+              {importResultado.erros.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
+                  {importResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {csvColunas.length > 0 && (
+            <button type="button" onClick={importarCSV} disabled={importando}
+              className="w-full rounded-xl py-3.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+              style={{ background:"linear-gradient(135deg,#FFB800,#FF8C00)", color:"#0D1117", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+              {importando ? (
+                <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"/>IMPORTANDO...</span>
+              ) : `📥 IMPORTAR ${csvTexto.trim().split("\n").length - 1} EVENTO(S)`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Painel de sincronização Google Sheets */}
+      {syncAberto && (
+        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl mt-0.5">📊</span>
+            <div className="flex-1">
+              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>SINCRONIZAR COM GOOGLE SHEETS</h3>
+              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>
+                Cole o ID da sua planilha pública. Ela deve ter as colunas nesta ordem:<br />
+                <span style={{ color:"#5CC800", fontFamily:"monospace" }}>nome | cidade | estado | data (DD/MM/AAAA) | distancia | local | link_inscricao | destaque (sim/não)</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input type="text" placeholder="ID da planilha (ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms)" value={sheetId}
+              onChange={e => setSheetId(e.target.value)}
+              style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"13px", outline:"none", flex:1 }}
+              onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+            <button type="button" onClick={sincronizar} disabled={syncing}
+              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+              style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", whiteSpace:"nowrap" }}>
+              {syncing ? (
+                <span className="flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/>SINCRONIZANDO...</span>
+              ) : "🔄 SINCRONIZAR"}
+            </button>
+          </div>
+
+          {syncErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{syncErro}</div>}
+
+          {syncResultado && (
+            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
+              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ SINCRONIZAÇÃO CONCLUÍDA</p>
+              <div className="flex gap-4">
+                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
+              </div>
+              {syncResultado.erros.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
+                  {syncResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
+            <p className="text-xs font-bold mb-2" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>📋 COMO CONFIGURAR A PLANILHA</p>
+            <ol className="text-xs space-y-1" style={{ color:"#8B949E" }}>
+              <li>1. Crie uma planilha no <a href="https://sheets.google.com" target="_blank" rel="noreferrer" style={{ color:"#5CC800" }}>Google Sheets</a></li>
+              <li>2. Adicione o cabeçalho na linha 1: <span style={{ color:"#E6EDF3", fontFamily:"monospace" }}>nome, cidade, estado, data, distancia, local, link_inscricao, destaque</span></li>
+              <li>3. Preencha os eventos a partir da linha 2</li>
+              <li>4. Clique em <strong style={{ color:"#E6EDF3" }}>Arquivo → Compartilhar → Qualquer pessoa com o link pode ver</strong></li>
+              <li>5. Copie o ID da URL: <span style={{ color:"#5CC800", fontFamily:"monospace" }}>docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit</span></li>
+            </ol>
+          </div>
+        </div>
+      )}
 
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8" style={{ background:"rgba(0,0,0,0.7)", backdropFilter:"blur(8px)" }} onClick={e=>e.target===e.currentTarget&&setAberto(false)}>
