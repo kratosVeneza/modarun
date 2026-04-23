@@ -824,19 +824,24 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
 
   async function aprovar(s: Sugestao) {
     setAprovando(s.id);
-    const res = await fetch("/api/admin/eventos", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      // Insert directly via authenticated supabase client
+      const { data: novoEvento, error } = await supabase.from("eventos").insert([{
         nome: s.nome, cidade: s.cidade, estado: s.estado,
-        data_evento: s.data_evento, distancia: s.distancia || "",
-        local: s.local || "", link_inscricao: s.link_inscricao || "", destaque: false,
-      }),
-    });
-    const result = await res.json();
-    if (res.ok) {
+        data_evento: s.data_evento,
+        distancia: s.distancia || null,
+        local: s.local || null,
+        link_inscricao: s.link_inscricao || null,
+        destaque: false,
+      }]).select().single();
+
+      if (error) { alert("Erro ao publicar: " + error.message); setAprovando(null); return; }
+
       await supabase.from("sugestoes_eventos").update({ status: "aprovado" }).eq("id", s.id);
-      setSugestoes(sugestoes.filter(x => x.id !== s.id));
-      onAprovar(result.data);
+      setSugestoes(prev => prev.filter(x => x.id !== s.id));
+      onAprovar(novoEvento as Evento);
+    } catch (e) {
+      alert("Erro de conexão.");
     }
     setAprovando(null);
   }
