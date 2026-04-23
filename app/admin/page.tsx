@@ -801,6 +801,8 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
   const [carregando, setCarregando] = useState(true);
   const [aprovando, setAprovando] = useState<string | null>(null);
   const [rejeitando, setRejeitando] = useState<string | null>(null);
+  const [editandoSugestao, setEditandoSugestao] = useState<Sugestao | null>(null);
+  const [formEdicao, setFormEdicao] = useState<Sugestao | null>(null);
 
   // IA extraction state
   const [textoIA, setTextoIA] = useState("");
@@ -993,27 +995,104 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
         )}
 
         <div className="space-y-3">
-          {sugestoes.map(s => (
-            <div key={s.id} className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h4 className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{s.nome}</h4>
-                  <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {s.cidade} — {s.estado} · 📅 {fmtData(s.data_evento)}</p>
-                  {s.distancia && <p className="text-xs" style={{ color: "#5CC800" }}>📏 {s.distancia}</p>}
-                  {s.organizador_nome && <p className="text-xs mt-1" style={{ color: "#8B949E" }}>👤 {s.organizador_nome}{s.organizador_whatsapp && ` · ${s.organizador_whatsapp}`}</p>}
-                  {s.link_inscricao && <a href={s.link_inscricao} target="_blank" rel="noreferrer" className="text-xs font-bold hover:underline" style={{ color: "#5CC800" }}>🔗 Ver inscrição</a>}
+          {/* Modal de edição */}
+          {editandoSugestao && formEdicao && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8"
+              style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
+              onClick={e => e.target === e.currentTarget && setEditandoSugestao(null)}>
+              <div className="w-full max-w-lg rounded-2xl shadow-2xl" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.3)" }}>
+                <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div>
+                    <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>✏️ EDITAR SUGESTÃO</h3>
+                    <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>Ajuste os dados antes de publicar</p>
+                  </div>
+                  <button type="button" onClick={() => setEditandoSugestao(null)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>✕</button>
+                </div>
+                <div className="space-y-4 p-6">
+                  {[
+                    { lbl: "NOME DO EVENTO *", key: "nome", type: "text", placeholder: "Nome do evento" },
+                    { lbl: "CIDADE *", key: "cidade", type: "text", placeholder: "Cidade" },
+                    { lbl: "DATA *", key: "data_evento", type: "date", placeholder: "" },
+                    { lbl: "DISTÂNCIA", key: "distancia", type: "text", placeholder: "Ex: 5km, 10km, 21km" },
+                    { lbl: "LOCAL", key: "local", type: "text", placeholder: "Ex: Parque Municipal" },
+                    { lbl: "LINK DE INSCRIÇÃO", key: "link_inscricao", type: "url", placeholder: "https://..." },
+                  ].map(campo => (
+                    <div key={campo.key} className={campo.key === "cidade" ? "grid grid-cols-2 gap-3" : ""}>
+                      {campo.key === "cidade" ? (
+                        <>
+                          <div>
+                            <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>CIDADE *</label>
+                            <input type="text" value={formEdicao.cidade || ""} placeholder="Cidade"
+                              onChange={e => setFormEdicao({ ...formEdicao, cidade: e.target.value })}
+                              style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}
+                              onFocus={e => (e.target.style.borderColor="#5CC800")} onBlur={e => (e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+                          </div>
+                          <div>
+                            <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>ESTADO *</label>
+                            <select value={formEdicao.estado || ""}
+                              onChange={e => setFormEdicao({ ...formEdicao, estado: e.target.value })}
+                              style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}>
+                              <option value="">UF</option>
+                              {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>{campo.lbl}</label>
+                          <input type={campo.type} value={(formEdicao[campo.key as keyof Sugestao] as string) || ""} placeholder={campo.placeholder}
+                            onChange={e => setFormEdicao({ ...formEdicao, [campo.key]: e.target.value })}
+                            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}
+                            onFocus={e => (e.target.style.borderColor="#5CC800")} onBlur={e => (e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setEditandoSugestao(null)}
+                      className="flex-1 rounded-xl py-3 text-sm font-black"
+                      style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
+                      CANCELAR
+                    </button>
+                    <button type="button" onClick={() => { aprovar(formEdicao); setEditandoSugestao(null); }}
+                      disabled={aprovando === formEdicao.id}
+                      className="flex-1 rounded-xl py-3 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+                      style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
+                      {aprovando === formEdicao.id ? "PUBLICANDO..." : "✅ PUBLICAR EVENTO"}
+                    </button>
+                  </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {sugestoes.map(s => (
+            <div key={s.id} className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
+              <div className="mb-3">
+                <h4 className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{s.nome}</h4>
+                <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {s.cidade} — {s.estado} · 📅 {fmtData(s.data_evento)}</p>
+                {s.distancia && <p className="text-xs" style={{ color: "#5CC800" }}>📏 {s.distancia}</p>}
+                {s.local && <p className="text-xs" style={{ color: "#8B949E" }}>📌 {s.local}</p>}
+                {s.organizador_nome && <p className="text-xs mt-1" style={{ color: "#8B949E" }}>👤 {s.organizador_nome}{s.organizador_whatsapp && ` · ${s.organizador_whatsapp}`}</p>}
+                {s.link_inscricao && <a href={s.link_inscricao} target="_blank" rel="noreferrer" className="text-xs font-bold hover:underline" style={{ color: "#5CC800" }}>🔗 Ver inscrição</a>}
+              </div>
               <div className="flex gap-2">
+                <button type="button" onClick={() => { setEditandoSugestao(s); setFormEdicao({ ...s }); }}
+                  className="flex-1 rounded-xl py-2.5 text-xs font-black transition-all hover:brightness-110"
+                  style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif" }}>
+                  ✏️ EDITAR
+                </button>
                 <button type="button" onClick={() => aprovar(s)} disabled={aprovando === s.id}
                   className="flex-1 rounded-xl py-2.5 text-xs font-black disabled:opacity-60 transition-all hover:brightness-110"
                   style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {aprovando === s.id ? "APROVANDO..." : "✅ APROVAR E PUBLICAR"}
+                  {aprovando === s.id ? "APROVANDO..." : "✅ APROVAR"}
                 </button>
                 <button type="button" onClick={() => rejeitar(s.id)} disabled={rejeitando === s.id}
-                  className="rounded-xl px-4 py-2.5 text-xs font-black disabled:opacity-50"
+                  className="rounded-xl px-3 py-2.5 text-xs font-black disabled:opacity-50"
                   style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {rejeitando === s.id ? "..." : "❌ REJEITAR"}
+                  {rejeitando === s.id ? "..." : "❌"}
                 </button>
               </div>
             </div>
