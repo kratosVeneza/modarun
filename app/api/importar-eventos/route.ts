@@ -69,8 +69,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { data: adminRow } = await supabase.from("admins").select("email").eq("email", user.email?.toLowerCase() ?? "").single();
     if (!adminRow) return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
 
-    const { csv, mapeamento } = await request.json() as {
+    const { csv, mapeamento, estado_padrao } = await request.json() as {
       csv: string;
+      estado_padrao?: string;
       mapeamento: { nome: number; cidade: number; estado: number; data: number; distancia?: number; local?: number; link?: number; destaque?: number };
     };
 
@@ -101,7 +102,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       eventos.push({
         nome,
         cidade,
-        estado: estado ? estado.toUpperCase().slice(0, 2) : "BR",
+        estado: estado ? estado.toUpperCase().slice(0, 2) : (estado_padrao || "BR"),
         data_evento,
         distancia: get(cols, mapeamento.distancia) || null,
         local: get(cols, mapeamento.local) || null,
@@ -118,10 +119,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       if (existing) { await supabase.from("eventos").update(ev).eq("id", existing.id); atualizados++; }
       else { await supabase.from("eventos").insert([ev]); inseridos++; }
     }
-
     return NextResponse.json({ success: true, inseridos, atualizados, erros, total: eventos.length });
   } catch (e) {
-    console.error(e);
+    console.error(e);   
     return NextResponse.json({ error: "Erro interno." }, { status: 500 });
   }
 }

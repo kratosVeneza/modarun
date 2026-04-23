@@ -156,6 +156,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   const [importResultado, setImportResultado] = useState<{inseridos:number;atualizados:number;total:number;erros:string[]} | null>(null);
   const [importErro, setImportErro] = useState("");
   const csvFileRef = useRef<HTMLInputElement>(null);
+  const [estadoPadrao, setEstadoPadrao] = useState("");
 
   function abrirNovo() { setEditando(null); setForm(eventoVazio); setErro(""); setAberto(true); }
   function abrirEditar(e: Evento) { setEditando(e); setForm({ nome:e.nome,cidade:e.cidade,estado:e.estado,data_evento:String(e.data_evento),distancia:e.distancia||"",local:e.local||"",link_inscricao:e.link_inscricao||"",destaque:e.destaque||false }); setErro(""); setAberto(true); }
@@ -339,7 +340,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(csvMap.nome<0||csvMap.cidade<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade e data.");return;}
     setImportando(true);setImportErro("");setImportResultado(null);
     try {
-      const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvTexto,mapeamento:csvMap})});
+      const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvTexto,mapeamento:csvMap,estado_padrao:estadoPadrao||"BR"})});
       const result = await res.json();
       if(!res.ok){setImportErro(result.error||"Erro ao importar.");setImportando(false);return;}
       setImportResultado(result);
@@ -461,6 +462,22 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Estado padrão quando não mapeado */}
+          {csvColunas.length > 0 && csvMap.estado < 0 && (
+            <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.08)", border:"1px solid rgba(255,184,0,0.25)" }}>
+              <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#FFB800", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                ⚠️ ESTADO NÃO DETECTADO — DEFINA O ESTADO PARA TODOS OS EVENTOS
+              </label>
+              <select value={estadoPadrao} onChange={e => setEstadoPadrao(e.target.value)}
+                style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.3)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}>
+                <option value="">Usar "BR" como padrão</option>
+                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
             </div>
           )}
 
