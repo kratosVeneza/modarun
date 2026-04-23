@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 type LatLng = { lat: number; lng: number };
 type Props = {
@@ -20,7 +20,7 @@ function haversine(a: LatLng, b: LatLng): number {
 }
 
 function calcularDistancia(ponto: LatLng | null, rota: LatLng[]): number {
-  if (!ponto) return 0;
+  if (!ponto || rota.length === 0) return 0;
   const todos = [ponto, ...rota];
   let total = 0;
   for (let i = 1; i < todos.length; i++) total += haversine(todos[i - 1], todos[i]);
@@ -30,17 +30,33 @@ function calcularDistancia(ponto: LatLng | null, rota: LatLng[]): number {
 export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rotaCoords, setRotaCoords, onDistanciaChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
+  const LRef = useRef<unknown>(null);
+  const polylineRef = useRef<unknown>(null);
   const pontoMarkerRef = useRef<unknown>(null);
   const rotaMarcadoresRef = useRef<unknown[]>([]);
-  const polylineRef = useRef<unknown>(null);
-  const LRef = useRef<unknown>(null);
 
-  // Use ref to always call latest onDistanciaChange
+  // Always-fresh refs for state and callbacks
+  const pontoRef = useRef(pontoEncontro);
+  const rotaRef = useRef(rotaCoords);
+  const setPontoRef = useRef(setPontoEncontro);
+  const setRotaRef = useRef(setRotaCoords);
   const onDistanciaRef = useRef(onDistanciaChange);
+
+  // Keep refs in sync with props
+  pontoRef.current = pontoEncontro;
+  rotaRef.current = rotaCoords;
+  setPontoRef.current = setPontoEncontro;
+  setRotaRef.current = setRotaCoords;
   onDistanciaRef.current = onDistanciaChange;
-  const atualizarDistancia = useCallback((ponto: LatLng | null, rota: LatLng[]) => {
-    onDistanciaRef.current(calcularDistancia(ponto, rota));
-  }, []);
+
+  function atualizarPolyline(L2: unknown, map2: unknown, ponto: LatLng | null, rota: LatLng[]) {
+    if (polylineRef.current) (polylineRef.current as { remove: () => void }).remove();
+    polylineRef.current = null;
+    if (!ponto || rota.length === 0) return;
+    const pontos: [number, number][] = [[ponto.lat, ponto.lng], ...rota.map(p => [p.lat, p.lng] as [number, number])];
+    const L = L2 as { polyline: (p: [number,number][], opts: object) => { addTo: (m: unknown) => unknown } };
+    polylineRef.current = L.polyline(pontos, { color: "#5CC800", weight: 4, opacity: 0.9 }).addTo(map2 as unknown);
+  }
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -57,11 +73,9 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
 
-      // Default to Tucuruí/PA
       const map = L.default.map(containerRef.current!, { center: [-3.767, -49.672], zoom: 14, zoomControl: true });
       mapRef.current = map;
 
-      // OpenStreetMap standard tile - best readability
       L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
         maxZoom: 19,
@@ -70,38 +84,38 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
       map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
         const latlng: LatLng = { lat: e.latlng.lat, lng: e.latlng.lng };
         const L2 = LRef.current as typeof L.default;
-        const map2 = mapRef.current as ReturnType<typeof L.default.map>;
 
         if (!pontoMarkerRef.current) {
           // Primeiro clique = ponto de encontro
           const greenIcon = L2.divIcon({
             className: "",
-            html: `<div style="width:20px;height:20px;background:#5CC800;border:3px solid #fff;border-radius:50%;box-shadow:0 0 10px rgba(92,200,0,0.6);"></div>`,
-            iconSize: [20, 20], iconAnchor: [10, 10],
+            html: `<div style="width:22px;height:22px;background:#5CC800;border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(92,200,0,0.7);"></div>`,
+            iconSize: [22, 22], iconAnchor: [11, 11],
           });
-          pontoMarkerRef.current = L2.marker([latlng.lat, latlng.lng], { icon: greenIcon }).addTo(map2);
-          setPontoEncontro(latlng);
-          atualizarDistancia(latlng, rotaCoords);
+          pontoMarkerRef.current = L2.marker([latlng.lat, latlng.lng], { icon: greenIcon }).addTo(map);
+          setPontoRef.current(latlng);
+          onDistanciaRef.current(0); // ponto só, sem rota ainda
+
         } else {
           // Cliques seguintes = rota
           const rotaIcon = L2.divIcon({
             className: "",
-            html: `<div style="width:12px;height:12px;background:#FF6B00;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(255,107,0,0.5);"></div>`,
-            iconSize: [12, 12], iconAnchor: [6, 6],
+            html: `<div style="width:14px;height:14px;background:#FF6B00;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(255,107,0,0.6);"></div>`,
+            iconSize: [14, 14], iconAnchor: [7, 7],
           });
-          const marker = L2.marker([latlng.lat, latlng.lng], { icon: rotaIcon }).addTo(map2);
+          const marker = L2.marker([latlng.lat, latlng.lng], { icon: rotaIcon }).addTo(map);
           rotaMarcadoresRef.current.push(marker);
-          const novaRota = [...rotaCoords, latlng];
-          setRotaCoords(novaRota);
 
-          // Update polyline
-          if (polylineRef.current) (polylineRef.current as { remove: () => void }).remove();
-          const ponto = pontoEncontro;
-          if (ponto) {
-            const pontos: [number, number][] = [[ponto.lat, ponto.lng], ...novaRota.map(p => [p.lat, p.lng] as [number, number])];
-            polylineRef.current = L2.polyline(pontos, { color: "#5CC800", weight: 3, opacity: 0.8, dashArray: "8, 4" }).addTo(map2);
-          }
-          atualizarDistancia(pontoEncontro, novaRota);
+          const novaRota = [...rotaRef.current, latlng];
+          setRotaRef.current(novaRota);
+
+          // Draw polyline
+          const ponto = pontoRef.current;
+          atualizarPolyline(L2, map, ponto, novaRota);
+
+          // Update distance
+          const dist = calcularDistancia(ponto, novaRota);
+          onDistanciaRef.current(dist);
         }
       });
 
@@ -119,41 +133,30 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function desfazerUltimoPonto() {
+  function desfazer() {
     if (rotaMarcadoresRef.current.length > 0) {
       const ultimo = rotaMarcadoresRef.current.pop();
       (ultimo as { remove: () => void }).remove();
-      const novaRota = rotaCoords.slice(0, -1);
-      setRotaCoords(novaRota);
-      if (polylineRef.current) (polylineRef.current as { remove: () => void }).remove();
-      if (pontoEncontro && novaRota.length > 0) {
-        const L2 = LRef.current as { polyline: (p: [number,number][], opts: object) => { addTo: (m: unknown) => unknown } };
-        const pontos: [number, number][] = [[pontoEncontro.lat, pontoEncontro.lng], ...novaRota.map(p => [p.lat, p.lng] as [number, number])];
-        polylineRef.current = L2.polyline(pontos, { color: "#5CC800", weight: 3, opacity: 0.8, dashArray: "8, 4" }).addTo(mapRef.current as unknown);
-      }
-      atualizarDistancia(pontoEncontro, novaRota);
+      const novaRota = rotaRef.current.slice(0, -1);
+      setRotaRef.current(novaRota);
+      atualizarPolyline(LRef.current, mapRef.current, pontoRef.current, novaRota);
+      onDistanciaRef.current(calcularDistancia(pontoRef.current, novaRota));
     } else if (pontoMarkerRef.current) {
       (pontoMarkerRef.current as { remove: () => void }).remove();
       pontoMarkerRef.current = null;
-      setPontoEncontro(null);
-      atualizarDistancia(null, []);
+      setPontoRef.current(null);
+      onDistanciaRef.current(0);
     }
   }
 
-  function limparRota() {
+  function limpar() {
     rotaMarcadoresRef.current.forEach(m => (m as { remove: () => void }).remove());
     rotaMarcadoresRef.current = [];
-    if (pontoMarkerRef.current) {
-      (pontoMarkerRef.current as { remove: () => void }).remove();
-      pontoMarkerRef.current = null;
-    }
-    if (polylineRef.current) {
-      (polylineRef.current as { remove: () => void }).remove();
-      polylineRef.current = null;
-    }
-    setRotaCoords([]);
-    setPontoEncontro(null);
-    atualizarDistancia(null, []);
+    if (pontoMarkerRef.current) { (pontoMarkerRef.current as { remove: () => void }).remove(); pontoMarkerRef.current = null; }
+    if (polylineRef.current) { (polylineRef.current as { remove: () => void }).remove(); polylineRef.current = null; }
+    setPontoRef.current(null);
+    setRotaRef.current([]);
+    onDistanciaRef.current(0);
   }
 
   return (
@@ -163,23 +166,23 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
           <div>
             <p className="text-xs font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>🗺 MAPA DO TREINO</p>
             <p className="text-xs" style={{ color: "#8B949E" }}>
-              {!pontoEncontro ? "1° clique = ponto de encontro 📍" : "Próximos cliques = traçar rota 🟠"}
+              {!pontoEncontro ? "1° clique = ponto de encontro 📍" : rotaCoords.length === 0 ? "Próximos cliques = traçar rota 🟠" : `Rota: ${rotaCoords.length} ponto${rotaCoords.length > 1 ? "s" : ""}`}
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={desfazerUltimoPonto}
-              className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all"
+            <button type="button" onClick={desfazer}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold"
               style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
               ↩ DESFAZER
             </button>
-            <button type="button" onClick={limparRota}
-              className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all"
+            <button type="button" onClick={limpar}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold"
               style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
               🗑 LIMPAR
             </button>
           </div>
         </div>
-        <div ref={containerRef} style={{ height: "280px", width: "100%" }} />
+        <div ref={containerRef} style={{ height: "300px", width: "100%" }} />
       </div>
     </div>
   );
