@@ -197,20 +197,96 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   function parseCsvPreview(csv: string) {
     const linhas = csv.trim().split("\n");
-    if (linhas.length < 1) return;
+    if (linhas.length < 2) return;
+
     const header = linhas[0].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
     setCsvColunas(header);
-    const find = (terms: string[]) => header.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
-    setCsvMap({
-      nome: find(["nome","event","corrida","prova","titulo"]),
-      cidade: find(["cidade","city","municipio"]),
-      estado: find(["estado","uf","state"]),
-      data: find(["data","date","dia"]),
-      distancia: find(["distancia","distância","km","distance"]),
-      local: find(["local","endereco","endereço","place"]),
-      link: find(["link","url","inscricao","inscrição","site"]),
-      destaque: find(["destaque","featured"]),
-    });
+
+    // Try to detect by header name first
+    const findByName = (terms: string[]) => header.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
+
+    // Analyze content of each column using first 5 data rows
+    const dataRows = linhas.slice(1, 6).map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
+
+    function detectColByContent(): { nome: number; cidade: number; estado: number; data: number; distancia: number; local: number; link: number; destaque: number } {
+      const scores: Record<string, number[]> = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, link:-1, local:-1, destaque:-1 } as unknown as Record<string, number[]>;
+      const result = { nome:-1, cidade:-1, estado:-1, data:-1, distancia:-1, local:-1, link:-1, destaque:-1 };
+
+      // Score each column
+      const colScores: { nome:number; cidade:number; estado:number; data:number; distancia:number; link:number }[] = header.map(() => ({ nome:0, cidade:0, estado:0, data:0, distancia:0, link:0 }));
+
+      dataRows.forEach(row => {
+        row.forEach((val, i) => {
+          if (!val) return;
+          const v = val.toLowerCase();
+
+          // Data: DD.MM, DD/MM/YYYY, YYYY-MM-DD
+          if (/^\d{1,2}[.\/\-]\d{1,2}([.\/\-]\d{2,4})?$/.test(val)) colScores[i].data += 3;
+
+          // Link: starts with http
+          if (v.startsWith("http")) colScores[i].link += 3;
+
+          // Distancia: contains km
+          if (/\d+\s*km/i.test(val) || /^\d+$/.test(val) && parseInt(val) < 200) colScores[i].distancia += 2;
+
+          // Estado: 2 uppercase letters
+          if (/^[A-Z]{2}$/.test(val.trim())) colScores[i].estado += 3;
+
+          // Cidade: capitalized word, no numbers, no http
+          if (!v.startsWith("http") && /^[A-ZÀ-Ú]/.test(val) && !/\d/.test(val) && val.length > 2 && val.length < 40) colScores[i].cidade += 1;
+
+          // Nome: longer text, capitalized, no http
+          if (!v.startsWith("http") && val.length > 10 && /[a-zA-ZÀ-Ú]/.test(val)) colScores[i].nome += 1;
+        });
+      });
+
+      // Pick best column for each field (highest score, no reuse)
+      const used = new Set<number>();
+
+      const pick = (field: keyof typeof result, scoreKey: keyof typeof colScores[0], minScore: number) => {
+        let best = -1, bestScore = minScore - 1;
+        colScores.forEach((s, i) => {
+          if (!used.has(i) && s[scoreKey] > bestScore) { best = i; bestScore = s[scoreKey]; }
+        });
+        if (best >= 0) { result[field] = best; used.add(best); }
+      };
+
+      pick("link", "link", 2);
+      pick("data", "data", 2);
+      pick("distancia", "distancia", 1);
+      pick("estado", "estado", 2);
+      // For cidade and nome, use remaining columns with text
+      // Cidade tends to be shorter, nome tends to be longer
+      const textCols = header.map((_, i) => {
+        if (used.has(i)) return null;
+        const avgLen = dataRows.reduce((acc, r) => acc + (r[i]?.length || 0), 0) / dataRows.length;
+        return { i, avgLen };
+      }).filter(Boolean) as { i: number; avgLen: number }[];
+
+      textCols.sort((a, b) => a.avgLen - b.avgLen);
+      if (textCols.length > 0) { result.cidade = textCols[0].i; used.add(textCols[0].i); }
+      if (textCols.length > 1) { result.nome = textCols[textCols.length - 1].i; used.add(textCols[textCols.length - 1].i); }
+
+      return result;
+    }
+
+    // First try by header name
+    const byName = {
+      nome: findByName(["nome","event","corrida","prova","titulo","name"]),
+      cidade: findByName(["cidade","city","municipio","location"]),
+      estado: findByName(["estado","uf","state"]),
+      data: findByName(["data","date","dia","quando"]),
+      distancia: findByName(["distancia","distância","km","distance","percurso"]),
+      local: findByName(["local","endereco","endereço","place","venue"]),
+      link: findByName(["link","url","inscricao","inscrição","site","href"]),
+      destaque: findByName(["destaque","featured"]),
+    };
+
+    // If header names didn't help (generic like "tipo4"), use content analysis
+    const namedCount = Object.values(byName).filter(v => v >= 0).length;
+    const finalMap = namedCount >= 3 ? byName : { ...detectColByContent(), local: byName.local, destaque: byName.destaque };
+
+    setCsvMap(finalMap);
   }
 
   async function importarCSV() {
