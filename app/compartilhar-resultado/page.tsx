@@ -527,4 +527,5 @@ export default function CompartilharResultadoPage(): React.JSX.Element {
       </main>
     </>
   );
+  
 }
