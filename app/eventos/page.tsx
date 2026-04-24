@@ -156,7 +156,7 @@ export default function EventosPage(): React.JSX.Element {
 
           {/* Abas de estados rápidos */}
           {estadosDisponiveis.length > 0 && !loading && (
-            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            <div className="flex flex-wrap gap-2">
               <button onClick={() => setEstadoSelecionado("")}
                 className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
                 style={{ background: estadoSelecionado === "" ? "#5CC800" : "rgba(92,200,0,0.08)", color: estadoSelecionado === "" ? "#0D1117" : "#8B949E", border: estadoSelecionado === "" ? "1px solid #5CC800" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -218,7 +218,7 @@ export default function EventosPage(): React.JSX.Element {
 
               {/* Filtro por cidade dentro do estado */}
               {[...new Set(evs.map(e => e.cidade))].sort().length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                <div className="flex flex-wrap gap-2">
                   <button onClick={() => setCidadePorEstado(prev => ({ ...prev, [uf]: "" }))}
                     className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-all"
                     style={{ background: !cidadePorEstado[uf] ? "#FF6B00" : "rgba(255,107,0,0.08)", color: !cidadePorEstado[uf] ? "#fff" : "#8B949E", border: !cidadePorEstado[uf] ? "1px solid #FF6B00" : "1px solid rgba(255,107,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
