@@ -355,12 +355,26 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       }
     }
     // Rebuild CSV without garbage columns
-    const csvLimpo = linhasLimpas.map((l, idx) => {
+    const csvLimpo = linhasLimpas.map((l: string) => {
       const cols = l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
       const trimmed = cols.slice(csvOffset);
-      return trimmed.map(c => `"${c}"`).join(",");
+      return trimmed.map((c: string) => `"${c}"`).join(",");
     }).join("\n");
-    const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvLimpo,mapeamento:csvMap,estado_padrao:estadoPadrao||"BR"})});
+
+    // Validate map indices — clamp to actual number of columns
+    const numCols = csvColunas.length;
+    const mapValidado = {
+      nome: csvMap.nome < numCols ? csvMap.nome : -1,
+      cidade: csvMap.cidade < numCols ? csvMap.cidade : -1,
+      estado: csvMap.estado < numCols ? csvMap.estado : -1,
+      data: csvMap.data < numCols ? csvMap.data : -1,
+      distancia: csvMap.distancia < numCols ? csvMap.distancia : -1,
+      local: csvMap.local < numCols ? csvMap.local : -1,
+      link: csvMap.link < numCols ? csvMap.link : -1,
+      destaque: csvMap.destaque < numCols ? csvMap.destaque : -1,
+    };
+
+    const res = await fetch("/api/importar-eventos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({csv:csvLimpo,mapeamento:mapValidado,estado_padrao:estadoPadrao||"BR"})});
       const result = await res.json();
       if(!res.ok){setImportErro(result.error||"Erro ao importar.");setImportando(false);return;}
       setImportResultado(result);
