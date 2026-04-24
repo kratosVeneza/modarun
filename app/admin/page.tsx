@@ -348,7 +348,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   async function importarCSV() {
     if(!csvTexto.trim()){setImportErro("Cole o CSV primeiro.");return;}
-    if(csvMap.nome<0||csvMap.cidade<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome, cidade e data.");return;}
+    if(csvMap.nome<0||csvMap.data<0){setImportErro("Mapeie pelo menos: nome e data.");return;}
     setImportando(true);setImportErro("");setImportResultado(null);
     try {
       // Clean CSV before sending: remove garbage lines and apply offset
