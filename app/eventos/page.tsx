@@ -270,20 +270,34 @@ export default function EventosPage(): React.JSX.Element {
             </section>
           ))}
 
-          {/* CTA loja */}
+          {/* CTA loja melhorado */}
           {!loading && totalFiltrado > 0 && (
-            <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <a href="/loja" className="block rounded-2xl overflow-hidden transition-all hover:brightness-110"
+              style={{ background: "linear-gradient(135deg, #1a0a00, #2a1200)", border: "1px solid rgba(255,107,0,0.3)" }}>
+              <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#FF6B00,#FFB800)" }} />
+              <div className="p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>SE PREPARANDO PARA UMA PROVA? 🏅</p>
-                  <p className="text-sm mt-0.5" style={{ color: "#8B949E" }}>Veja os kits recomendados pela Moda Run.</p>
+                  <p className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#FF6B00", letterSpacing: "0.02em" }}>
+                    🏅 SE PREPARANDO PARA UMA PROVA?
+                  </p>
+                  <p className="text-sm mt-0.5" style={{ color: "#8B949E" }}>
+                    Conjuntos, tênis, acessórios e nutrição selecionados para corredores.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {["👟 Tênis","👗 Conjuntos","⚡ Nutrição","🧢 Bonés"].map(item => (
+                      <span key={item} className="rounded-lg px-2 py-1 text-xs font-bold"
+                        style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {item}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <a href="/loja" className="shrink-0 rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
-                  style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  🛒 VER LOJA
-                </a>
+                <div className="shrink-0 flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-black self-start sm:self-center"
+                  style={{ background: "linear-gradient(135deg,#FF6B00,#FF8C00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  🛒 VER LOJA →
+                </div>
               </div>
-            </div>
+            </a>
           )}
 
         </div>

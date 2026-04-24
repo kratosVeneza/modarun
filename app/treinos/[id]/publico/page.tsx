@@ -296,6 +296,24 @@ export default function TreinoPublicoPage() {
           ⚡ CONFIRMAR PRESENÇA
         </button>
 
+        {/* Funil loja */}
+        {(treino.km_planejado || treino.distancia) && (
+          <a href="/loja"
+            className="flex items-center justify-between rounded-2xl p-4 transition-all hover:brightness-110"
+            style={{ background: "linear-gradient(135deg, rgba(255,107,0,0.15), rgba(255,184,0,0.1))", border: "1px solid rgba(255,107,0,0.3)" }}>
+            <div>
+              <p className="font-black text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#FF6B00", letterSpacing: "0.05em" }}>
+                🏃 VAI CORRER {treino.km_planejado ? `${treino.km_planejado}KM` : treino.distancia?.toUpperCase()}?
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>Veja os kits e equipamentos recomendados pela Moda Run</p>
+            </div>
+            <span className="shrink-0 ml-3 rounded-xl px-3 py-2 text-xs font-black"
+              style={{ background: "rgba(255,107,0,0.2)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              VER →
+            </span>
+          </a>
+        )}
+
         {/* Lista de participantes */}
         <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
           <div className="flex items-center gap-3 mb-4">

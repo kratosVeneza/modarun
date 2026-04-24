@@ -94,6 +94,22 @@ export default function EncontroForm(): React.JSX.Element {
             </button>
           </div>
           <p className="text-xs text-center" style={{ color:"#8B949E" }}>Quem receber o link pode confirmar presença sem criar conta</p>
+
+          {/* Funil loja pós-criação */}
+          {form.km_planejado && (
+            <a href="/loja"
+              className="flex items-center justify-between rounded-xl p-3 transition-all hover:brightness-110"
+              style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.2)" }}>
+              <div>
+                <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  🏃 VAI CORRER {form.km_planejado}KM? EQUIPE-SE!
+                </p>
+                <p className="text-xs" style={{ color: "#8B949E" }}>Veja tênis, roupas e nutrição na loja</p>
+              </div>
+              <span className="text-xs font-black shrink-0 ml-2" style={{ color: "#FF6B00" }}>→</span>
+            </a>
+          )}
+
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={() => { setTreinoId(null); setCopiado(false); }} className="flex-1 rounded-xl py-3 text-sm font-black"
               style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
