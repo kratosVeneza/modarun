@@ -142,6 +142,9 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   const [excluindo, setExcluindo] = useState<number|null>(null);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [excluindoLote, setExcluindoLote] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroCidade, setFiltroCidade] = useState("");
+  const [filtroBusca, setFiltroBusca] = useState("");
   const [syncAberto, setSyncAberto] = useState(false);
   const [sheetId, setSheetId] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -183,6 +186,22 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(res.ok) setEventos(eventos.filter(e=>e.id!==id));
   }
 
+  // Eventos filtrados
+  const eventosFiltrados = React.useMemo(() => {
+    return eventos.filter(ev => {
+      if (filtroEstado && ev.estado !== filtroEstado) return false;
+      if (filtroCidade && !ev.cidade.toLowerCase().includes(filtroCidade.toLowerCase())) return false;
+      if (filtroBusca && !ev.nome.toLowerCase().includes(filtroBusca.toLowerCase()) && !ev.cidade.toLowerCase().includes(filtroBusca.toLowerCase())) return false;
+      return true;
+    });
+  }, [eventos, filtroEstado, filtroCidade, filtroBusca]);
+
+  const estadosDisponiveis = React.useMemo(() => [...new Set(eventos.map(e => e.estado).filter(Boolean))].sort(), [eventos]);
+  const cidadesDisponiveis = React.useMemo(() => {
+    const base = filtroEstado ? eventos.filter(e => e.estado === filtroEstado) : eventos;
+    return [...new Set(base.map(e => e.cidade).filter(Boolean))].sort();
+  }, [eventos, filtroEstado]);
+
   function toggleSelecionado(id: number) {
     setSelecionados(prev => {
       const novo = new Set(prev);
@@ -192,8 +211,10 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   }
 
   function toggleTodos() {
-    if (selecionados.size === eventos.length) setSelecionados(new Set());
-    else setSelecionados(new Set(eventos.map(e => e.id)));
+    const ids = eventosFiltrados.map(e => e.id);
+    const allSelected = ids.every(id => selecionados.has(id));
+    if (allSelected) setSelecionados(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+    else setSelecionados(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
   }
 
   async function excluirLote() {
@@ -403,14 +424,55 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   return (
     <div className="space-y-4">
+
+      {/* Filtros */}
+      <div className="rounded-2xl p-4 space-y-3" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.15)" }}>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🔍</span>
+          <h3 className="font-black text-sm" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.05em" }}>FILTRAR EVENTOS</h3>
+          {(filtroEstado || filtroCidade || filtroBusca) && (
+            <button onClick={() => { setFiltroEstado(""); setFiltroCidade(""); setFiltroBusca(""); setSelecionados(new Set()); }}
+              className="ml-auto rounded-lg px-2.5 py-1 text-xs font-black"
+              style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>
+              ✕ LIMPAR
+            </button>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <input type="text" placeholder="Buscar por nome ou cidade..." value={filtroBusca}
+            onChange={e => { setFiltroBusca(e.target.value); setSelecionados(new Set()); }}
+            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}
+            onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+          <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setFiltroCidade(""); setSelecionados(new Set()); }}
+            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}>
+            <option value="">Todos os estados ({eventos.length})</option>
+            {estadosDisponiveis.map(uf => (
+              <option key={uf} value={uf}>{uf} ({eventos.filter(e => e.estado === uf).length})</option>
+            ))}
+          </select>
+          <select value={filtroCidade} onChange={e => { setFiltroCidade(e.target.value); setSelecionados(new Set()); }}
+            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}>
+            <option value="">Todas as cidades</option>
+            {cidadesDisponiveis.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        {(filtroEstado || filtroCidade || filtroBusca) && (
+          <p className="text-xs" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            {eventosFiltrados.length} de {eventos.length} eventos
+          </p>
+        )}
+      </div>
+
       <div className="flex flex-wrap gap-3 justify-between items-center">
         <div className="flex gap-2 flex-wrap">
           {eventos.length > 0 && (
             <>
               <button onClick={toggleTodos}
                 className="rounded-xl px-4 py-2.5 text-sm font-black transition-all"
-                style={{ background: selecionados.size === eventos.length ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {selecionados.size === eventos.length ? "✓ TODOS SELECIONADOS" : `☐ SELECIONAR TODOS`}
+style={{ background: eventosFiltrados.every(e => selecionados.has(e.id)) && eventosFiltrados.length > 0 ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {eventosFiltrados.length > 0 && eventosFiltrados.every(e => selecionados.has(e.id)) ? `✓ TODOS (${eventosFiltrados.length})` : `☐ SELECIONAR ${eventosFiltrados.length}`}
               </button>
               {selecionados.size > 0 && (
                 <button onClick={excluirLote} disabled={excluindoLote}
@@ -669,7 +731,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
         </div>
       ) : (
         <div className="space-y-3">
-          {eventos.map(ev => {
+          {eventosFiltrados.map(ev => {
             const selecionado = selecionados.has(ev.id);
             return (
             <div key={ev.id} className="rounded-2xl p-4 transition-all cursor-pointer"
