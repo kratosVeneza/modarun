@@ -20,6 +20,18 @@ export default function CadastroPage() {
             style={{ height: "80px", width: "auto", objectFit: "contain" }}
           />
         </div>
+        <div className="mb-4 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2 text-sm font-black"
+            style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            ← VOLTAR
+          </a>
+          <div className="flex gap-3 text-xs" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <a href="/eventos" style={{ color: "#8B949E" }}>EVENTOS</a>
+            <a href="/loja" style={{ color: "#8B949E" }}>LOJA</a>
+            <a href="/encontros" style={{ color: "#8B949E" }}>TREINOS</a>
+          </div>
+        </div>
+
         <div className="rounded-2xl p-8" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
           <div className="mb-6">
             <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>CRIE SUA CONTA</h2>

@@ -16,13 +16,24 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl" style={{ background: "linear-gradient(135deg, #5CC800, #FF6B00)", boxShadow: "0 0 40px rgba(92,200,0,0.3)" }}>
-            <span className="text-white font-black text-2xl" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>MR</span>
+          <img
+            src="/logo-moda-run-full.png"
+            alt="Moda Run"
+            className="mx-auto mb-2"
+            style={{ height: "80px", width: "auto", objectFit: "contain" }}
+          />
+        </div>
+
+        <div className="mb-4 flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2 text-sm font-black"
+            style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            ← VOLTAR
+          </a>
+          <div className="flex gap-3 text-xs" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <a href="/eventos" style={{ color: "#8B949E" }}>EVENTOS</a>
+            <a href="/loja" style={{ color: "#8B949E" }}>LOJA</a>
+            <a href="/encontros" style={{ color: "#8B949E" }}>TREINOS</a>
           </div>
-          <h1 className="text-3xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#5CC800", letterSpacing: "0.05em" }}>
-            MODA <span style={{ color: "#FF6B00" }}>RUN</span>
-          </h1>
-          <p className="text-xs mt-1" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.2em" }}>RUNNING & PERFORMANCE</p>
         </div>
 
         <div className="rounded-2xl p-8" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
