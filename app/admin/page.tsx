@@ -175,7 +175,8 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(!res.ok){setErro(result.error||"Erro.");return;}
     setAberto(false);
     // Recarregar do banco para garantir dados corretos
-    const { data: ev } = await supabase.from("eventos").select("*").order("data_evento", {ascending: true});
+    const supabaseClient = createClient();
+    const { data: ev } = await supabaseClient.from("eventos").select("*").order("data_evento", {ascending: true});
     setEventos(ev || []);
   }
 
