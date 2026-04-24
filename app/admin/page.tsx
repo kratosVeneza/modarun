@@ -248,13 +248,19 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     // Parse all cleaned lines
     const todasCols = linhasLimpas.map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
 
-    // Detect offset: find the first column that has a date pattern DD.MM or DD/MM in any row
+    // Detect offset: find the first column that has a date pattern DD.MM or DD/MM
+    // in MAJORITY of rows (not just one), to avoid false positives from empty rows
     let offset = 0;
-    outerOffset: for (let i = 0; i < Math.min(8, (todasCols[0] || []).length); i++) {
-      for (const row of todasCols) {
-        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(row[i] || "")) { offset = i; break outerOffset; }
+    const numRows = Math.min(todasCols.length, 10);
+    let bestOffset = 0, bestCount = 0;
+    for (let i = 0; i < Math.min(15, (todasCols[0] || []).length); i++) {
+      let count = 0;
+      for (const row of todasCols.slice(0, numRows)) {
+        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(row[i] || "")) count++;
       }
+      if (count > bestCount) { bestCount = count; bestOffset = i; }
     }
+    if (bestCount > 0) offset = bestOffset;
 
     // Check if first line is a real header (non-numeric, non-url) or data
     const primeiraLinha = todasCols[0] || [];
@@ -346,13 +352,18 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       const v = l.toLowerCase();
       return !v.includes("adsbygoogle") && !v.includes("googlesyndication") && !v.includes("doubleclick") && l.trim().replace(/[",]/g,"").trim().length > 0;
     });
-    // Detect offset from first data line
+    // Detect offset: find column with most date patterns across all rows
     let csvOffset = 0;
     if (linhasLimpas.length > 1) {
-      const firstDataCols = linhasLimpas[1].split(/,|;/).map((c: string) => c.replace(/"/g,"").trim());
-      for (let i = 0; i < Math.min(5, firstDataCols.length); i++) {
-        if (/^\d{1,2}[.\/\-]\d{1,2}/.test(firstDataCols[i])) { csvOffset = i; break; }
+      const allCols = linhasLimpas.map(l => l.split(/,|;/).map((c: string) => c.replace(/"/g,"").trim()));
+      let bestOffset2 = 0, bestCount2 = 0;
+      const maxCols = Math.min(15, (allCols[0] || []).length);
+      for (let i = 0; i < maxCols; i++) {
+        let cnt = 0;
+        for (const r of allCols.slice(0, 10)) { if (/^\d{1,2}[.\/\-]\d{1,2}/.test(r[i] || "")) cnt++; }
+        if (cnt > bestCount2) { bestCount2 = cnt; bestOffset2 = i; }
       }
+      if (bestCount2 > 0) csvOffset = bestOffset2;
     }
     // Rebuild CSV without garbage columns
     const csvLimpo = linhasLimpas.map((l: string) => {
