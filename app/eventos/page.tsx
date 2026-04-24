@@ -176,6 +176,147 @@ export default function EventosPage(): React.JSX.Element {
             </div>
           )}
 
+          {/* Destaques e Próximos — só quando sem filtro ativo */}
+          {!loading && !error && !busca && !estadoSelecionado && (
+            <>
+              {/* Eventos em destaque */}
+              {eventos.filter(e => e.destaque).length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
+                    <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>⭐ EM DESTAQUE</h2>
+                    <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {eventos.filter(e => e.destaque).length}
+                    </span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {eventos.filter(e => e.destaque).map(evento => (
+                      <article key={`dest-${evento.id}`} className="relative overflow-hidden rounded-2xl"
+                        style={{ background: "linear-gradient(135deg, #1a1200, #2a1e00)", border: "1px solid rgba(255,184,0,0.3)" }}>
+                        <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#FFB800,#FF6B00)" }} />
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h3 className="font-black text-base leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
+                            <span className="shrink-0 rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.2)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>
+                          </div>
+                          <p className="text-xs mb-3" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              📅 {formatarData(String(evento.data_evento))}
+                            </span>
+                            {evento.distancia && <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>📏 {evento.distancia}</span>}
+                            {evento.link_inscricao && (
+                              <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
+                                className="rounded-lg px-2.5 py-1 text-xs font-black transition-all hover:brightness-110"
+                                style={{ background: "linear-gradient(135deg,#FFB800,#FF8C00)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}
+                                onClick={e => e.stopPropagation()}>
+                                INSCREVER-SE →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Próximos 7 dias */}
+              {(() => {
+                const hoje = new Date();
+                const em7dias = new Date(); em7dias.setDate(hoje.getDate() + 7);
+                const proximos = eventos.filter(e => {
+                  const d = new Date(e.data_evento + "T00:00:00");
+                  return d >= hoje && d <= em7dias && !e.destaque;
+                });
+                if (proximos.length === 0) return null;
+                return (
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                      <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>⚡ ESSA SEMANA</h2>
+                      <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {proximos.length} evento{proximos.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                      {proximos.map(evento => (
+                        <article key={`prox-${evento.id}`} className="shrink-0 w-64 relative overflow-hidden rounded-2xl"
+                          style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
+                          <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#5CC800,#FF6B00)" }} />
+                          <div className="p-4">
+                            <div className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-black mb-2"
+                              style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              📅 {formatarData(String(evento.data_evento))}
+                            </div>
+                            <h3 className="font-black text-sm leading-tight mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
+                            <p className="text-xs mb-2" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
+                            {evento.distancia && <p className="text-xs font-bold" style={{ color: "#FF6B00" }}>📏 {evento.distancia}</p>}
+                            {evento.link_inscricao && (
+                              <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
+                                className="mt-2 flex items-center justify-center rounded-lg py-2 text-xs font-black transition-all hover:brightness-110"
+                                style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                INSCREVER-SE →
+                              </a>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })()}
+
+              {/* Próximos 30 dias */}
+              {(() => {
+                const hoje = new Date();
+                const em7dias = new Date(); em7dias.setDate(hoje.getDate() + 7);
+                const em30dias = new Date(); em30dias.setDate(hoje.getDate() + 30);
+                const proximos30 = eventos.filter(e => {
+                  const d = new Date(e.data_evento + "T00:00:00");
+                  return d > em7dias && d <= em30dias;
+                });
+                if (proximos30.length === 0) return null;
+                return (
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-1 rounded-full" style={{ background: "#FF6B00" }} />
+                      <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>🗓 PRÓXIMOS 30 DIAS</h2>
+                      <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {proximos30.length}
+                      </span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                      {proximos30.map(evento => (
+                        <article key={`p30-${evento.id}`} className="shrink-0 w-56 relative overflow-hidden rounded-xl"
+                          style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.15)" }}>
+                          <div className="p-3">
+                            <div className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-black mb-1.5"
+                              style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              📅 {formatarData(String(evento.data_evento))}
+                            </div>
+                            <h3 className="font-black text-sm leading-tight mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
+                            <p className="text-xs" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
+                            {evento.distancia && <p className="text-xs font-bold mt-0.5" style={{ color: "#FF6B00" }}>📏 {evento.distancia}</p>}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })()}
+
+              {/* Divider antes da lista completa */}
+              {totalFiltrado > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px" style={{ background: "rgba(92,200,0,0.1)" }} />
+                  <span className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>TODOS OS EVENTOS</span>
+                  <div className="flex-1 h-px" style={{ background: "rgba(92,200,0,0.1)" }} />
+                </div>
+              )}
+            </>
+          )}
+
           {/* Loading */}
           {loading && (
             <div className="flex justify-center py-10">
