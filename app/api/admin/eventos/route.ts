@@ -25,9 +25,10 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   const user = await verificarAdmin(supabase);
   if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
   const body = await request.json() as Record<string, unknown>;
-  const { id, nome, cidade, estado, data_evento, distancia, local, link_inscricao, destaque } = body as Record<string, string | boolean | number>;
+  const { id: idRaw, nome, cidade, estado, data_evento, distancia, local, link_inscricao, destaque } = body as Record<string, string | boolean | number>;
+  const id = Number(idRaw);
   if (!id) return NextResponse.json({ error: "ID não informado." }, { status: 400 });
-  const { data, error } = await supabase.from("eventos").update({ nome, cidade, estado, data_evento, distancia: distancia || null, local: local || null, link_inscricao: link_inscricao || null, destaque: destaque || false }).eq("id", id).select().single();
+  const { data, error } = await supabase.from("eventos").update({ nome, cidade, estado, data_evento, distancia: distancia || null, local: local || null, link_inscricao: link_inscricao || null, destaque: Boolean(destaque) }).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true, data });
 }
