@@ -33,11 +33,20 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   const distancia = body.distancia as string || null;
   const local = body.local as string || null;
   const link_inscricao = body.link_inscricao as string || null;
-  const destaque = body.destaque === true || body.destaque === "true";
+  const destaque = body.destaque === true || body.destaque === "true" || String(body.destaque) === "true";
+  
+  console.log("PATCH eventos - id:", id, "destaque recebido:", body.destaque, "tipo:", typeof body.destaque, "destaque final:", destaque);
+  
   if (!id) return NextResponse.json({ error: "ID não informado." }, { status: 400 });
-  const { data, error } = await supabase.from("eventos").update({ nome, cidade, estado, data_evento, distancia, local, link_inscricao, destaque }).eq("id", id).select();
+  
+  // Update only destaque field explicitly
+  const updateData: Record<string, unknown> = { nome, cidade, estado, data_evento, distancia, local, link_inscricao, destaque };
+  console.log("updateData.destaque:", updateData.destaque);
+  
+  const { data, error } = await supabase.from("eventos").update(updateData).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, data: data?.[0] || null });
+  console.log("Update result:", data?.[0]?.destaque);
+  return NextResponse.json({ success: true, data: data?.[0] || null, debug: { destaque_enviado: body.destaque, destaque_salvo: destaque } });
 }
 
 export async function DELETE(request: Request): Promise<NextResponse> {
