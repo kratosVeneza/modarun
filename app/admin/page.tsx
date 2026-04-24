@@ -174,8 +174,9 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     setLoading(false);
     if(!res.ok){setErro(result.error||"Erro.");return;}
     setAberto(false);
-    if(editando) setEventos(eventos.map(e=>e.id===editando.id?{...e,...form}:e));
-    else setEventos([result.data,...eventos]);
+    // Recarregar do banco para garantir dados corretos
+    const { data: ev } = await supabase.from("eventos").select("*").order("data_evento", {ascending: true});
+    setEventos(ev || []);
   }
 
   async function excluir(id: number) {
