@@ -321,8 +321,13 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     // Cidade = shortest remaining text, Nome = longest remaining text
     const remaining = colLen.map((len, i) => used.has(i) ? null : { i, len }).filter(Boolean) as {i:number,len:number}[];
     remaining.sort((a, b) => a.len - b.len);
-    if (remaining.length > 0) { result.cidade = remaining[0].i; used.add(remaining[0].i); }
-    if (remaining.length > 1) { result.nome = remaining[remaining.length-1].i; }
+    if (remaining.length === 1) {
+      // Only one text column — assign as nome
+      result.nome = remaining[0].i;
+    } else if (remaining.length > 1) {
+      result.cidade = remaining[0].i; used.add(remaining[0].i);
+      result.nome = remaining[remaining.length-1].i;
+    }
 
     // Override with header name matches if found
     const findByName = (terms: string[]) => headerFinal.findIndex((h: string) => terms.some((t: string) => h.toLowerCase().includes(t)));
