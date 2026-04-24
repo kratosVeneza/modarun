@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 type AuthFormProps = { mode: "login" | "signup" };
@@ -18,6 +18,9 @@ function traduzirErro(msg: string): string {
 export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mensagem, setMensagem] = useState("");
@@ -31,7 +34,7 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
       },
     });
   }
@@ -52,7 +55,8 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setMensagem(traduzirErro(error.message)); setLoading(false); return; }
     setSucesso(true); setMensagem("Login realizado!");
-    setLoading(false); setTimeout(() => { router.push("/"); router.refresh(); }, 600);
+    setLoading(false);
+    setTimeout(() => { router.push(redirectTo); router.refresh(); }, 600);
   }
 
   const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", width: "100%", borderRadius: "12px", padding: "12px 16px", fontSize: "14px", outline: "none", transition: "border-color 0.2s" } as React.CSSProperties;
@@ -60,6 +64,14 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      {/* Aviso de contexto quando vem de um redirect */}
+      {redirectTo !== "/" && mode === "login" && (
+        <div className="rounded-xl px-4 py-3 text-xs font-bold"
+          style={{ background: "rgba(92,200,0,0.08)", border: "1px solid rgba(92,200,0,0.2)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+          ✅ Entre para continuar — seus dados do formulário foram salvos!
+        </div>
+      )}
 
       {/* Google OAuth */}
       <button type="button" onClick={handleGoogle} disabled={loadingGoogle}
@@ -75,7 +87,7 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
         )}
-        {loadingGoogle ? "REDIRECIONANDO..." : `CONTINUAR COM GOOGLE`}
+        {loadingGoogle ? "REDIRECIONANDO..." : "CONTINUAR COM GOOGLE"}
       </button>
 
       {/* Divider */}
@@ -106,7 +118,8 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
         </div>
 
         {mensagem && (
-          <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: sucesso ? "rgba(92,200,0,0.1)" : "rgba(255,107,0,0.1)", color: sucesso ? "#5CC800" : "#FF6B00", border: `1px solid ${sucesso ? "rgba(92,200,0,0.3)" : "rgba(255,107,0,0.3)"}` }}>
+          <div className="rounded-xl p-3 text-sm font-semibold"
+            style={{ background: sucesso ? "rgba(92,200,0,0.1)" : "rgba(255,107,0,0.1)", color: sucesso ? "#5CC800" : "#FF6B00", border: `1px solid ${sucesso ? "rgba(92,200,0,0.3)" : "rgba(255,107,0,0.3)"}` }}>
             {mensagem}
           </div>
         )}
@@ -124,9 +137,9 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
 
         <p className="text-center text-xs" style={{ color: "#8B949E" }}>
           {mode === "login" ? (
-            <>Não tem conta? <Link href="/cadastro" style={{ color: "#5CC800", fontWeight: 700 }}>Cadastre-se grátis</Link></>
+            <>Não tem conta? <Link href={"/cadastro" + (redirectTo !== "/" ? "?redirect=" + encodeURIComponent(redirectTo) : "")} style={{ color: "#5CC800", fontWeight: 700 }}>Cadastre-se grátis</Link></>
           ) : (
-            <>Já tem conta? <Link href="/login" style={{ color: "#5CC800", fontWeight: 700 }}>Entrar</Link></>
+            <>Já tem conta? <Link href={"/login" + (redirectTo !== "/" ? "?redirect=" + encodeURIComponent(redirectTo) : "")} style={{ color: "#5CC800", fontWeight: 700 }}>Entrar</Link></>
           )}
         </p>
       </form>

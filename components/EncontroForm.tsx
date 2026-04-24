@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { createClient } from "@/utils/supabase/client";
 
 const MapaTreinoEditor = dynamic(() => import("@/components/MapaTreinoEditor"), { ssr: false });
 
@@ -11,14 +12,19 @@ type LatLng = { lat: number; lng: number };
 const tiposTreino = ["Caminhada longa","Corrida leve","Corrida moderada","Longão","Tiro","Fartlek","Intervalado","Regenerativo","Subida","Trail","Outro"];
 const estadosBR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.vercel.app";
+const STORAGE_KEY = "modarun_treino_rascunho";
+
+const formVazio = { titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",tipo_treino:"",km_planejado:"" };
 
 const inp = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"12px 16px", fontSize:"14px", outline:"none", width:"100%", transition:"border-color 0.2s" } as React.CSSProperties;
 const lbl = { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" } as React.CSSProperties;
 
 export default function EncontroForm(): React.JSX.Element {
   const router = useRouter();
+  const supabase = createClient();
+
   const [etapa, setEtapa] = useState(1);
-  const [form, setForm] = useState({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",tipo_treino:"",km_planejado:"" });
+  const [form, setForm] = useState(formVazio);
   const [pontoEncontro, setPontoEncontro] = useState<LatLng|null>(null);
   const [rotaCoords, setRotaCoords] = useState<LatLng[]>([]);
   const [distanciaReal, setDistanciaReal] = useState(0);
@@ -26,6 +32,29 @@ export default function EncontroForm(): React.JSX.Element {
   const [erro, setErro] = useState("");
   const [treinoId, setTreinoId] = useState<number|null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false);
+
+  // Ao montar: verificar se existe rascunho salvo (usuário voltou do login)
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(STORAGE_KEY);
+      if (!salvo) return;
+      const dados = JSON.parse(salvo) as {
+        form: typeof formVazio;
+        etapa: number;
+        pontoEncontro: LatLng | null;
+        rotaCoords: LatLng[];
+      };
+      setForm(dados.form || formVazio);
+      setEtapa(dados.etapa || 1);
+      if (dados.pontoEncontro) setPontoEncontro(dados.pontoEncontro);
+      if (dados.rotaCoords?.length) setRotaCoords(dados.rotaCoords);
+      setRascunhoRestaurado(true);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignora erro de parse
+    }
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -40,16 +69,40 @@ export default function EncontroForm(): React.JSX.Element {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setErro("");
+    setErro("");
+
+    // Verificar se está logado antes de submeter
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      // Salvar rascunho completo no localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          form, etapa: 2, pontoEncontro, rotaCoords,
+        }));
+      } catch {
+        // ignora erro de storage
+      }
+      // Redirecionar para login com redirect de volta
+      router.push("/login?redirect=/encontros");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch("/api/encontros", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : null, ponto_encontro_lat: pontoEncontro?.lat ?? null, ponto_encontro_lng: pontoEncontro?.lng ?? null, rota_coords: rotaCoords }),
+        body: JSON.stringify({
+          ...form,
+          distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : null,
+          ponto_encontro_lat: pontoEncontro?.lat ?? null,
+          ponto_encontro_lng: pontoEncontro?.lng ?? null,
+          rota_coords: rotaCoords,
+        }),
       });
       const result = await res.json();
       if (!res.ok) { setErro(result.error || "Erro ao criar treino."); setLoading(false); return; }
       setTreinoId(result.data?.id || result.id);
-      setForm({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",tipo_treino:"",km_planejado:"" });
+      setForm(formVazio);
       setPontoEncontro(null); setRotaCoords([]); setDistanciaReal(0); setEtapa(1);
       setTimeout(() => router.refresh(), 100);
     } catch { setErro("Erro ao enviar os dados."); }
@@ -95,7 +148,6 @@ export default function EncontroForm(): React.JSX.Element {
           </div>
           <p className="text-xs text-center" style={{ color:"#8B949E" }}>Quem receber o link pode confirmar presença sem criar conta</p>
 
-          {/* Funil loja pós-criação */}
           {form.km_planejado && (
             <a href="/loja"
               className="flex items-center justify-between rounded-xl p-3 transition-all hover:brightness-110"
@@ -128,6 +180,16 @@ export default function EncontroForm(): React.JSX.Element {
   // ── FORMULÁRIO ────────────────────────────────────────────────────────────
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.15)" }}>
+
+      {/* Banner de rascunho restaurado */}
+      {rascunhoRestaurado && (
+        <div className="flex items-center justify-between px-5 py-3 text-xs font-bold"
+          style={{ background:"rgba(92,200,0,0.1)", borderBottom:"1px solid rgba(92,200,0,0.2)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
+          <span>✅ Seus dados foram restaurados! Continue de onde parou.</span>
+          <button onClick={() => setRascunhoRestaurado(false)} style={{ color:"rgba(92,200,0,0.5)", background:"none", border:"none", cursor:"pointer", fontSize:"16px" }}>×</button>
+        </div>
+      )}
+
       {/* Indicador de etapas */}
       <div className="flex" style={{ borderBottom:"1px solid rgba(92,200,0,0.1)" }}>
         {[{n:1,l:"INFORMAÇÕES"},{n:2,l:"MAPA"}].map(e => (
