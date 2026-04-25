@@ -197,19 +197,23 @@ export default function EventosPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busca, setBusca] = useState(searchParams.get("cidade") || "");
-  const [estadoSelecionado, setEstadoSelecionado] = useState(searchParams.get("estado")?.includes(",") ? "" : (searchParams.get("estado") || ""));
+  const [estadoSelecionado, setEstadoSelecionado] = useState(
+    // Se vier múltiplos estados da URL (do perfil), não pré-seleciona nenhum tab
+    searchParams.get("estado")?.includes(",") ? "" : (searchParams.get("estado") || "")
+  );
   const [cidadePorEstado, setCidadePorEstado] = useState<Record<string, string>>({});
   const [eventosSalvosIds, setEventosSalvosIds] = useState<Set<number>>(new Set());
   const [salvandoEvento, setSalvandoEvento] = useState<number | null>(null);
   const [estadosFiltroSalvos, setEstadosFiltroSalvos] = useState<string[]>([]);
   const [cidadesFiltroSalvas, setCidadesFiltroSalvas] = useState<string[]>([]);
-  const [mostrarFiltroPersonalizado, setMostrarFiltroPersonalizado] = useState(false);
   const [salvandoFiltro, setSalvandoFiltro] = useState(false);
 
   const cidadeFiltro = searchParams.get("cidade") || "";
   const estadoFiltro = searchParams.get("estado") || "";
-  // Suporte a múltiplos estados via URL: ?estado=PA,AM,MA
-  const estadosFiltroUrl = estadoFiltro.includes(",") ? estadoFiltro.split(",").map(s => s.trim()) : [];
+  // Estados vindos da URL (quando usuário clica "Ver eventos" no perfil)
+  const estadosFiltroUrl = estadoFiltro.includes(",")
+    ? estadoFiltro.split(",").map(s => s.trim()).filter(Boolean)
+    : estadoFiltro ? [estadoFiltro] : [];
 
   useEffect(() => {
     async function carregarUser() {
@@ -255,11 +259,13 @@ export default function EventosPage(): React.JSX.Element {
     carregarEventos();
   }, [cidadeFiltro, estadoFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Agrupar por estado
+  // Agrupar por estado — respeita filtro por URL (cidades do perfil) + filtro manual
   const eventosPorEstado = useMemo(() => {
     const filtrados = eventos.filter(e => {
       if (busca.trim() && !e.cidade.toLowerCase().includes(busca.toLowerCase()) && !e.nome.toLowerCase().includes(busca.toLowerCase())) return false;
       if (estadoSelecionado && e.estado !== estadoSelecionado) return false;
+      // Filtro por estados vindos da URL (perfil) — só aplica se não houver estado selecionado manualmente
+      if (!estadoSelecionado && estadosFiltroUrl.length > 0 && !estadosFiltroUrl.includes(e.estado)) return false;
       return true;
     });
 
@@ -357,6 +363,10 @@ export default function EventosPage(): React.JSX.Element {
     setBusca(""); setEstadoSelecionado(""); router.push("/eventos");
   }
 
+  function limparFiltroPerfil() {
+    router.push("/eventos");
+  }
+
   const inp = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "10px 14px", fontSize: "14px", outline: "none" } as React.CSSProperties;
 
   return (
@@ -406,6 +416,27 @@ export default function EventosPage(): React.JSX.Element {
               </select>
             </div>
           </div>
+
+          {/* Banner: filtro ativo vindo do perfil */}
+          {estadosFiltroUrl.length > 0 && !estadoSelecionado && (
+            <div className="flex items-center gap-3 rounded-xl px-4 py-3"
+              style={{ background: "rgba(255,184,0,0.08)", border: "1px solid rgba(255,184,0,0.3)" }}>
+              <MapPin size={14} color="#FFB800" strokeWidth={2} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  FILTRANDO POR: {estadosFiltroUrl.join(", ")}
+                </p>
+                <p className="text-xs" style={{ color: "#8B949E" }}>
+                  Mostrando eventos dos estados que você favoritou no perfil
+                </p>
+              </div>
+              <button onClick={limparFiltroPerfil}
+                className="shrink-0 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-black transition-all hover:brightness-110"
+                style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <X size={11} strokeWidth={2.5} /> LIMPAR FILTRO
+              </button>
+            </div>
+          )}
 
           {/* Abas de estados rápidos */}
           {estadosDisponiveis.length > 0 && !loading && (
