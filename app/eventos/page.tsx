@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import { Flag, Search, X, MapPin, Calendar, Ruler, Star, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight, Zap, Clock } from "lucide-react";
+import { Flag, Search, X, MapPin, Calendar, Ruler, Star, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight, Bookmark, BookmarkCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { createClient } from "@/utils/supabase/client";
 
@@ -186,6 +186,8 @@ export default function EventosPage(): React.JSX.Element {
   const [busca, setBusca] = useState(searchParams.get("cidade") || "");
   const [estadoSelecionado, setEstadoSelecionado] = useState(searchParams.get("estado") || "");
   const [cidadePorEstado, setCidadePorEstado] = useState<Record<string, string>>({});
+  const [eventosSalvosIds, setEventosSalvosIds] = useState<Set<number>>(new Set());
+  const [salvandoEvento, setSalvandoEvento] = useState<number | null>(null);
 
   const cidadeFiltro = searchParams.get("cidade") || "";
   const estadoFiltro = searchParams.get("estado") || "";
@@ -195,8 +197,11 @@ export default function EventosPage(): React.JSX.Element {
       const { data: { user } } = await authSupabase.auth.getUser();
       setUserEmail(user?.email);
       if (user?.email) {
-        const { data } = await authSupabase.from("admins").select("email").eq("email", user.email.toLowerCase()).single();
-        setIsAdmin(!!data);
+        const { data: adminData } = await authSupabase.from("admins").select("email").eq("email", user.email.toLowerCase()).single();
+        setIsAdmin(!!adminData);
+        // Carregar IDs de eventos salvos
+        const { data: salvos } = await authSupabase.from("user_eventos_salvos").select("evento_id").eq("user_id", user.id);
+        if (salvos) setEventosSalvosIds(new Set(salvos.map((s: { evento_id: number }) => s.evento_id)));
       }
     }
     carregarUser();
@@ -258,6 +263,20 @@ export default function EventosPage(): React.JSX.Element {
     const d = new Date(e.data_evento + "T00:00:00");
     return d > em7dias && d <= em30dias;
   }), [eventos]); // eslint-disable-line
+
+  async function toggleSalvarEvento(eventoId: number) {
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) { window.location.href = "/login"; return; }
+    setSalvandoEvento(eventoId);
+    if (eventosSalvosIds.has(eventoId)) {
+      await authSupabase.from("user_eventos_salvos").delete().eq("user_id", user.id).eq("evento_id", eventoId);
+      setEventosSalvosIds(prev => { const next = new Set(prev); next.delete(eventoId); return next; });
+    } else {
+      await authSupabase.from("user_eventos_salvos").insert({ user_id: user.id, evento_id: eventoId });
+      setEventosSalvosIds(prev => new Set([...prev, eventoId]));
+    }
+    setSalvandoEvento(null);
+  }
 
   function limparFiltros() {
     setBusca(""); setEstadoSelecionado(""); router.push("/eventos");
@@ -443,12 +462,25 @@ export default function EventosPage(): React.JSX.Element {
                   <article key={evento.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
                     style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
                     <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#5CC800,#FF6B00)" }} />
-                    <div className="p-4">
+                    {/* Botão salvar — posicionado absolutamente no canto */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleSalvarEvento(evento.id); }}
+                      disabled={salvandoEvento === evento.id}
+                      className="absolute top-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-xl transition-all hover:scale-110"
+                      title={eventosSalvosIds.has(evento.id) ? "Remover dos salvos" : "Salvar evento"}
+                      style={{ background: eventosSalvosIds.has(evento.id) ? "rgba(255,184,0,0.25)" : "rgba(255,255,255,0.07)", color: eventosSalvosIds.has(evento.id) ? "#FFB800" : "#8B949E", border: "1px solid " + (eventosSalvosIds.has(evento.id) ? "rgba(255,184,0,0.4)" : "rgba(255,255,255,0.08)") }}>
+                      {salvandoEvento === evento.id
+                        ? <span className="h-4 w-4 block animate-spin rounded-full border-2 border-yellow-400/30 border-t-yellow-400" />
+                        : eventosSalvosIds.has(evento.id) ? <BookmarkCheck size={16} strokeWidth={2} /> : <Bookmark size={16} strokeWidth={2} />
+                      }
+                    </button>
+
+                    <div className="p-4 pr-12">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1">
                           <div className="flex flex-wrap items-center gap-2 mb-1">
                             <h3 className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
-                            {evento.destaque && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
+                            {evento.destaque && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>DESTAQUE</span>}
                           </div>
                           <p className="text-xs flex items-center gap-1" style={{ color: "#8B949E" }}><MapPin size={11} strokeWidth={2} />{evento.cidade} — {evento.estado}</p>
                         </div>
