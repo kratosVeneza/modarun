@@ -10,7 +10,9 @@ import { createClient } from "@/utils/supabase/client";
 type VariacaoCor = {
   cor: string;
   fotos: string[];
-  tamanhos: string[]; // tamanhos disponíveis NESSA cor
+  tamanhos: string[];
+  esgotado?: boolean;
+  tamanhos_esgotados?: string[];
 };
 
 type Banner = {
@@ -35,6 +37,7 @@ type Produto = {
   tamanhos: string[];        // tamanhos gerais (fallback)
   estoque_disponivel: boolean; destaque: boolean;
   whatsapp_msg?: string; ordem: number;
+  quantidade?: number | null;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -52,7 +55,7 @@ const s = {
 };
 
 const eventoVazio = { nome:"",cidade:"",estado:"",data_evento:"",distancia:"",local:"",link_inscricao:"",destaque:false };
-const produtoVazio: Omit<Produto,"id"> = { nome:"",descricao:"",preco:0,preco_promocional:undefined,categoria:"Camiseta",fotos:[],variacoes_cor:[],cores:[],tamanhos:[],estoque_disponivel:true,destaque:false,whatsapp_msg:"",ordem:0 };
+const produtoVazio: Omit<Produto,"id"> = { nome:"",descricao:"",preco:0,preco_promocional:undefined,categoria:"Camiseta",fotos:[],variacoes_cor:[],cores:[],tamanhos:[],estoque_disponivel:true,destaque:false,whatsapp_msg:"",ordem:0,quantidade:null };
 
 function fmtData(d: string) { if(!d) return "—"; const [a,m,dia]=String(d).split("-"); return `${dia}/${m}/${a}`; }
 function fmtPreco(v: number) { return v?.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}); }
@@ -142,9 +145,6 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   const [excluindo, setExcluindo] = useState<number|null>(null);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [excluindoLote, setExcluindoLote] = useState(false);
-  const [filtroEstado, setFiltroEstado] = useState("");
-  const [filtroCidade, setFiltroCidade] = useState("");
-  const [filtroBusca, setFiltroBusca] = useState("");
   const [syncAberto, setSyncAberto] = useState(false);
   const [sheetId, setSheetId] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -174,10 +174,8 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     setLoading(false);
     if(!res.ok){setErro(result.error||"Erro.");return;}
     setAberto(false);
-    // Recarregar do banco para garantir dados corretos
-    const supabaseClient = createClient();
-    const { data: ev } = await supabaseClient.from("eventos").select("*").order("data_evento", {ascending: true});
-    setEventos(ev || []);
+    if(editando) setEventos(eventos.map(e=>e.id===editando.id?{...e,...form}:e));
+    else setEventos([result.data,...eventos]);
   }
 
   async function excluir(id: number) {
@@ -188,22 +186,6 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     if(res.ok) setEventos(eventos.filter(e=>e.id!==id));
   }
 
-  // Eventos filtrados
-  const eventosFiltrados = React.useMemo(() => {
-    return eventos.filter(ev => {
-      if (filtroEstado && ev.estado !== filtroEstado) return false;
-      if (filtroCidade && !ev.cidade.toLowerCase().includes(filtroCidade.toLowerCase())) return false;
-      if (filtroBusca && !ev.nome.toLowerCase().includes(filtroBusca.toLowerCase()) && !ev.cidade.toLowerCase().includes(filtroBusca.toLowerCase())) return false;
-      return true;
-    });
-  }, [eventos, filtroEstado, filtroCidade, filtroBusca]);
-
-  const estadosDisponiveis = React.useMemo(() => [...new Set(eventos.map(e => e.estado).filter(Boolean))].sort(), [eventos]);
-  const cidadesDisponiveis = React.useMemo(() => {
-    const base = filtroEstado ? eventos.filter(e => e.estado === filtroEstado) : eventos;
-    return [...new Set(base.map(e => e.cidade).filter(Boolean))].sort();
-  }, [eventos, filtroEstado]);
-
   function toggleSelecionado(id: number) {
     setSelecionados(prev => {
       const novo = new Set(prev);
@@ -213,10 +195,8 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
   }
 
   function toggleTodos() {
-    const ids = eventosFiltrados.map(e => e.id);
-    const allSelected = ids.every(id => selecionados.has(id));
-    if (allSelected) setSelecionados(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
-    else setSelecionados(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
+    if (selecionados.size === eventos.length) setSelecionados(new Set());
+    else setSelecionados(new Set(eventos.map(e => e.id)));
   }
 
   async function excluirLote() {
@@ -426,55 +406,14 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   return (
     <div className="space-y-4">
-
-      {/* Filtros */}
-      <div className="rounded-2xl p-4 space-y-3" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.15)" }}>
-        <div className="flex items-center gap-2">
-          <span className="text-sm">🔍</span>
-          <h3 className="font-black text-sm" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.05em" }}>FILTRAR EVENTOS</h3>
-          {(filtroEstado || filtroCidade || filtroBusca) && (
-            <button onClick={() => { setFiltroEstado(""); setFiltroCidade(""); setFiltroBusca(""); setSelecionados(new Set()); }}
-              className="ml-auto rounded-lg px-2.5 py-1 text-xs font-black"
-              style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>
-              ✕ LIMPAR
-            </button>
-          )}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <input type="text" placeholder="Buscar por nome ou cidade..." value={filtroBusca}
-            onChange={e => { setFiltroBusca(e.target.value); setSelecionados(new Set()); }}
-            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}
-            onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
-          <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setFiltroCidade(""); setSelecionados(new Set()); }}
-            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}>
-            <option value="">Todos os estados ({eventos.length})</option>
-            {estadosDisponiveis.map(uf => (
-              <option key={uf} value={uf}>{uf} ({eventos.filter(e => e.estado === uf).length})</option>
-            ))}
-          </select>
-          <select value={filtroCidade} onChange={e => { setFiltroCidade(e.target.value); setSelecionados(new Set()); }}
-            style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"10px", padding:"8px 12px", fontSize:"13px", outline:"none" }}>
-            <option value="">Todas as cidades</option>
-            {cidadesDisponiveis.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-        {(filtroEstado || filtroCidade || filtroBusca) && (
-          <p className="text-xs" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
-            {eventosFiltrados.length} de {eventos.length} eventos
-          </p>
-        )}
-      </div>
-
       <div className="flex flex-wrap gap-3 justify-between items-center">
         <div className="flex gap-2 flex-wrap">
           {eventos.length > 0 && (
             <>
               <button onClick={toggleTodos}
                 className="rounded-xl px-4 py-2.5 text-sm font-black transition-all"
-style={{ background: eventosFiltrados.every(e => selecionados.has(e.id)) && eventosFiltrados.length > 0 ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {eventosFiltrados.length > 0 && eventosFiltrados.every(e => selecionados.has(e.id)) ? `✓ TODOS (${eventosFiltrados.length})` : `☐ SELECIONAR ${eventosFiltrados.length}`}
+                style={{ background: selecionados.size === eventos.length ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {selecionados.size === eventos.length ? "✓ TODOS SELECIONADOS" : `☐ SELECIONAR TODOS`}
               </button>
               {selecionados.size > 0 && (
                 <button onClick={excluirLote} disabled={excluindoLote}
@@ -733,7 +672,7 @@ style={{ background: eventosFiltrados.every(e => selecionados.has(e.id)) && even
         </div>
       ) : (
         <div className="space-y-3">
-          {eventosFiltrados.map(ev => {
+          {eventos.map(ev => {
             const selecionado = selecionados.has(ev.id);
             return (
             <div key={ev.id} className="rounded-2xl p-4 transition-all cursor-pointer"
@@ -786,7 +725,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
   function abrirNovo() { setEditando(null); setForm(produtoVazio); setErro(""); setAberto(true); }
   function abrirEditar(p: Produto) {
     setEditando(p);
-    setForm({ ...p, variacoes_cor: p.variacoes_cor?.length ? [...p.variacoes_cor.map(v=>({...v,fotos:[...v.fotos],tamanhos:[...v.tamanhos]}))] : [] });
+    setForm({ ...p, variacoes_cor: p.variacoes_cor?.length ? [...p.variacoes_cor.map(v=>({...v,fotos:[...v.fotos],tamanhos:[...v.tamanhos],esgotado:v.esgotado||false,tamanhos_esgotados:[...(v.tamanhos_esgotados||[])]}))] : [] });
     setErro(""); setAberto(true);
   }
 
@@ -1004,8 +943,39 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
                             </div>
                           </div>
                         </div>
+                        {/* Toggle ESGOTADO para esta cor */}
+                        <div className="mt-3 flex items-center gap-2">
+                          <label className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-black"
+                            style={{ background: variacao.esgotado ? "rgba(255,107,0,0.15)" : "rgba(92,200,0,0.08)", border: "1px solid " + (variacao.esgotado ? "rgba(255,107,0,0.4)" : "rgba(92,200,0,0.2)"), color: variacao.esgotado ? "#FF6B00" : "#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
+                            <input type="checkbox" checked={!!variacao.esgotado}
+                              onChange={e => setForm(f => ({ ...f, variacoes_cor: f.variacoes_cor.map(v => v.cor === variacao.cor ? { ...v, esgotado: e.target.checked } : v) }))}
+                              style={{ accentColor: "#FF6B00" }} />
+                            {variacao.esgotado ? "🚫 ESGOTADO" : "✅ DISPONÍVEL"}
+                          </label>
+                        </div>
+                        {/* Tamanhos esgotados individualmente */}
                         {variacao.tamanhos.length > 0 && (
-                          <p className="mt-2 text-xs" style={{ color:"#5CC800" }}>✓ {variacao.tamanhos.join(", ")}</p>
+                          <div className="mt-2">
+                            <p className="text-xs font-black mb-1.5" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.06em" }}>TAMANHOS ESGOTADOS:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {variacao.tamanhos.map(t => {
+                                const esgotado = variacao.tamanhos_esgotados?.includes(t);
+                                return (
+                                  <button key={t} type="button"
+                                    onClick={() => setForm(f => ({ ...f, variacoes_cor: f.variacoes_cor.map(v => {
+                                      if (v.cor !== variacao.cor) return v;
+                                      const lista = v.tamanhos_esgotados || [];
+                                      return { ...v, tamanhos_esgotados: esgotado ? lista.filter(x => x !== t) : [...lista, t] };
+                                    })}))}
+                                    className="rounded-lg px-2.5 py-1 text-xs font-black transition-all"
+                                    style={{ background: esgotado ? "rgba(255,107,0,0.2)" : "#21262D", color: esgotado ? "#FF6B00" : "#8B949E", border: "1px solid " + (esgotado ? "rgba(255,107,0,0.4)" : "transparent"), fontFamily:"'Barlow Condensed', sans-serif", textDecoration: esgotado ? "line-through" : "none" }}>
+                                    {t}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Clique para marcar/desmarcar como esgotado</p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1013,16 +983,25 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
                 </div>
               </div>
 
-              {/* Opções */}
+              {/* Destaque */}
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
+                <input type="checkbox" checked={form.destaque} onChange={e=>setForm({...form,destaque:e.target.checked})} style={{ accentColor:"#FFB800" }} />
+                <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Primeiro na loja</p></div>
+              </label>
+
+              {/* Quantidade e estoque */}
               <div className="grid grid-cols-2 gap-3">
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(92,200,0,0.05)", border:"1px solid rgba(92,200,0,0.15)" }}>
-                  <input type="checkbox" checked={form.estoque_disponivel} onChange={e=>setForm({...form,estoque_disponivel:e.target.checked})} style={{ accentColor:"#5CC800" }} />
-                  <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>✅ Em estoque</p><p className="text-xs" style={{ color:"#8B949E" }}>Visível na loja</p></div>
-                </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
-                  <input type="checkbox" checked={form.destaque} onChange={e=>setForm({...form,destaque:e.target.checked})} style={{ accentColor:"#FFB800" }} />
-                  <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Primeiro na loja</p></div>
-                </label>
+                <div>
+                  <label style={s.lbl}>📦 QUANTIDADE EM ESTOQUE</label>
+                  <input type="number" min="0" placeholder="Ex: 10 (opcional)" value={form.quantidade ?? ""} onChange={e=>setForm({...form,quantidade:e.target.value?Number(e.target.value):null})} style={s.inp} />
+                  <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Visível só para você (admin)</p>
+                </div>
+                <div className="flex items-center">
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3 w-full" style={{ background:"rgba(92,200,0,0.05)", border:"1px solid rgba(92,200,0,0.15)" }}>
+                    <input type="checkbox" checked={form.estoque_disponivel} onChange={e=>setForm({...form,estoque_disponivel:e.target.checked})} style={{ accentColor:"#5CC800" }} />
+                    <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>✅ Em estoque</p><p className="text-xs" style={{ color:"#8B949E" }}>Visível na loja</p></div>
+                  </label>
+                </div>
               </div>
 
               <div><label style={s.lbl}>MSG WHATSAPP <span style={{ fontWeight:400 }}>(opcional)</span></label><input type="text" placeholder="Gerada automaticamente se vazio" value={form.whatsapp_msg} onChange={e=>setForm({...form,whatsapp_msg:e.target.value})} style={s.inp} /></div>
@@ -1059,6 +1038,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
                     {p.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.2)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐</span>}
                     {!p.estoque_disponivel&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,107,0,0.2)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>SEM ESTOQUE</span>}
                     {p.variacoes_cor?.length>0&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(92,200,0,0.2)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{p.variacoes_cor.length} COR{p.variacoes_cor.length>1?"ES":""}</span>}
+                    {p.quantidade!=null&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>📦 {p.quantidade}</span>}
                   </div>
                 </div>
                 <div className="p-4">
@@ -1075,9 +1055,11 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
                   {p.variacoes_cor?.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {p.variacoes_cor.map(v => (
-                        <div key={v.cor} className="flex items-center gap-1 rounded-lg px-2 py-0.5" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.15)" }}>
-                          {v.fotos[0] && <img src={v.fotos[0]} alt={v.cor} className="h-4 w-4 rounded object-cover" />}
-                          <span className="text-xs" style={{ color:"#8B949E" }}>{v.cor}</span>
+                        <div key={v.cor} className="flex items-center gap-1 rounded-lg px-2 py-0.5"
+                          style={{ background: v.esgotado ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.08)", border: "1px solid " + (v.esgotado ? "rgba(255,107,0,0.3)" : "rgba(92,200,0,0.15)") }}>
+                          {v.fotos[0] && <img src={v.fotos[0]} alt={v.cor} className="h-4 w-4 rounded object-cover" style={{ opacity: v.esgotado ? 0.4 : 1 }} />}
+                          <span className="text-xs" style={{ color: v.esgotado ? "#FF6B00" : "#8B949E", textDecoration: v.esgotado ? "line-through" : "none" }}>{v.cor}</span>
+                          {v.esgotado && <span className="text-xs" style={{ color:"#FF6B00" }}>🚫</span>}
                           {v.tamanhos.length>0&&<span className="text-xs" style={{ color:"#5CC800" }}>({v.tamanhos.length}tam)</span>}
                         </div>
                       ))}

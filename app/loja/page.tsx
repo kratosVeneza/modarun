@@ -6,13 +6,13 @@ import { createClient } from "@/utils/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type VariacaoCor = { cor: string; fotos: string[]; tamanhos: string[] };
+type VariacaoCor = { cor: string; fotos: string[]; tamanhos: string[]; esgotado?: boolean; tamanhos_esgotados?: string[] };
 type Produto = {
   id: string; nome: string; descricao?: string; preco: number;
   preco_promocional?: number; categoria: string;
   fotos: string[]; variacoes_cor: VariacaoCor[];
   cores: string[]; tamanhos: string[];
-  estoque_disponivel: boolean; destaque: boolean; whatsapp_msg?: string;
+  estoque_disponivel: boolean; destaque: boolean; whatsapp_msg?: string; quantidade?: number | null;
 };
 type Banner = {
   id: string; titulo?: string; subtitulo?: string;
@@ -128,17 +128,27 @@ function ModalFoto({ fotos, indice, onClose }: { fotos: string[]; indice: number
 function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
   const variacoes = parseVariacoes(produto.variacoes_cor);
   const temVariacoes = variacoes.length > 0;
-  const [corSelecionada, setCorSelecionada] = useState(temVariacoes ? variacoes[0].cor : (produto.cores?.[0] || ""));
+  // null = nenhuma cor selecionada (mostra fotos gerais)
+  const [corSelecionada, setCorSelecionada] = useState<string | null>(null);
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [tamanhoSelecionado, setTamanhoSelecionado] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
 
   const variacaoAtual = variacoes.find(v => v.cor === corSelecionada);
-  const fotosAtuais = variacaoAtual?.fotos?.length ? variacaoAtual.fotos : (produto.fotos || []);
+  // Fotos gerais quando nenhuma cor selecionada, fotos da cor quando selecionada
+  const fotosAtuais = corSelecionada && variacaoAtual?.fotos?.length
+    ? variacaoAtual.fotos
+    : (produto.fotos?.length ? produto.fotos : (variacoes[0]?.fotos || []));
   const tamanhosAtuais = variacaoAtual?.tamanhos?.length ? variacaoAtual.tamanhos : (produto.tamanhos || []);
   const todasAsCores = temVariacoes ? variacoes.map(v => v.cor) : (produto.cores || []);
+  const corEsgotada = variacaoAtual?.esgotado === true;
 
-  function selecionarCor(cor: string) { setCorSelecionada(cor); setFotoAtiva(0); setTamanhoSelecionado(""); }
+  function selecionarCor(cor: string) {
+    // Clicando na mesma cor deseleciona (volta para fotos gerais)
+    setCorSelecionada(prev => prev === cor ? null : cor);
+    setFotoAtiva(0);
+    setTamanhoSelecionado("");
+  }
 
   const temDesconto = !!produto.preco_promocional && produto.preco_promocional < produto.preco;
   const precoFinal = temDesconto ? produto.preco_promocional! : produto.preco;
@@ -167,11 +177,22 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
           {fotosAtuais.length > 0 ? (
             <>
               <img key={`${corSelecionada}-${fotoAtiva}`} src={fotosAtuais[fotoAtiva]} alt={produto.nome}
-                className="h-full w-full transition duration-300" style={{ objectFit: "contain", padding: "8px" }} />
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                style={{ background: "rgba(0,0,0,0.3)" }}>
-                <span className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.9)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>🔍 AMPLIAR</span>
-              </div>
+                className="h-full w-full transition duration-300" style={{ objectFit: "contain", padding: "8px", opacity: corEsgotada ? 0.45 : 1 }} />
+              {/* Overlay ESGOTADO */}
+              {corEsgotada && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="rounded-xl px-4 py-2 text-sm font-black rotate-[-12deg]"
+                    style={{ background: "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em", border: "2px solid #FF6B00", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>
+                    🚫 ESGOTADO
+                  </div>
+                </div>
+              )}
+              {!corEsgotada && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                  style={{ background: "rgba(0,0,0,0.3)" }}>
+                  <span className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.9)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>🔍 AMPLIAR</span>
+                </div>
+              )}
               {fotosAtuais.length > 1 && (
                 <>
                   <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5" onClick={e => e.stopPropagation()}>
@@ -214,16 +235,40 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
           </div>
           {todasAsCores.length > 0 && (
             <div>
-              <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>COR: <span style={{ color: "#5CC800" }}>{corSelecionada}</span></p>
+              <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
+                COR: <span style={{ color: corSelecionada ? (corEsgotada ? "#FF6B00" : "#5CC800") : "#8B949E" }}>
+                  {corSelecionada ? corSelecionada + (corEsgotada ? " — ESGOTADO" : "") : "Selecione"}
+                </span>
+              </p>
               <div className="flex flex-wrap gap-2">
                 {todasAsCores.map(cor => {
                   const v = variacoes.find(x => x.cor === cor);
                   const mini = v?.fotos?.[0];
                   const ativo = corSelecionada === cor;
+                  const esgotadaCor = v?.esgotado === true;
                   return (
-                    <button key={cor} onClick={() => selecionarCor(cor)} className="relative overflow-hidden rounded-xl transition-all"
-                      style={{ outline: ativo ? "2px solid #5CC800" : "1px solid rgba(92,200,0,0.2)", outlineOffset: "2px", transform: ativo ? "scale(1.08)" : "scale(1)" }}>
-                      {mini ? <img src={mini} alt={cor} className="h-12 w-12 object-cover" /> : <span className="flex h-8 items-center px-3 text-xs font-black" style={{ background: ativo ? "rgba(92,200,0,0.25)" : "#21262D", color: ativo ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{cor}</span>}
+                    <button key={cor} onClick={() => !esgotadaCor && selecionarCor(cor)}
+                      className="relative overflow-hidden rounded-xl transition-all"
+                      title={esgotadaCor ? cor + " — Esgotado" : cor}
+                      style={{
+                        outline: ativo ? "2px solid #5CC800" : esgotadaCor ? "1px solid rgba(255,107,0,0.3)" : "1px solid rgba(92,200,0,0.2)",
+                        outlineOffset: "2px",
+                        transform: ativo ? "scale(1.08)" : "scale(1)",
+                        cursor: esgotadaCor ? "not-allowed" : "pointer",
+                        opacity: esgotadaCor ? 0.5 : 1,
+                      }}>
+                      {mini
+                        ? <img src={mini} alt={cor} className="h-12 w-12 object-cover" />
+                        : <span className="flex h-8 items-center px-3 text-xs font-black"
+                            style={{ background: ativo ? "rgba(92,200,0,0.25)" : "#21262D", color: ativo ? "#5CC800" : esgotadaCor ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", textDecoration: esgotadaCor ? "line-through" : "none" }}>
+                            {cor}
+                          </span>
+                      }
+                      {esgotadaCor && (
+                        <div className="absolute inset-0 flex items-end justify-center pb-0.5 pointer-events-none">
+                          <span className="text-xs font-black px-1 rounded" style={{ background:"rgba(255,107,0,0.85)", color:"#fff", fontSize:"8px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>ESGOT.</span>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -234,13 +279,26 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
             <div>
               <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TAMANHO</p>
               <div className="flex flex-wrap gap-1.5">
-                {tamanhosAtuais.map(t => (
-                  <button key={t} onClick={() => setTamanhoSelecionado(tamanhoSelecionado === t ? "" : t)}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-black transition-all"
-                    style={{ background: tamanhoSelecionado === t ? "#5CC800" : "#21262D", color: tamanhoSelecionado === t ? "#0D1117" : "#8B949E", border: `1px solid ${tamanhoSelecionado === t ? "#5CC800" : "rgba(92,200,0,0.2)"}`, fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {t}
-                  </button>
-                ))}
+                {tamanhosAtuais.map(t => {
+                  const tamEsgotado = variacaoAtual?.tamanhos_esgotados?.includes(t) ?? false;
+                  const ativo = tamanhoSelecionado === t;
+                  return (
+                    <button key={t} onClick={() => !tamEsgotado && setTamanhoSelecionado(ativo ? "" : t)}
+                      className="rounded-lg px-2.5 py-1.5 text-xs font-black transition-all relative"
+                      title={tamEsgotado ? t + " — Esgotado" : t}
+                      style={{
+                        background: ativo ? "#5CC800" : tamEsgotado ? "rgba(255,107,0,0.08)" : "#21262D",
+                        color: ativo ? "#0D1117" : tamEsgotado ? "#FF6B00" : "#8B949E",
+                        border: "1px solid " + (ativo ? "#5CC800" : tamEsgotado ? "rgba(255,107,0,0.3)" : "rgba(92,200,0,0.2)"),
+                        fontFamily: "'Barlow Condensed', sans-serif",
+                        textDecoration: tamEsgotado ? "line-through" : "none",
+                        cursor: tamEsgotado ? "not-allowed" : "pointer",
+                        opacity: tamEsgotado ? 0.6 : 1,
+                      }}>
+                      {t}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
