@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { Link2, Share2, Check } from "lucide-react";
 
 export default function CompartilharTreino({ url }: { url: string }): React.JSX.Element {
   const [copiado, setCopiado] = useState(false);
@@ -20,12 +21,11 @@ export default function CompartilharTreino({ url }: { url: string }): React.JSX.
       <button type="button" onClick={copiarLink}
         className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition-all hover:scale-105"
         style={{ background: copiado ? "#5CC800" : "#1a3a0a", color: copiado ? "#0D1117" : "#5CC800", border: "1px solid #5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-        {copiado ? "✓ COPIADO!" : "🔗 COPIAR LINK"}
+        {copiado ? <><Check size={14} strokeWidth={2.5} /> COPIADO!</> : <><Link2 size={14} strokeWidth={2} /> COPIAR LINK</>}
       </button>
       <button type="button" onClick={compartilhar}
-        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition-all hover:scale-105"
-        style={{ background: "#1a1a2e", color: "#E6EDF3", border: "1px solid rgba(255,255,255,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-        📤 COMPARTILHAR
+        className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition-all hover:scale-105" style={{ background: "#1a1a2e", color: "#E6EDF3", border: "1px solid rgba(255,255,255,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+        <Share2 size={14} strokeWidth={2} /> COMPARTILHAR
       </button>
     </div>
   );
