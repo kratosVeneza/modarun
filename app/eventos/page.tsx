@@ -265,7 +265,8 @@ export default function EventosPage(): React.JSX.Element {
       if (busca.trim() && !e.cidade.toLowerCase().includes(busca.toLowerCase()) && !e.nome.toLowerCase().includes(busca.toLowerCase())) return false;
       if (estadoSelecionado && e.estado !== estadoSelecionado) return false;
       // Filtro por estados vindos da URL (perfil) — só aplica se não houver estado selecionado manualmente
-      if (!estadoSelecionado && estadosFiltroUrl.length > 0 && !estadosFiltroUrl.includes(e.estado)) return false;
+      // URL filter (from profile) only applies to the list when no manual state is selected
+      if (!estadoSelecionado && !busca.trim() && estadosFiltroUrl.length > 0 && !estadosFiltroUrl.includes(e.estado)) return false;
       return true;
     });
 
@@ -393,6 +394,92 @@ export default function EventosPage(): React.JSX.Element {
             </div>
           </section>
 
+          {/* ── DESTAQUES ───────────────────────────────────────── */}
+          {!loading && destaques.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>EM DESTAQUE</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{destaques.length}</span>
+                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
+              </div>
+              <CarrosselEventos eventos={destaques} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
+            </div>
+          )}
+
+          {/* ── ESSA SEMANA ──────────────────────────────────────── */}
+          {!loading && essaSemana.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>ESSA SEMANA</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{essaSemana.length} eventos</span>
+                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
+              </div>
+              <CarrosselEventos eventos={essaSemana} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
+            </div>
+          )}
+
+          {/* ── PRÓXIMOS 30 DIAS ─────────────────────────────────── */}
+          {!loading && proximos30.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#FF6B00" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS 30 DIAS</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{proximos30.length}</span>
+                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
+              </div>
+              <CarrosselEventos eventos={proximos30} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
+            </div>
+          )}
+
+          {/* Aviso quando filtro por favoritos não retorna resultados */}
+          {!loading && temFavoritos && destaques.length === 0 && essaSemana.length === 0 && proximos30.length === 0 && (
+            <div className="rounded-2xl p-5 text-center" style={{ background: "#161B22", border: "1px dashed rgba(255,184,0,0.25)" }}>
+              <Star size={28} color="rgba(255,184,0,0.3)" strokeWidth={0} fill="rgba(255,184,0,0.3)" style={{ margin: "0 auto 8px" }} />
+              <p className="font-black text-base" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                NENHUM EVENTO EM {estadosFiltroSalvos.join(", ")}
+              </p>
+              <p className="text-xs mt-1 mb-3" style={{ color: "#8B949E" }}>
+                Não há eventos cadastrados nesse(s) estado(s) nos próximos 30 dias.
+              </p>
+              <button
+                onClick={() => estadosFiltroSalvos.forEach(uf => toggleEstadoFiltro(uf))}
+                className="rounded-xl px-4 py-2 text-xs font-black transition-all hover:brightness-110"
+                style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                VER TODOS OS ESTADOS
+              </button>
+            </div>
+          )}
+
+          {/* ── DIVISOR — separa carrosséis do explorador ── */}
+          {!loading && (
+            <div className="rounded-2xl p-4"
+              style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
+                  EXPLORAR EVENTOS
+                </h2>
+                {totalFiltrado > 0 && (
+                  <span className="rounded-full px-2 py-0.5 text-xs font-black"
+                    style={{ background: "rgba(92,200,0,0.12)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {totalFiltrado} eventos
+                  </span>
+                )}
+              </div>
+              <p className="text-xs" style={{ color: "#8B949E" }}>
+                Selecione um estado ou busque por nome/cidade para filtrar.
+                {estadoSelecionado && (
+                  <button onClick={() => setEstadoSelecionado("")}
+                    className="ml-2 font-black"
+                    style={{ color: "#FF6B00" }}>
+                    Limpar seleção ({estadoSelecionado}) ×
+                  </button>
+                )}
+              </p>
+            </div>
+          )}
           {/* Filtros */}
           <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
             <div className="flex items-center gap-2 mb-3">
@@ -523,72 +610,6 @@ export default function EventosPage(): React.JSX.Element {
             </div>
           )}
 
-          {/* ── DESTAQUES ───────────────────────────────────────── */}
-          {!loading && destaques.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
-                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>EM DESTAQUE</h2>
-                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{destaques.length}</span>
-                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
-              </div>
-              <CarrosselEventos eventos={destaques} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
-            </div>
-          )}
-
-          {/* ── ESSA SEMANA ──────────────────────────────────────── */}
-          {!loading && essaSemana.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
-                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>ESSA SEMANA</h2>
-                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{essaSemana.length} eventos</span>
-                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
-              </div>
-              <CarrosselEventos eventos={essaSemana} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
-            </div>
-          )}
-
-          {/* ── PRÓXIMOS 30 DIAS ─────────────────────────────────── */}
-          {!loading && proximos30.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="h-5 w-1 rounded-full" style={{ background: "#FF6B00" }} />
-                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS 30 DIAS</h2>
-                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{proximos30.length}</span>
-                {temFavoritos && <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}><Star size={10} strokeWidth={0} fill="#FFB800" /> {estadosFiltroSalvos.join(", ")}</span>}
-              </div>
-              <CarrosselEventos eventos={proximos30} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
-            </div>
-          )}
-
-          {/* Aviso quando filtro por favoritos não retorna resultados */}
-          {!loading && temFavoritos && destaques.length === 0 && essaSemana.length === 0 && proximos30.length === 0 && (
-            <div className="rounded-2xl p-5 text-center" style={{ background: "#161B22", border: "1px dashed rgba(255,184,0,0.25)" }}>
-              <Star size={28} color="rgba(255,184,0,0.3)" strokeWidth={0} fill="rgba(255,184,0,0.3)" style={{ margin: "0 auto 8px" }} />
-              <p className="font-black text-base" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                NENHUM EVENTO EM {estadosFiltroSalvos.join(", ")}
-              </p>
-              <p className="text-xs mt-1 mb-3" style={{ color: "#8B949E" }}>
-                Não há eventos cadastrados nesse(s) estado(s) nos próximos 30 dias.
-              </p>
-              <button
-                onClick={() => estadosFiltroSalvos.forEach(uf => toggleEstadoFiltro(uf))}
-                className="rounded-xl px-4 py-2 text-xs font-black transition-all hover:brightness-110"
-                style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                VER TODOS OS ESTADOS
-              </button>
-            </div>
-          )}
-
-          {/* Divisor */}
-          {!loading && (destaques.length > 0 || essaSemana.length > 0 || proximos30.length > 0) && (
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
-              <span className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TODOS OS EVENTOS POR ESTADO</span>
-              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
-            </div>
-          )}
 
           {/* Eventos agrupados por estado */}
           {!loading && !error && eventosPorEstado.map(([uf, evs]) => (
