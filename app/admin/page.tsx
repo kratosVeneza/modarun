@@ -43,7 +43,7 @@ type Produto = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const estadosBR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
-const categorias = ["Camiseta","Conjunto","Shorts","Calçado","Meia","Boné","Acessório","Nutrição","Hidratação","Outro"];
+// Categorias carregadas dinamicamente do banco (veja AbaProdutos)
 const tamanhosRoupa = ["PP","P","M","G","GG","XGG"];
 const tamanhosTenis = ["34","35","36","37","38","39","40","41","42","43","44","45"];
 const coresPadrao = ["Preto","Branco","Cinza","Azul","Vermelho","Verde","Amarelo","Laranja","Rosa","Roxo","Vinho","Bege"];
@@ -712,7 +712,41 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 // ─── AbaProdutos ──────────────────────────────────────────────────────────────
 
 function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdutos: (p: Produto[]) => void }): React.JSX.Element {
+  const supabase = createClient();
+  const [categorias, setCategorias] = useState<string[]>(["Camiseta","Conjunto","Shorts","Calçado","Meia","Boné","Acessório","Nutrição","Hidratação","Outro"]);
+  const [novaCategoria, setNovaCategoria] = useState("");
+  const [gerenciarCats, setGerenciarCats] = useState(false);
+  const [salvandoCat, setSalvandoCat] = useState(false);
+  const [removendoCat, setRemovendoCat] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
+
+  // Carregar categorias do banco ao montar
+  React.useEffect(() => {
+    const sp = createClient();
+    sp.from("produto_categorias").select("nome").order("ordem").then(({ data }) => {
+      if (data && data.length > 0) setCategorias(data.map((d: { nome: string }) => d.nome));
+    });
+  }, []);
+
+  async function adicionarCategoria() {
+    const nome = novaCategoria.trim();
+    if (!nome || categorias.includes(nome)) return;
+    setSalvandoCat(true);
+    const sp = createClient();
+    const { error } = await sp.from("produto_categorias").insert({ nome, ordem: categorias.length + 1 });
+    if (!error) { setCategorias(prev => [...prev, nome]); setNovaCategoria(""); }
+    setSalvandoCat(false);
+  }
+
+  async function removerCategoria(nome: string) {
+    if (!confirm(`Remover categoria "${nome}"? Produtos com essa categoria não serão alterados.`)) return;
+    setRemovendoCat(nome);
+    const sp = createClient();
+    await sp.from("produto_categorias").delete().eq("nome", nome);
+    setCategorias(prev => prev.filter(c => c !== nome));
+    setRemovendoCat(null);
+  }
+
   const [editando, setEditando] = useState<Produto|null>(null);
   const [form, setForm] = useState<Omit<Produto,"id">>(produtoVazio);
   const [loading, setLoading] = useState(false);
@@ -829,7 +863,63 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
               {/* Nome e categoria */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1"><label style={s.lbl}>NOME *</label><input type="text" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
-                <div><label style={s.lbl}>CATEGORIA *</label><select value={form.categoria} onChange={e=>setForm({...form,categoria:e.target.value})} style={s.inp}>{categorias.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label style={s.lbl}>CATEGORIA *</label>
+                    <button type="button" onClick={() => setGerenciarCats(!gerenciarCats)}
+                      className="text-xs font-black transition-all"
+                      style={{ color: gerenciarCats ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                      {gerenciarCats ? "✕ FECHAR" : "⚙️ GERENCIAR"}
+                    </button>
+                  </div>
+                  <select value={form.categoria} onChange={e=>setForm({...form,categoria:e.target.value})} style={s.inp}>
+                    {categorias.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+
+                  {/* Painel de gerenciamento de categorias */}
+                  {gerenciarCats && (
+                    <div className="mt-2 rounded-xl p-4 space-y-3" style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.2)" }}>
+                      <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>GERENCIAR CATEGORIAS</p>
+
+                      {/* Adicionar nova */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nova categoria..."
+                          value={novaCategoria}
+                          onChange={e => setNovaCategoria(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && adicionarCategoria()}
+                          style={{ ...s.inp, flex: 1, padding: "8px 12px", fontSize: "13px" }}
+                        />
+                        <button type="button" onClick={adicionarCategoria} disabled={salvandoCat || !novaCategoria.trim()}
+                          className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50 transition-all hover:brightness-110"
+                          style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", whiteSpace: "nowrap" }}>
+                          {salvandoCat ? "..." : "+ ADD"}
+                        </button>
+                      </div>
+
+                      {/* Lista de categorias */}
+                      <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                        {categorias.map(cat => (
+                          <div key={cat} className="flex items-center gap-1 rounded-lg px-2.5 py-1"
+                            style={{ background: form.categoria === cat ? "rgba(92,200,0,0.2)" : "#21262D", border: `1px solid ${form.categoria === cat ? "rgba(92,200,0,0.4)" : "rgba(255,255,255,0.06)"}` }}>
+                            <button type="button" onClick={() => setForm({...form, categoria: cat})}
+                              className="text-xs font-black"
+                              style={{ color: form.categoria === cat ? "#5CC800" : "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {cat}
+                            </button>
+                            <button type="button" onClick={() => removerCategoria(cat)} disabled={removendoCat === cat}
+                              className="ml-0.5 rounded text-xs transition-all hover:text-red-400"
+                              style={{ color: "#8B949E", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>
+                              {removendoCat === cat ? "..." : "×"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs" style={{ color: "#8B949E" }}>Clique na categoria para selecioná-la. × para remover.</p>
+                    </div>
+                  )}
+                </div>
               </div>
               <div><label style={s.lbl}>DESCRIÇÃO</label><textarea value={form.descricao} onChange={e=>setForm({...form,descricao:e.target.value})} rows={2} style={{...s.inp, resize:"none"}} /></div>
 
@@ -1508,7 +1598,6 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
 const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
 function AbaSync({ onImportar }: { onImportar: (novos: Evento[]) => void }): React.JSX.Element {
-  const supabase = (typeof window !== "undefined" ? require("@/utils/supabase/client").createClient() : null);
   const [estadosSel, setEstadosSel] = useState<string[]>(["PA"]);
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState<{ importados: number; ignorados: number; erros?: string[] } | null>(null);
