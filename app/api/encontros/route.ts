@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       titulo, cidade, estado, data_encontro, horario, local_saida,
-      percurso, distancia, ritmo, observacoes, organizador_nome,
+      percurso, distancia, ritmo, observacoes, organizador_nome, whatsapp_organizador,
       tipo_treino, km_planejado, ponto_encontro_lat, ponto_encontro_lng, rota_coords,
     } = body;
 
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         percurso: percurso || null, distancia: distancia || null,
         ritmo: ritmo || null, observacoes: observacoes || null,
         organizador_nome: organizador_nome || null,
+        whatsapp_organizador: whatsapp_organizador || null,
         tipo_treino: tipo_treino || null,
         km_planejado: km_planejado ? Number(km_planejado) : null,
         ponto_encontro_lat, ponto_encontro_lng, rota_coords,
