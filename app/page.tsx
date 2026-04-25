@@ -20,6 +20,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
   // Eventos personalizados para usuário logado
   type EventoPersonalizado = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string };
   let eventosPersonalizados: EventoPersonalizado[] = [];
+  let eventosFavoritados: EventoPersonalizado[] = [];
   let cidadesFavoritas: { cidade: string; estado: string }[] = [];
 
   if (user) {
@@ -46,22 +47,19 @@ export default async function HomePage(): Promise<React.JSX.Element> {
       );
     }
 
-    // Também incluir eventos salvos
+    // Eventos salvos com bookmark — seção separada
     const { data: salvos } = await supabase
       .from("user_eventos_salvos")
       .select("eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)")
       .eq("user_id", user.id)
-      .limit(5);
+      .limit(6);
 
-    const eventosSalvos = (salvos || [])
+    eventosFavoritados = (salvos || [])
       .map((s: { eventos: EventoPersonalizado | EventoPersonalizado[] | null }) =>
         Array.isArray(s.eventos) ? s.eventos[0] : s.eventos
       )
-      .filter((e): e is EventoPersonalizado => !!e && e.data_evento >= hoje);
-
-    // Merge sem duplicatas
-    const idsJa = new Set(eventosPersonalizados.map(e => e.id));
-    eventosSalvos.forEach(e => { if (!idsJa.has(e.id)) eventosPersonalizados.push(e); });
+      .filter((e): e is EventoPersonalizado => !!e && e.data_evento >= hoje)
+      .sort((a, b) => a.data_evento.localeCompare(b.data_evento));
   }
 
   function formatarData(data: string) {
@@ -202,63 +200,145 @@ export default async function HomePage(): Promise<React.JSX.Element> {
           </div>
         </section>
 
-        {/* PARA VOCÊ — eventos personalizados */}
-        {user && eventosPersonalizados.length > 0 && (
+        {/* ── CORRIDAS FAVORITADAS ────────────────────────────── */}
+        {user && eventosFavoritados.length > 0 && (
           <section className="px-4 py-12" style={{ background: "#161B22" }}>
             <div className="mx-auto max-w-6xl">
               <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-6 w-1 rounded-full" style={{ background: "#FFB800" }} />
                   <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
-                    EVENTOS PARA VOCÊ
+                    MINHAS CORRIDAS
                   </h2>
-                  <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1"
+                    style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    ⭐ {eventosFavoritados.length} salva{eventosFavoritados.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <Link href="/perfil" className="text-xs font-bold"
+                  style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  VER TODAS →
+                </Link>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {eventosFavoritados.map(e => {
+                  const [ano, mes, dia] = String(e.data_evento).split("-");
+                  const dataFmt = `${dia}/${mes}/${ano}`;
+                  return (
+                    <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
+                      style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.2)" }}>
+                      <div className="absolute top-0 left-0 right-0 h-0.5"
+                        style={{ background: "linear-gradient(90deg, #FFB800, #FF6B00)" }} />
+                      {/* Badge favorito */}
+                      <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-lg"
+                        style={{ background: "rgba(255,184,0,0.2)", color: "#FFB800" }}>
+                        ⭐
+                      </div>
+                      <div className="p-4 pr-10">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            {dataFmt}
+                          </span>
+                          {e.distancia && (
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-lg"
+                              style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {e.distancia}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-black text-sm leading-tight mb-1.5"
+                          style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          {e.nome}
+                        </h3>
+                        <p className="text-xs mb-3 flex items-center gap-1" style={{ color: "#8B949E" }}>
+                          📍 {e.cidade} — {e.estado}
+                        </p>
+                        {e.link_inscricao ? (
+                          <a href={e.link_inscricao} target="_blank" rel="noreferrer"
+                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black transition-all hover:brightness-110"
+                            style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.04em" }}>
+                            INSCREVER-SE →
+                          </a>
+                        ) : (
+                          <Link href="/eventos"
+                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
+                            style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            VER DETALHES →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── EVENTOS DA SUA REGIÃO ────────────────────────────── */}
+        {user && eventosPersonalizados.length > 0 && (
+          <section className="px-4 py-12" style={{ background: "#0D1117" }}>
+            <div className="mx-auto max-w-6xl">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-6 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
+                    NA SUA REGIÃO
+                  </h2>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-black"
+                    style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
                     {cidadesFavoritas.map(c => c.cidade).join(", ")}
                   </span>
                 </div>
-                <Link href="/eventos" className="text-xs font-bold" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                <Link href="/eventos" className="text-xs font-bold"
+                  style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
                   VER TODOS →
                 </Link>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {eventosPersonalizados.slice(0, 6).map(e => (
-                  <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
-                    style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.15)" }}>
-                    <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg, #FFB800, transparent)" }} />
-                    <div className="p-4">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          {(() => { const [ano, mes, dia] = String(e.data_evento).split("-"); return `${dia}/${mes}/${ano}`; })()}
-                        </span>
+                {eventosPersonalizados.slice(0, 6).map(e => {
+                  const [ano, mes, dia] = String(e.data_evento).split("-");
+                  const dataFmt = `${dia}/${mes}/${ano}`;
+                  return (
+                    <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
+                      style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.12)" }}>
+                      <div className="absolute top-0 left-0 right-0 h-0.5"
+                        style={{ background: "linear-gradient(90deg, #5CC800, transparent)" }} />
+                      <div className="p-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{dataFmt}</span>
+                          {e.distancia && (
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-lg"
+                              style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {e.distancia}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-black text-sm leading-tight mb-1.5"
+                          style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          {e.nome}
+                        </h3>
+                        <p className="text-xs mb-3" style={{ color: "#8B949E" }}>📍 {e.cidade} — {e.estado}</p>
+                        {e.link_inscricao ? (
+                          <a href={e.link_inscricao} target="_blank" rel="noreferrer"
+                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black transition-all hover:brightness-110"
+                            style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            INSCREVER-SE →
+                          </a>
+                        ) : (
+                          <Link href="/eventos"
+                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
+                            style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            VER EVENTO →
+                          </Link>
+                        )}
                       </div>
-                      <h3 className="font-black text-sm leading-tight mb-1"
-                        style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {e.nome}
-                      </h3>
-                      <p className="text-xs mb-3" style={{ color: "#8B949E" }}>
-                        📍 {e.cidade} — {e.estado}
-                        {e.distancia && <span style={{ color: "#FF6B00" }}> · {e.distancia}</span>}
-                      </p>
-                      {e.link_inscricao ? (
-                        <a href={e.link_inscricao} target="_blank" rel="noreferrer"
-                          className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
-                          style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          INSCREVER-SE →
-                        </a>
-                      ) : (
-                        <Link href="/eventos"
-                          className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
-                          style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          VER EVENTO →
-                        </Link>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              {/* CTA personalizar */}
               <div className="mt-4 text-center">
-                <Link href="/perfil" className="inline-flex items-center gap-1.5 text-xs font-bold"
+                <Link href="/perfil" className="inline-flex items-center gap-1.5 text-xs"
                   style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                   ⚙️ Gerenciar cidades favoritas no perfil
                 </Link>
