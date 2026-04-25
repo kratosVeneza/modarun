@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
-import { TrendingUp, Plus, Trash2, Timer, Ruler, Heart, Mountain, Flame, StickyNote, Timer as TimerIcon, BarChart2, Activity } from "lucide-react";
+import { TrendingUp, Plus, Trash2, Timer, Ruler, Heart, Mountain, Flame, ClipboardList } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
