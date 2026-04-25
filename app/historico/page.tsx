@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
+import { TrendingUp, Plus, Trash2, Timer, Ruler, Heart, Mountain, Flame, StickyNote, Timer as TimerIcon, BarChart2, Activity } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -222,7 +223,7 @@ export default function HistoricoTreinosPage(): React.JSX.Element {
             <button onClick={() => { setShowForm(!showForm); setErro(""); }}
               className="shrink-0 rounded-xl px-5 py-3 font-black text-sm transition-all hover:brightness-110 hover:scale-105"
               style={{ background: showForm ? "#21262D" : "linear-gradient(135deg, #5CC800, #4aaa00)", color: showForm ? "#8B949E" : "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-              {showForm ? "✕ FECHAR" : "+ REGISTRAR"}
+              {showForm ? "FECHAR" : "REGISTRAR"}
             </button>
           </div>
         </section>
@@ -289,7 +290,7 @@ export default function HistoricoTreinosPage(): React.JSX.Element {
                 <button type="submit" disabled={salvando}
                   className="flex-1 rounded-xl py-3.5 font-black text-sm transition-all hover:brightness-110"
                   style={{ background: salvando ? "#21262D" : "linear-gradient(135deg, #5CC800, #4aaa00)", color: salvando ? "#8B949E" : "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  {salvando ? "SALVANDO..." : "✅ SALVAR TREINO"}
+                  {salvando ? "SALVANDO..." : "SALVAR TREINO"}
                 </button>
                 <button type="button" onClick={() => { setShowForm(false); setErro(""); }}
                   className="rounded-xl px-5 py-3.5 font-black text-sm"
@@ -309,7 +310,7 @@ export default function HistoricoTreinosPage(): React.JSX.Element {
               { label: "KM (30 DIAS)", value: `${kmUltimos30.toFixed(1)}km`, color: "#5CC800", icon: "📅" },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-lg mb-0.5">{s.icon}</p>
+                
                 <p className="text-xl font-black leading-none" style={{ color: s.color, fontFamily: "'Barlow Condensed', sans-serif" }}>{s.value}</p>
                 <p className="text-xs mt-1" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>{s.label}</p>
               </div>
@@ -399,12 +400,12 @@ export default function HistoricoTreinosPage(): React.JSX.Element {
           {/* Links ferramentas */}
           <div className="grid grid-cols-2 gap-3">
             <Link href="/calculadora-pace" className="rounded-xl p-4 transition-all hover:-translate-y-0.5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
-              <p className="text-xl mb-1">⏱</p>
+              <Timer size={22} color="#5CC800" strokeWidth={1.75} style={{ marginBottom: "4px" }} />
               <p className="font-black text-sm" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>CALCULADORA PACE</p>
               <p className="text-xs" style={{ color: "#8B949E" }}>Ritmo por km</p>
             </Link>
             <Link href="/planos-treino" className="rounded-xl p-4 transition-all hover:-translate-y-0.5" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.2)" }}>
-              <p className="text-xl mb-1">📋</p>
+              <ClipboardList size={22} color="#FF6B00" strokeWidth={1.75} style={{ marginBottom: "4px" }} />
               <p className="font-black text-sm" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>PLANOS DE TREINO</p>
               <p className="text-xs" style={{ color: "#8B949E" }}>Do zero ao 5km</p>
             </Link>

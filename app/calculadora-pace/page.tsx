@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import Header from "@/components/Header";
+import { Timer, Ruler, Flag, Zap, Heart, ClipboardList, ArrowRight } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useEffect } from "react";
 import Link from "next/link";
@@ -152,9 +153,9 @@ export default function CalculadoraPacePage(): React.JSX.Element {
   }, [modo, distancia, tempo, pace]);
 
   const modos = [
-    { id: "pace", label: "CALCULAR PACE", icon: "⏱" },
-    { id: "tempo", label: "CALCULAR TEMPO", icon: "🏁" },
-    { id: "distancia", label: "CALCULAR DISTÂNCIA", icon: "📏" },
+    { id: "pace",      label: "CALCULAR PACE",      IconEl: Timer  },
+    { id: "tempo",     label: "CALCULAR TEMPO",      IconEl: Flag   },
+    { id: "distancia", label: "CALCULAR DISTÂNCIA",  IconEl: Ruler  },
   ] as const;
 
   return (
@@ -191,7 +192,7 @@ export default function CalculadoraPacePage(): React.JSX.Element {
                   background: modo === m.id ? "linear-gradient(135deg, #5CC800, #4aaa00)" : "transparent",
                   color: modo === m.id ? "#fff" : "#8B949E",
                 }}>
-                <span className="block text-base">{m.icon}</span>
+                <m.IconEl size={18} strokeWidth={modo === m.id ? 2.5 : 1.75} style={{ margin: "0 auto" }} />
                 <span className="hidden sm:block mt-0.5">{m.label}</span>
               </button>
             ))}
@@ -326,12 +327,12 @@ export default function CalculadoraPacePage(): React.JSX.Element {
           {/* Links para outras ferramentas */}
           <div className="grid grid-cols-2 gap-3">
             <Link href="/calculadora-fc" className="rounded-xl p-4 transition-all hover:-translate-y-0.5" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.2)" }}>
-              <p className="text-xl mb-1">❤️</p>
+              <Heart size={22} color="#FF6B00" strokeWidth={1.75} style={{ marginBottom: "4px" }} />
               <p className="font-black text-sm" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>CALCULADORA FC</p>
               <p className="text-xs" style={{ color: "#8B949E" }}>Zonas Z1-Z5</p>
             </Link>
             <Link href="/planos-treino" className="rounded-xl p-4 transition-all hover:-translate-y-0.5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
-              <p className="text-xl mb-1">📋</p>
+              <ClipboardList size={22} color="#5CC800" strokeWidth={1.75} style={{ marginBottom: "4px" }} />
               <p className="font-black text-sm" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>PLANOS DE TREINO</p>
               <p className="text-xs" style={{ color: "#8B949E" }}>Do zero ao 5km</p>
             </Link>

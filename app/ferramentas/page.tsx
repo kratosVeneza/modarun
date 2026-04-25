@@ -4,11 +4,15 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import Header from "@/components/Header";
+import {
+  Timer, Heart, ClipboardList, TrendingUp, Share2,
+  Users, Flag, ArrowRight,
+} from "lucide-react";
 
 const FERRAMENTAS = [
   {
     href: "/calculadora-pace",
-    icon: "⏱",
+    Icon: Timer,
     titulo: "CALCULADORA DE PACE",
     desc: "Calcule seu ritmo, tempo de prova ou distância. Previsão para 1km, 5km, 10km, meia e maratona.",
     tags: ["Pace", "Tempo", "Distância"],
@@ -18,7 +22,7 @@ const FERRAMENTAS = [
   },
   {
     href: "/calculadora-fc",
-    icon: "❤️",
+    Icon: Heart,
     titulo: "ZONAS DE FREQUÊNCIA CARDÍACA",
     desc: "Descubra suas zonas Z1-Z5 com base na sua idade e FC de repouso. Métodos Tanaka, clássico e Karvonen.",
     tags: ["Z1-Z5", "FC Máxima", "Karvonen"],
@@ -28,7 +32,7 @@ const FERRAMENTAS = [
   },
   {
     href: "/planos-treino",
-    icon: "📋",
+    Icon: ClipboardList,
     titulo: "PLANOS DE TREINO",
     desc: "Programas semana a semana: do zero ao 5km, de 5km para 10km, e rumo à meia maratona.",
     tags: ["Zero ao 5km", "10km", "Meia Maratona"],
@@ -38,7 +42,7 @@ const FERRAMENTAS = [
   },
   {
     href: "/historico",
-    icon: "📈",
+    Icon: TrendingUp,
     titulo: "HISTÓRICO DE TREINOS",
     desc: "Registre suas atividades e acompanhe sua evolução com gráficos de distância, tempo e frequência cardíaca.",
     tags: ["Evolução", "Gráficos", "Registros"],
@@ -48,7 +52,7 @@ const FERRAMENTAS = [
   },
   {
     href: "/compartilhar-resultado",
-    icon: "📸",
+    Icon: Share2,
     titulo: "COMPARTILHAR RESULTADO",
     desc: "Gere uma imagem bonita com seus dados de treino para compartilhar nos Stories, Instagram ou WhatsApp.",
     tags: ["Stories", "Instagram", "WhatsApp"],
@@ -97,7 +101,8 @@ export default function FerramentasPage(): React.JSX.Element {
           <div className="relative mx-auto max-w-4xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black"
               style={{ background: "rgba(255,184,0,0.1)", border: "1px solid rgba(255,184,0,0.3)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
-              🛠 FERRAMENTAS DO CORREDOR
+              <Timer size={13} strokeWidth={2.5} />
+              FERRAMENTAS DO CORREDOR
             </div>
             <h1 className="text-5xl font-black sm:text-6xl"
               style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", lineHeight: 1, letterSpacing: "-0.01em" }}>
@@ -121,18 +126,16 @@ export default function FerramentasPage(): React.JSX.Element {
                   className="group relative overflow-hidden rounded-2xl p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl"
                   style={{ background: "#161B22", border: "1px solid " + f.corBorder }}>
 
-                  {/* Linha topo */}
                   <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
                     style={{ background: "linear-gradient(90deg, " + f.cor + ", transparent)" }} />
-
-                  {/* Glow hover */}
                   <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                     style={{ background: "radial-gradient(circle, " + f.cor + "15, transparent)" }} />
 
                   <div className="relative">
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
+                    {/* Ícone */}
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
                       style={{ background: f.corBg, border: "1px solid " + f.corBorder }}>
-                      {f.icon}
+                      <f.Icon size={26} color={f.cor} strokeWidth={1.75} />
                     </div>
 
                     <h2 className="text-xl font-black leading-tight mb-2"
@@ -153,10 +156,10 @@ export default function FerramentasPage(): React.JSX.Element {
                       ))}
                     </div>
 
-                    <p className="text-xs font-black transition-transform duration-200 group-hover:translate-x-1"
+                    <div className="flex items-center gap-1 text-xs font-black transition-transform duration-200 group-hover:translate-x-1"
                       style={{ color: f.cor, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
-                      ACESSAR →
-                    </p>
+                      ACESSAR <ArrowRight size={13} strokeWidth={2.5} />
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -173,9 +176,10 @@ export default function FerramentasPage(): React.JSX.Element {
                 style={{ background: "radial-gradient(circle, rgba(92,200,0,0.1), transparent)" }} />
               <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-black mb-1"
+                  <p className="text-xs font-black mb-1 flex items-center gap-1.5"
                     style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
-                    ⚡ QUER TREINAR EM GRUPO?
+                    <Users size={13} strokeWidth={2.5} />
+                    QUER TREINAR EM GRUPO?
                   </p>
                   <h3 className="text-2xl font-black"
                     style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
@@ -189,12 +193,14 @@ export default function FerramentasPage(): React.JSX.Element {
                   <Link href="/encontros"
                     className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105 hover:brightness-110"
                     style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                    ⚡ VER TREINOS
+                    <Users size={16} strokeWidth={2.5} />
+                    VER TREINOS
                   </Link>
                   <Link href="/eventos"
                     className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105"
                     style={{ border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                    🏁 VER EVENTOS
+                    <Flag size={16} strokeWidth={2} />
+                    VER EVENTOS
                   </Link>
                 </div>
               </div>
