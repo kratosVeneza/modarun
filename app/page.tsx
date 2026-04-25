@@ -1,512 +1,529 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
-import { getAdminStatus } from "@/utils/supabase/isAdmin";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import { Flag, Users, ShoppingBag, Timer, Heart, ClipboardList, TrendingUp, Share2, ArrowRight, Zap, Star, MapPin } from "lucide-react";
+import { Camera, Edit2, Check, X, LogOut, ShoppingBag, Flag, Zap, ClipboardList, MapPin, Star, Trash2, Calendar, Ruler, ArrowRight } from "lucide-react";
 
-export default async function HomePage(): Promise<React.JSX.Element> {
-  const { user, isAdmin } = await getAdminStatus();
+type Treino = { id: number; titulo: string; cidade: string; estado: string; data_encontro: string; tipo_treino?: string; km_planejado?: number; distancia?: string };
+type CidadeInteresse = { id: number; cidade: string; estado: string };
+type EventoSalvo = { id: number; evento_id: number; eventos: { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string } };
 
-  const hoje = new Date().toISOString().split("T")[0];
+const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
-  const [{ count: totalTreinos }, { count: totalParticipantes }, { data: proximosTreinos }, { data: proximosEventos }] = await Promise.all([
-    supabase.from("encontros").select("*", { count: "exact", head: true }),
-    supabase.from("encontro_participantes").select("*", { count: "exact", head: true }),
-    supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, horario, tipo_treino, km_planejado, distancia").order("data_encontro", { ascending: true }).limit(3),
-    supabase.from("eventos").select("id, nome, cidade, estado, data_evento, distancia").gte("data_evento", hoje).order("data_evento", { ascending: true }).limit(2),
-  ]);
+const inp = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none" } as React.CSSProperties;
 
-  // Eventos personalizados para usuário logado
-  type EventoPersonalizado = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string };
-  let eventosPersonalizados: EventoPersonalizado[] = [];
-  let eventosFavoritados: EventoPersonalizado[] = [];
-  let cidadesFavoritas: { cidade: string; estado: string }[] = [];
+function formatarData(data: string) {
+  if (!data) return "—";
+  const [, mes, dia] = String(data).split("-");
+  return `${dia}/${mes}`;
+}
 
-  if (user) {
-    const { data: cidades } = await supabase
-      .from("user_cidades_interesse")
-      .select("cidade, estado")
-      .eq("user_id", user.id);
+function formatarDataCompleta(data: string) {
+  if (!data) return "—";
+  const [ano, mes, dia] = String(data).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
 
-    cidadesFavoritas = cidades || [];
+export default function PerfilPage(): React.JSX.Element {
+  const router = useRouter();
+  const supabase = createClient();
+  const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId] = useState("");
+  const [nomeExibicao, setNomeExibicao] = useState("");
+  const [nomeEditando, setNomeEditando] = useState(false);
+  const [nomeTemp, setNomeTemp] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [treinos, setTreinos] = useState<Treino[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [salvandoNome, setSalvandoNome] = useState(false);
+  const [uploadandoFoto, setUploadandoFoto] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-    if (cidadesFavoritas.length > 0) {
-      // Buscar eventos nas cidades favoritas
-      const cidadesNomes = cidadesFavoritas.map(c => c.cidade.toLowerCase());
-      const { data: evPers } = await supabase
-        .from("eventos")
-        .select("id, nome, cidade, estado, data_evento, distancia, link_inscricao")
-        .gte("data_evento", hoje)
-        .order("data_evento", { ascending: true })
-        .limit(10);
+  // Preferências
+  const [cidadesInteresse, setCidadesInteresse] = useState<CidadeInteresse[]>([]);
+  const [eventosSalvos, setEventosSalvos] = useState<EventoSalvo[]>([]);
+  const [abaPref, setAbaPref] = useState<"cidades" | "eventos">("cidades");
+  const [novaCidade, setNovaCidade] = useState("");
+  const [novoEstado, setNovoEstado] = useState("PA");
+  const [salvandoCidade, setSalvandoCidade] = useState(false);
+  const [removendoId, setRemovendoId] = useState<number | null>(null);
+  const [removendoEventoId, setRemovendoEventoId] = useState<number | null>(null);
 
-      // Filtrar pelos que são das cidades favoritas
-      eventosPersonalizados = (evPers || []).filter(e =>
-        cidadesNomes.some(c => e.cidade?.toLowerCase().includes(c))
-      );
+  const carregar = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); return; }
+    setUserEmail(user.email || "");
+    setUserId(user.id);
+    const nome = user.user_metadata?.nome_exibicao || user.email?.split("@")[0] || "Corredor";
+    setNomeExibicao(nome); setNomeTemp(nome);
+    setAvatarUrl(user.user_metadata?.avatar_url || null);
+
+    const [{ data: adminRow }, { data: treinosData }, { data: cidades }, { data: eventos }] = await Promise.all([
+      supabase.from("admins").select("email").eq("email", user.email?.toLowerCase() ?? "").single(),
+      supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, tipo_treino, km_planejado, distancia").eq("user_id", user.id).order("data_encontro", { ascending: false }),
+      supabase.from("user_cidades_interesse").select("id, cidade, estado").eq("user_id", user.id).order("created_at"),
+      supabase.from("user_eventos_salvos").select("id, evento_id, eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)").eq("user_id", user.id).order("created_at", { ascending: false }),
+    ]);
+
+    setIsAdmin(!!adminRow);
+    setTreinos(treinosData || []);
+    setCidadesInteresse((cidades || []) as CidadeInteresse[]);
+    setEventosSalvos((eventos || []) as unknown as EventoSalvo[]);
+    setLoading(false);
+  }, []); // eslint-disable-line
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function salvarNome() {
+    setSalvandoNome(true);
+    await supabase.auth.updateUser({ data: { nome_exibicao: nomeTemp.trim() } });
+    setNomeExibicao(nomeTemp.trim()); setNomeEditando(false); setSalvandoNome(false);
+  }
+
+  async function uploadFoto(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 3 * 1024 * 1024) { alert("Imagem muito grande. Máximo 3MB."); return; }
+    setUploadandoFoto(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const fileName = `${userId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, file, { upsert: true, contentType: file.type });
+      if (uploadError) { alert("Erro no upload: " + uploadError.message); setUploadandoFoto(false); return; }
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      setAvatarUrl(publicUrl);
+    } catch { alert("Erro ao fazer upload."); }
+    setUploadandoFoto(false);
+  }
+
+  async function removerFoto() {
+    if (!confirm("Remover foto de perfil?")) return;
+    await supabase.auth.updateUser({ data: { avatar_url: null } });
+    setAvatarUrl(null);
+  }
+
+  async function adicionarCidade() {
+    if (!novaCidade.trim() || !novoEstado) return;
+    setSalvandoCidade(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await supabase.from("user_cidades_interesse").insert({
+      user_id: user.id, cidade: novaCidade.trim(), estado: novoEstado,
+    }).select("id, cidade, estado").single();
+    if (!error && data) {
+      setCidadesInteresse(prev => [...prev, data as CidadeInteresse]);
+      setNovaCidade("");
     }
-
-    // Eventos salvos com bookmark — seção separada
-    const { data: salvos } = await supabase
-      .from("user_eventos_salvos")
-      .select("eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)")
-      .eq("user_id", user.id)
-      .limit(6);
-
-    eventosFavoritados = (salvos || [])
-      .map((s: { eventos: EventoPersonalizado | EventoPersonalizado[] | null }) =>
-        Array.isArray(s.eventos) ? s.eventos[0] : s.eventos
-      )
-      .filter((e): e is EventoPersonalizado => !!e && e.data_evento >= hoje)
-      .sort((a, b) => a.data_evento.localeCompare(b.data_evento));
+    setSalvandoCidade(false);
   }
 
-  function formatarData(data: string) {
-    if (!data) return "—";
-    const [, mes, dia] = String(data).split("-");
-    return `${dia}/${mes}`;
+  async function removerCidade(id: number) {
+    setRemovendoId(id);
+    await supabase.from("user_cidades_interesse").delete().eq("id", id);
+    setCidadesInteresse(prev => prev.filter(c => c.id !== id));
+    setRemovendoId(null);
   }
+
+  async function removerEventoSalvo(id: number) {
+    setRemovendoEventoId(id);
+    await supabase.from("user_eventos_salvos").delete().eq("id", id);
+    setEventosSalvos(prev => prev.filter(e => e.id !== id));
+    setRemovendoEventoId(null);
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut(); router.push("/login");
+  }
+
+  if (loading) return (
+    <>
+      <Header userEmail={userEmail} isAdmin={isAdmin} />
+      <main className="flex min-h-screen items-center justify-center" style={{ background: "#0D1117" }}>
+        <div className="h-12 w-12 animate-spin rounded-full border-4" style={{ borderColor: "rgba(92,200,0,0.2)", borderTopColor: "#5CC800" }} />
+      </main>
+    </>
+  );
+
+  const inicial = nomeExibicao[0]?.toUpperCase() || "?";
+  const totalKm = treinos.reduce((acc, t) => acc + (t.km_planejado || 0), 0);
+
+  // Link para eventos filtrados pelas cidades favoritas
+  const estadosFavoritosUnicos = [...new Set(cidadesInteresse.map(c => c.estado))];
+  const linkEventosCidades = cidadesInteresse.length > 0
+    ? `/eventos?estado=${encodeURIComponent(estadosFavoritosUnicos.join(","))}`
+    : "/eventos";
 
   return (
     <>
-      <Header userEmail={user?.email} isAdmin={isAdmin} />
+      <Header userEmail={userEmail} isAdmin={isAdmin} />
       <main style={{ background: "#0D1117", minHeight: "100vh" }}>
 
-        {/* HERO */}
-        <section className="relative overflow-hidden px-4 py-20 sm:py-32" style={{ background: "linear-gradient(135deg, #0D1117 0%, #161B22 50%, #0D1117 100%)" }}>
-          {/* Decorações */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -right-40 top-0 h-[600px] w-[600px] rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent 70%)" }} />
-            <div className="absolute -left-20 bottom-0 h-[400px] w-[400px] rounded-full opacity-5" style={{ background: "radial-gradient(circle, #FF6B00, transparent 70%)" }} />
-            {/* Linhas decorativas */}
-            <svg className="absolute inset-0 w-full h-full opacity-5" xmlns="http://www.w3.org/2000/svg">
-              <defs><pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#5CC800" strokeWidth="0.5"/></pattern></defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-          </div>
+        {/* Hero */}
+        <section className="relative overflow-hidden px-4 py-10" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
+          <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
+          <div className="relative mx-auto max-w-3xl">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
-          <div className="relative mx-auto max-w-6xl">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
-                ⚡ RUNNING & PERFORMANCE
-              </div>
-
-              <h1 className="text-5xl font-black leading-none sm:text-7xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "-0.01em" }}>
-                <span style={{ color: "#E6EDF3" }}>CORRA NA</span><br />
-                <span style={{ color: "#5CC800" }}>MODA.</span>{" "}
-                <span style={{ color: "#FF6B00" }}>VENÇA</span><br />
-                <span style={{ color: "#E6EDF3" }}>COM ESTILO.</span>
-              </h1>
-
-              <p className="mt-6 max-w-xl text-base sm:text-lg" style={{ color: "#8B949E" }}>
-                Organize treinos em grupo, descubra provas no Brasil inteiro e encontre os equipamentos perfeitos para cada corrida.
-              </p>
-
-              <div className="mt-8 flex flex-wrap gap-3">
-                {user ? (
-                  <>
-                    <Link href="/encontros"
-                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 text-sm font-black transition-all hover:scale-105 hover:brightness-110"
-                      style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
-                      ⚡ VER TREINOS
-                    </Link>
-                    <Link href="/perfil"
-                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 text-sm font-black transition-all hover:scale-105"
-                      style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
-                      👤 MEU PERFIL
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/cadastro"
-                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 font-black transition-all hover:scale-105 hover:brightness-110"
-                      style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px", boxShadow: "0 0 30px rgba(92,200,0,0.3)" }}>
-                      🚀 CRIAR CONTA GRÁTIS
-                    </Link>
-                    <Link href="/encontros"
-                      className="flex items-center gap-2 rounded-xl px-6 py-3.5 font-black transition-all hover:scale-105"
-                      style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em", fontSize: "15px" }}>
-                      ⚡ VER TREINOS
-                    </Link>
-                  </>
+              {/* Avatar */}
+              <div className="relative shrink-0 group">
+                <div className="relative h-24 w-24 rounded-2xl overflow-hidden"
+                  style={{ boxShadow: avatarUrl ? "0 0 0 3px #5CC800" : "0 0 0 3px rgba(92,200,0,0.3)" }}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={nomeExibicao} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-4xl font-black"
+                      style={{ background: "linear-gradient(135deg, #5CC800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {inicial}
+                    </div>
+                  )}
+                  <button onClick={() => fileRef.current?.click()} disabled={uploadandoFoto}
+                    className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "rgba(0,0,0,0.65)" }}>
+                    {uploadandoFoto
+                      ? <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      : <><Camera size={20} color="#fff" strokeWidth={2} /><span className="text-xs font-black mt-1" style={{ color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>TROCAR</span></>
+                    }
+                  </button>
+                </div>
+                {avatarUrl && !uploadandoFoto && (
+                  <button onClick={removerFoto}
+                    className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full text-xs shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "#FF6B00", color: "#fff" }}>✕</button>
                 )}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.target.value = ""; }} />
               </div>
 
-              {/* Stats */}
-              <div className="mt-12 flex flex-wrap gap-8">
-                {[
-                  { v: totalTreinos || 0, l: "Treinos criados" },
-                  { v: totalParticipantes || 0, l: "Confirmações" },
-                  { v: "∞", l: "Quilômetros pela frente" },
-                ].map((s, i) => (
-                  <div key={i}>
-                    <p className="text-3xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: i === 0 ? "#5CC800" : i === 1 ? "#FF6B00" : "#FFB800" }}>{s.v}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>{s.l}</p>
+              {/* Info */}
+              <div className="flex-1">
+                {nomeEditando ? (
+                  <div className="flex items-center gap-2">
+                    <input type="text" value={nomeTemp} onChange={e => setNomeTemp(e.target.value)} autoFocus
+                      className="flex-1 rounded-xl px-4 py-2 text-xl font-black"
+                      style={{ background: "#21262D", border: "1px solid #5CC800", color: "#E6EDF3", outline: "none", fontFamily: "'Barlow Condensed', sans-serif" }} />
+                    <button onClick={salvarNome} disabled={salvandoNome}
+                      className="rounded-xl px-4 py-2 text-sm font-black"
+                      style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {salvandoNome ? "..." : <span className="flex items-center gap-1"><Check size={14} strokeWidth={2.5} /> SALVAR</span>}
+                    </button>
+                    <button onClick={() => { setNomeEditando(false); setNomeTemp(nomeExibicao); }}
+                      className="rounded-xl px-3 py-2"
+                      style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>
+                      <X size={16} strokeWidth={2} />
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-3xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{nomeExibicao}</h1>
+                    <button onClick={() => setNomeEditando(true)}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold"
+                      style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      <Edit2 size={11} strokeWidth={2.5} /> EDITAR
+                    </button>
+                  </div>
+                )}
+                <p className="mt-0.5 text-sm" style={{ color: "#8B949E" }}>{userEmail}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="rounded-lg px-3 py-1 text-xs font-black"
+                    style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {treinos.length} TREINO{treinos.length !== 1 ? "S" : ""}
+                  </span>
+                  <span className="rounded-lg px-3 py-1 text-xs font-black"
+                    style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <MapPin size={10} style={{ display: "inline", marginRight: "3px" }} strokeWidth={2} />
+                    {cidadesInteresse.length} CIDADE{cidadesInteresse.length !== 1 ? "S" : ""} FAVORITA{cidadesInteresse.length !== 1 ? "S" : ""}
+                  </span>
+                  <span className="rounded-lg px-3 py-1 text-xs font-black"
+                    style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <Star size={10} style={{ display: "inline", marginRight: "3px" }} strokeWidth={2} />
+                    {eventosSalvos.length} EVENTO{eventosSalvos.length !== 1 ? "S" : ""} SALVO{eventosSalvos.length !== 1 ? "S" : ""}
+                  </span>
+                  {isAdmin && (
+                    <span className="rounded-lg px-3 py-1 text-xs font-black"
+                      style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      ⚙️ ADMIN
+                    </span>
+                  )}
+                </div>
               </div>
+
+              <button onClick={handleLogout}
+                className="shrink-0 self-start flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black"
+                style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <LogOut size={14} strokeWidth={2} /> SAIR
+              </button>
             </div>
           </div>
         </section>
 
-        {/* PRÓXIMOS TREINOS */}
-        <section className="px-4 py-12" style={{ background: "#161B22" }}>
-          <div className="mx-auto max-w-6xl">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-6 w-1 rounded-full" style={{ background: "#5CC800" }} />
-                <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS TREINOS</h2>
+        <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { v: treinos.length, l: "TREINOS", cor: "#5CC800" },
+              { v: `${totalKm}km`, l: "KM PLANEJADOS", cor: "#FF6B00" },
+              { v: cidadesInteresse.length, l: "CIDADES FAV.", cor: "#FFB800" },
+            ].map((s, i) => (
+              <div key={i} className="rounded-2xl p-4 text-center" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+                <p className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: s.cor }}>{s.v}</p>
+                <p className="mt-1 text-xs font-bold" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>{s.l}</p>
               </div>
-              <Link href="/encontros" className="text-xs font-bold transition hover:brightness-110" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                VER TODOS →
-              </Link>
+            ))}
+          </div>
+
+          {/* ── PREFERÊNCIAS ─────────────────────────────────────────── */}
+          <section className="rounded-2xl overflow-hidden" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
+            <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.03em" }}>
+                  MINHAS PREFERÊNCIAS
+                </h2>
+              </div>
+              <p className="text-xs" style={{ color: "#8B949E" }}>
+                Eventos das suas cidades favoritas aparecem na página inicial e filtram automaticamente a aba de eventos.
+              </p>
             </div>
 
-            {!proximosTreinos || proximosTreinos.length === 0 ? (
-              <div className="rounded-2xl p-8 text-center" style={{ background: "#21262D", border: "1px dashed rgba(92,200,0,0.2)" }}>
-                <p className="text-4xl mb-2">🏃</p>
-                <p className="font-semibold" style={{ color: "#8B949E" }}>Nenhum treino ainda.</p>
-                <Link href="/encontros" className="mt-4 inline-flex rounded-xl px-5 py-2.5 text-sm font-black"
-                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+            {/* Abas */}
+            <div className="flex" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              {([
+                { id: "cidades", label: "📍 CIDADES FAVORITAS", count: cidadesInteresse.length },
+                { id: "eventos", label: "⭐ EVENTOS SALVOS", count: eventosSalvos.length },
+              ] as const).map(a => (
+                <button key={a.id} onClick={() => setAbaPref(a.id)}
+                  className="flex-1 py-3 text-xs font-black transition-all"
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em",
+                    color: abaPref === a.id ? "#FFB800" : "#8B949E",
+                    background: abaPref === a.id ? "rgba(255,184,0,0.08)" : "transparent",
+                    borderBottom: abaPref === a.id ? "2px solid #FFB800" : "2px solid transparent",
+                  }}>
+                  {a.label} ({a.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="p-5">
+              {/* ABA CIDADES */}
+              {abaPref === "cidades" && (
+                <div className="space-y-4">
+                  {/* Adicionar cidade */}
+                  <div className="rounded-xl p-4" style={{ background: "#21262D" }}>
+                    <p className="text-xs font-black mb-3" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
+                      ADICIONAR CIDADE
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_120px_auto]">
+                      <input
+                        type="text"
+                        placeholder="Ex: Tucuruí, Belém, Manaus..."
+                        value={novaCidade}
+                        onChange={e => setNovaCidade(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && adicionarCidade()}
+                        style={inp}
+                      />
+                      <select value={novoEstado} onChange={e => setNovoEstado(e.target.value)} style={inp}>
+                        {ESTADOS_UF.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                      </select>
+                      <button onClick={adicionarCidade} disabled={salvandoCidade || !novaCidade.trim()}
+                        className="rounded-xl px-4 py-2 text-xs font-black transition-all hover:brightness-110 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", whiteSpace: "nowrap" }}>
+                        {salvandoCidade ? "..." : "+ ADICIONAR"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de cidades */}
+                  {cidadesInteresse.length === 0 ? (
+                    <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(255,184,0,0.2)" }}>
+                      <MapPin size={28} color="rgba(255,184,0,0.3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        NENHUMA CIDADE FAVORITA
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: "#8B949E" }}>
+                        Adicione cidades para ver eventos personalizados na página inicial.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {cidadesInteresse.map(c => (
+                        <div key={c.id}
+                          className="flex items-center justify-between rounded-xl px-4 py-3"
+                          style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.1)" }}>
+                          <div className="flex items-center gap-2">
+                            <MapPin size={14} color="#FFB800" strokeWidth={2} />
+                            <span className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {c.cidade}
+                            </span>
+                            <span className="rounded-lg px-2 py-0.5 text-xs font-black"
+                              style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                              {c.estado}
+                            </span>
+                          </div>
+                          <button onClick={() => removerCidade(c.id)} disabled={removendoId === c.id}
+                            className="rounded-lg p-1.5 transition-all hover:brightness-110"
+                            style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00" }}>
+                            {removendoId === c.id
+                              ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" />
+                              : <Trash2 size={13} strokeWidth={2} />
+                            }
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Link para eventos filtrados pelas cidades favoritas */}
+                      <Link
+                        href={linkEventosCidades}
+                        className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 text-xs font-black mt-2 transition-all hover:brightness-110"
+                        style={{ background: "rgba(255,184,0,0.08)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        <Flag size={13} strokeWidth={2} />
+                        VER EVENTOS NESSAS CIDADES
+                        <ArrowRight size={13} strokeWidth={2.5} />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ABA EVENTOS SALVOS */}
+              {abaPref === "eventos" && (
+                <div className="space-y-3">
+                  {eventosSalvos.length === 0 ? (
+                    <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(255,184,0,0.2)" }}>
+                      <Star size={28} color="rgba(255,184,0,0.3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        NENHUM EVENTO SALVO
+                      </p>
+                      <p className="text-xs mt-1 mb-4" style={{ color: "#8B949E" }}>
+                        Salve eventos na página de eventos clicando no ícone de bookmark 🔖
+                      </p>
+                      <Link href="/eventos"
+                        className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black"
+                        style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        <Flag size={13} strokeWidth={2} /> VER EVENTOS
+                      </Link>
+                    </div>
+                  ) : (
+                    eventosSalvos.map(es => {
+                      const ev = es.eventos;
+                      if (!ev) return null;
+                      return (
+                        <div key={es.id} className="relative overflow-hidden rounded-xl"
+                          style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.15)" }}>
+                          <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg, #FFB800, transparent)" }} />
+                          <div className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-sm leading-tight mb-1"
+                                  style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                  {ev.nome}
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  <span className="flex items-center gap-1 text-xs" style={{ color: "#5CC800" }}>
+                                    <Calendar size={10} strokeWidth={2} />{formatarDataCompleta(ev.data_evento)}
+                                  </span>
+                                  <span className="flex items-center gap-1 text-xs" style={{ color: "#8B949E" }}>
+                                    <MapPin size={10} strokeWidth={2} />{ev.cidade} — {ev.estado}
+                                  </span>
+                                  {ev.distancia && (
+                                    <span className="flex items-center gap-1 text-xs" style={{ color: "#FF6B00" }}>
+                                      <Ruler size={10} strokeWidth={2} />{ev.distancia}
+                                    </span>
+                                  )}
+                                </div>
+                                {ev.link_inscricao && (
+                                  <a href={ev.link_inscricao} target="_blank" rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs font-black transition-all hover:brightness-110"
+                                    style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                                    INSCREVER-SE <ArrowRight size={11} strokeWidth={2.5} />
+                                  </a>
+                                )}
+                              </div>
+                              <button onClick={() => removerEventoSalvo(es.id)} disabled={removendoEventoId === es.id}
+                                className="shrink-0 rounded-lg p-1.5 transition-all hover:brightness-110"
+                                style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00" }}>
+                                {removendoEventoId === es.id
+                                  ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" />
+                                  : <Trash2 size={13} strokeWidth={2} />
+                                }
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Meus treinos */}
+          <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", fontSize: "18px", letterSpacing: "0.03em" }}>MEUS TREINOS</h2>
+                <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{treinos.length}</span>
+              </div>
+              <Link href="/encontros" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>+ CRIAR →</Link>
+            </div>
+            {treinos.length === 0 ? (
+              <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(92,200,0,0.2)" }}>
+                <p className="text-sm" style={{ color: "#8B949E" }}>Você ainda não criou treinos.</p>
+                <Link href="/encontros" className="mt-3 inline-flex rounded-xl px-4 py-2 text-sm font-black"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
                   CRIAR PRIMEIRO TREINO
                 </Link>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-3">
-                {proximosTreinos.map((t) => (
+              <div className="space-y-2">
+                {treinos.slice(0, 5).map(t => (
                   <Link key={t.id} href={`/treinos/${t.id}`}
-                    className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1 hover:shadow-2xl"
+                    className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:brightness-110"
                     style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.1)" }}>
-                    <div className="absolute top-0 left-0 h-0.5 w-full" style={{ background: "linear-gradient(90deg, #5CC800, #FF6B00)" }} />
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black truncate text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{t.titulo}</p>
-                        <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {t.cidade} - {t.estado}</p>
-                      </div>
-                      <span className="ml-2 shrink-0 rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {formatarData(String(t.data_encontro))}
-                      </span>
+                    <div>
+                      <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{t.titulo}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>{t.cidade} · {formatarData(t.data_encontro)}{t.tipo_treino && ` · ${t.tipo_treino}`}</p>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {t.tipo_treino && <span className="rounded-lg px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00" }}>{t.tipo_treino}</span>}
-                      {(t.km_planejado || t.distancia) && <span className="rounded-lg px-2 py-0.5 text-xs font-semibold" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800" }}>{t.km_planejado ? `${t.km_planejado}km` : t.distancia}</span>}
-                    </div>
-                    <p className="mt-3 text-xs font-bold" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{t.horario} — ABRIR →</p>
+                    <span className="font-black text-sm" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {t.km_planejado ? `${t.km_planejado}km` : t.distancia || "→"}
+                    </span>
                   </Link>
                 ))}
+                {treinos.length > 5 && (
+                  <Link href="/meus-treinos" className="flex items-center justify-center gap-1 w-full rounded-xl py-2.5 text-xs font-black"
+                    style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    VER TODOS ({treinos.length}) <ArrowRight size={12} strokeWidth={2.5} />
+                  </Link>
+                )}
               </div>
             )}
-          </div>
-        </section>
-
-        {/* ── CORRIDAS FAVORITADAS ────────────────────────────── */}
-        {user && eventosFavoritados.length > 0 && (
-          <section className="px-4 py-12" style={{ background: "#161B22" }}>
-            <div className="mx-auto max-w-6xl">
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-6 w-1 rounded-full" style={{ background: "#FFB800" }} />
-                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
-                    MINHAS CORRIDAS
-                  </h2>
-                  <span className="rounded-full px-2 py-0.5 text-xs font-black flex items-center gap-1"
-                    style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    ⭐ {eventosFavoritados.length} salva{eventosFavoritados.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <Link href="/perfil" className="text-xs font-bold"
-                  style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  VER TODAS →
-                </Link>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {eventosFavoritados.map(e => {
-                  const [ano, mes, dia] = String(e.data_evento).split("-");
-                  const dataFmt = `${dia}/${mes}/${ano}`;
-                  return (
-                    <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
-                      style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.2)" }}>
-                      <div className="absolute top-0 left-0 right-0 h-0.5"
-                        style={{ background: "linear-gradient(90deg, #FFB800, #FF6B00)" }} />
-                      {/* Badge favorito */}
-                      <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-lg"
-                        style={{ background: "rgba(255,184,0,0.2)", color: "#FFB800" }}>
-                        ⭐
-                      </div>
-                      <div className="p-4 pr-10">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            {dataFmt}
-                          </span>
-                          {e.distancia && (
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-lg"
-                              style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              {e.distancia}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-black text-sm leading-tight mb-1.5"
-                          style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          {e.nome}
-                        </h3>
-                        <p className="text-xs mb-3 flex items-center gap-1" style={{ color: "#8B949E" }}>
-                          📍 {e.cidade} — {e.estado}
-                        </p>
-                        {e.link_inscricao ? (
-                          <a href={e.link_inscricao} target="_blank" rel="noreferrer"
-                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black transition-all hover:brightness-110"
-                            style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.04em" }}>
-                            INSCREVER-SE →
-                          </a>
-                        ) : (
-                          <Link href="/eventos"
-                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
-                            style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            VER DETALHES →
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </section>
-        )}
 
-        {/* ── EVENTOS DA SUA REGIÃO ────────────────────────────── */}
-        {user && eventosPersonalizados.length > 0 && (
-          <section className="px-4 py-12" style={{ background: "#0D1117" }}>
-            <div className="mx-auto max-w-6xl">
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-6 w-1 rounded-full" style={{ background: "#5CC800" }} />
-                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
-                    NA SUA REGIÃO
-                  </h2>
-                  <span className="rounded-full px-2 py-0.5 text-xs font-black"
-                    style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {cidadesFavoritas.map(c => c.cidade).join(", ")}
-                  </span>
-                </div>
-                <Link href="/eventos" className="text-xs font-bold"
-                  style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  VER TODOS →
-                </Link>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {eventosPersonalizados.slice(0, 6).map(e => {
-                  const [ano, mes, dia] = String(e.data_evento).split("-");
-                  const dataFmt = `${dia}/${mes}/${ano}`;
-                  return (
-                    <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
-                      style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.12)" }}>
-                      <div className="absolute top-0 left-0 right-0 h-0.5"
-                        style={{ background: "linear-gradient(90deg, #5CC800, transparent)" }} />
-                      <div className="p-4">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{dataFmt}</span>
-                          {e.distancia && (
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-lg"
-                              style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              {e.distancia}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-black text-sm leading-tight mb-1.5"
-                          style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          {e.nome}
-                        </h3>
-                        <p className="text-xs mb-3" style={{ color: "#8B949E" }}>📍 {e.cidade} — {e.estado}</p>
-                        {e.link_inscricao ? (
-                          <a href={e.link_inscricao} target="_blank" rel="noreferrer"
-                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black transition-all hover:brightness-110"
-                            style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            INSCREVER-SE →
-                          </a>
-                        ) : (
-                          <Link href="/eventos"
-                            className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
-                            style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                            VER EVENTO →
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-4 text-center">
-                <Link href="/perfil" className="inline-flex items-center gap-1.5 text-xs"
-                  style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  ⚙️ Gerenciar cidades favoritas no perfil
-                </Link>
-              </div>
-            </div>
+          {/* Links rápidos */}
+          <section className="grid grid-cols-2 gap-3">
+            {[
+              { href: "/meus-treinos", Icon: ClipboardList, label: "GERENCIAR TREINOS", cor: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
+              { href: "/loja", Icon: ShoppingBag, label: "VER A LOJA", cor: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
+              { href: linkEventosCidades, Icon: Flag, label: "VER EVENTOS", cor: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
+              { href: "/encontros", Icon: Zap, label: "CRIAR TREINO", cor: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
+            ].map(item => (
+              <Link key={item.href} href={item.href}
+                className="flex items-center gap-3 rounded-xl p-4 transition-all hover:brightness-110"
+                style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                <item.Icon size={18} strokeWidth={2} style={{ color: item.cor }} />
+                <span className="font-black text-xs" style={{ color: item.cor, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>{item.label}</span>
+              </Link>
+            ))}
           </section>
-        )}
 
-        {/* CTA adicionar cidade - para logados sem cidades favoritas */}
-        {user && cidadesFavoritas.length === 0 && (
-          <section className="px-4 py-8">
-            <div className="mx-auto max-w-6xl">
-              <div className="rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-4"
-                style={{ background: "#161B22", border: "1px dashed rgba(255,184,0,0.25)" }}>
-                <div className="flex-1">
-                  <p className="font-black text-base mb-0.5" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    📍 PERSONALIZE SUA PÁGINA INICIAL
-                  </p>
-                  <p className="text-sm" style={{ color: "#8B949E" }}>
-                    Adicione suas cidades favoritas e veja eventos relevantes aqui.
-                  </p>
-                </div>
-                <Link href="/perfil"
-                  className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black transition-all hover:scale-105"
-                  style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  CONFIGURAR CIDADES
-                </Link>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* PRÓXIMOS EVENTOS */}
-        {proximosEventos && proximosEventos.length > 0 && (
-          <section className="px-4 py-12" style={{ background: "#0D1117" }}>
-            <div className="mx-auto max-w-6xl">
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-6 w-1 rounded-full" style={{ background: "#FF6B00" }} />
-                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMAS PROVAS</h2>
-                </div>
-                <Link href="/eventos" className="text-xs font-bold" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>VER TODAS →</Link>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {proximosEventos.map(e => (
-                  <div key={e.id} className="flex items-center gap-4 rounded-2xl p-5" style={{ background: "#21262D", border: "1px solid rgba(255,107,0,0.15)" }}>
-                    <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl" style={{ background: "rgba(255,107,0,0.15)", border: "1px solid rgba(255,107,0,0.3)" }}>
-                      <p className="text-lg font-black leading-none" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{formatarData(String(e.data_evento))}</p>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-black truncate" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", fontSize: "16px" }}>{e.nome}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>📍 {e.cidade} — {e.estado}</p>
-                      {e.distancia && <p className="text-xs font-bold mt-0.5" style={{ color: "#FF6B00" }}>{e.distancia}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* CARDS NAVEGAÇÃO */}
-        <section className="px-4 py-12" style={{ background: "#161B22" }}>
-          <div className="mx-auto max-w-6xl">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {([
-                { href: "/eventos", Icon: Flag, label: "EVENTOS", desc: "Corridas e provas no Brasil", color: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
-                { href: "/encontros", Icon: Zap, label: "TREINOS", desc: "Grupos de corrida na sua cidade", color: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
-                { href: "/loja", Icon: ShoppingBag, label: "LOJA", desc: "Roupas, calçados e acessórios", color: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
-                { href: "/meus-treinos", Icon: ClipboardList, label: "MEUS TREINOS", desc: "Treinos que você organizou", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
-              ] as { href: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>; label: string; desc: string; color: string; bg: string; border: string }[]).map((item) => (
-                <Link key={item.href} href={item.href}
-                  className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1"
-                  style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                  <item.Icon size={28} strokeWidth={1.75} style={{ color: item.color, marginBottom: "12px" }} />
-                  <h3 className="font-black text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: item.color, letterSpacing: "0.03em" }}>{item.label}</h3>
-                  <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{item.desc}</p>
-                  <p className="mt-4 text-xs font-black transition-transform group-hover:translate-x-1" style={{ color: item.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>ACESSAR →</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* BANNER LOJA */}
-        <section className="px-4 py-12" style={{ background: "#0D1117" }}>
-          <div className="mx-auto max-w-6xl">
-            <div className="relative overflow-hidden rounded-3xl p-8 sm:p-12" style={{ background: "linear-gradient(135deg, #161B22 0%, #21262D 100%)", border: "1px solid rgba(92,200,0,0.2)" }}>
-              <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
-              <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #FF6B00, transparent)" }} />
-              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
-                    🛒 MODA RUN STORE
-                  </div>
-                  <h2 className="text-3xl font-black sm:text-4xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
-                    EQUIPADO PARA<br /><span style={{ color: "#5CC800" }}>CORRER MELHOR?</span>
-                  </h2>
-                  <p className="mt-2 text-sm" style={{ color: "#8B949E" }}>Conjuntos, calçados e acessórios selecionados para corredores.</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-3">
-                  <a href="https://wa.me/5594920009526?text=Olá! Vim pelo app Moda Run." target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105"
-                    style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                    💬 WHATSAPP
-                  </a>
-                  <Link href="/loja"
-                    className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-sm transition-all hover:scale-105"
-                    style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                    VER LOJA →
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* FERRAMENTAS */}
-        <section className="px-4 py-12" style={{ background: "#161B22" }}>
-          <div className="mx-auto max-w-6xl">
-            <div className="mb-6 flex items-center gap-3">
-              <div className="h-6 w-1 rounded-full" style={{ background: "#FFB800" }} />
-              <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>FERRAMENTAS DO CORREDOR</h2>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {([
-                { href: "/calculadora-pace", Icon: Timer, label: "CALCULADORA DE PACE", desc: "Calcule ritmo, tempo e distância", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
-                { href: "/calculadora-fc", Icon: Heart, label: "ZONAS DE FC", desc: "Zonas Z1-Z5 por frequência cardíaca", color: "#FF6B00", bg: "rgba(255,107,0,0.08)", border: "rgba(255,107,0,0.15)" },
-                { href: "/planos-treino", Icon: ClipboardList, label: "PLANOS DE TREINO", desc: "Do zero ao 5km, 10km e meia", color: "#FFB800", bg: "rgba(255,184,0,0.08)", border: "rgba(255,184,0,0.15)" },
-                { href: "/compartilhar-resultado", Icon: Share2, label: "COMPARTILHAR", desc: "Crie imagem para Instagram e WhatsApp", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
-              ] as { href: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>; label: string; desc: string; color: string; bg: string; border: string }[]).map((item) => (
-                <a key={item.href} href={item.href}
-                  className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1"
-                  style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                  <item.Icon size={28} strokeWidth={1.75} style={{ color: item.color, marginBottom: "12px" }} />
-                  <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: item.color, letterSpacing: "0.03em" }}>{item.label}</h3>
-                  <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{item.desc}</p>
-                  <p className="mt-4 text-xs font-black transition-transform group-hover:translate-x-1" style={{ color: item.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>ACESSAR →</p>
-                </a>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA CADASTRO */}
-        {!user && (
-          <section className="px-4 py-16" style={{ background: "#161B22" }}>
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-4xl font-black sm:text-5xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
-                PRONTO PARA<br /><span style={{ color: "#5CC800" }}>CORRER?</span>
-              </h2>
-              <p className="mt-3 text-base" style={{ color: "#8B949E" }}>Crie sua conta gratuita e junte-se à comunidade Moda Run.</p>
-              <div className="mt-6 flex justify-center gap-3">
-                <Link href="/cadastro"
-                  className="rounded-xl px-8 py-4 font-black text-base transition-all hover:scale-105"
-                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 0 40px rgba(92,200,0,0.2)" }}>
-                  🚀 CRIAR CONTA GRÁTIS
-                </Link>
-                <Link href="/login"
-                  className="rounded-xl px-8 py-4 font-black text-base transition-all hover:scale-105"
-                  style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  JÁ TENHO CONTA
-                </Link>
-              </div>
-            </div>
-          </section>
-        )}
-
+        </div>
       </main>
     </>
   );
