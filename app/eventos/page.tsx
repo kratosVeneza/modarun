@@ -197,7 +197,7 @@ export default function EventosPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busca, setBusca] = useState(searchParams.get("cidade") || "");
-  const [estadoSelecionado, setEstadoSelecionado] = useState(searchParams.get("estado") || "");
+  const [estadoSelecionado, setEstadoSelecionado] = useState(searchParams.get("estado")?.includes(",") ? "" : (searchParams.get("estado") || ""));
   const [cidadePorEstado, setCidadePorEstado] = useState<Record<string, string>>({});
   const [eventosSalvosIds, setEventosSalvosIds] = useState<Set<number>>(new Set());
   const [salvandoEvento, setSalvandoEvento] = useState<number | null>(null);
@@ -208,6 +208,8 @@ export default function EventosPage(): React.JSX.Element {
 
   const cidadeFiltro = searchParams.get("cidade") || "";
   const estadoFiltro = searchParams.get("estado") || "";
+  // Suporte a múltiplos estados via URL: ?estado=PA,AM,MA
+  const estadosFiltroUrl = estadoFiltro.includes(",") ? estadoFiltro.split(",").map(s => s.trim()) : [];
 
   useEffect(() => {
     async function carregarUser() {
@@ -240,7 +242,11 @@ export default function EventosPage(): React.JSX.Element {
       const hoje = new Date().toISOString().split("T")[0];
       let query = supabase.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true });
       if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
-      if (estadoFiltro) query = query.ilike("estado", `%${estadoFiltro}%`);
+      if (estadosFiltroUrl.length > 0) {
+        query = query.in("estado", estadosFiltroUrl);
+      } else if (estadoFiltro) {
+        query = query.ilike("estado", `%${estadoFiltro}%`);
+      }
       const { data, error: err } = await query;
       if (err) setError(err.message);
       else setEventos(data || []);
