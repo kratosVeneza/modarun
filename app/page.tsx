@@ -2,11 +2,14 @@ import React from "react";
 import Header from "@/components/Header";
 import { getAdminStatus } from "@/utils/supabase/isAdmin";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/server";
 import Link from "next/link";
 import { Flag, Users, ShoppingBag, Timer, Heart, ClipboardList, TrendingUp, Share2, ArrowRight, Zap, Star, MapPin } from "lucide-react";
 
 export default async function HomePage(): Promise<React.JSX.Element> {
   const { user, isAdmin } = await getAdminStatus();
+  // Cliente autenticado para queries com RLS (eventos salvos, cidades favoritas)
+  const supabaseAuth = user ? await createClient() : null;
 
   const hoje = new Date().toISOString().split("T")[0];
 
@@ -24,7 +27,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
   let cidadesFavoritas: { cidade: string; estado: string }[] = [];
 
   if (user) {
-    const { data: cidades } = await supabase
+    const { data: cidades } = await (supabaseAuth || supabase)
       .from("user_cidades_interesse")
       .select("cidade, estado")
       .eq("user_id", user.id);
@@ -39,7 +42,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         .select("id, nome, cidade, estado, data_evento, distancia, link_inscricao")
         .gte("data_evento", hoje)
         .order("data_evento", { ascending: true })
-        .limit(10);
+        .limit(20);
 
       // Filtrar pelos que são das cidades favoritas
       eventosPersonalizados = (evPers || []).filter(e =>
@@ -48,7 +51,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
     }
 
     // Eventos salvos com bookmark — seção separada
-    const { data: salvos } = await supabase
+    const { data: salvos } = await (supabaseAuth || supabase)
       .from("user_eventos_salvos")
       .select("eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)")
       .eq("user_id", user.id)
