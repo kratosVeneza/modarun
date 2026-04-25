@@ -151,6 +151,12 @@ export default function PerfilPage(): React.JSX.Element {
   const inicial = nomeExibicao[0]?.toUpperCase() || "?";
   const totalKm = treinos.reduce((acc, t) => acc + (t.km_planejado || 0), 0);
 
+  // Link para eventos filtrados pelas cidades favoritas
+  const estadosFavoritosUnicos = [...new Set(cidadesInteresse.map(c => c.estado))];
+  const linkEventosCidades = cidadesInteresse.length > 0
+    ? `/eventos?estado=${encodeURIComponent(estadosFavoritosUnicos.join(","))}`
+    : "/eventos";
+
   return (
     <>
       <Header userEmail={userEmail} isAdmin={isAdmin} />
@@ -272,7 +278,6 @@ export default function PerfilPage(): React.JSX.Element {
 
           {/* ── PREFERÊNCIAS ─────────────────────────────────────────── */}
           <section className="rounded-2xl overflow-hidden" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
-            {/* Header */}
             <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
@@ -281,7 +286,7 @@ export default function PerfilPage(): React.JSX.Element {
                 </h2>
               </div>
               <p className="text-xs" style={{ color: "#8B949E" }}>
-                Eventos das suas cidades favoritas aparecem na página inicial personalizada.
+                Eventos das suas cidades favoritas aparecem na página inicial e filtram automaticamente a aba de eventos.
               </p>
             </div>
 
@@ -370,7 +375,10 @@ export default function PerfilPage(): React.JSX.Element {
                           </button>
                         </div>
                       ))}
-                      <Link href="/eventos"
+
+                      {/* Link para eventos filtrados pelas cidades favoritas */}
+                      <Link
+                        href={linkEventosCidades}
                         className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 text-xs font-black mt-2 transition-all hover:brightness-110"
                         style={{ background: "rgba(255,184,0,0.08)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                         <Flag size={13} strokeWidth={2} />
@@ -392,7 +400,7 @@ export default function PerfilPage(): React.JSX.Element {
                         NENHUM EVENTO SALVO
                       </p>
                       <p className="text-xs mt-1 mb-4" style={{ color: "#8B949E" }}>
-                        Salve eventos na página de eventos clicando na estrela ⭐
+                        Salve eventos na página de eventos clicando no ícone de bookmark 🔖
                       </p>
                       <Link href="/eventos"
                         className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black"
@@ -503,7 +511,7 @@ export default function PerfilPage(): React.JSX.Element {
             {[
               { href: "/meus-treinos", Icon: ClipboardList, label: "GERENCIAR TREINOS", cor: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
               { href: "/loja", Icon: ShoppingBag, label: "VER A LOJA", cor: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
-              { href: "/eventos", Icon: Flag, label: "VER EVENTOS", cor: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
+              { href: linkEventosCidades, Icon: Flag, label: "VER EVENTOS", cor: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
               { href: "/encontros", Icon: Zap, label: "CRIAR TREINO", cor: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
             ].map(item => (
               <Link key={item.href} href={item.href}
