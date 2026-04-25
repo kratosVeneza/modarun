@@ -32,7 +32,7 @@ function formatarData(data: string) {
 
 
 // ── Componente de Carrossel ───────────────────────────────────────────────
-function CarrosselEventos({ eventos, isAdmin }: { eventos: Evento[]; isAdmin: boolean }) {
+function CarrosselEventos({ eventos, isAdmin, eventosSalvosIds, onToggleSalvar, salvandoEvento }: { eventos: Evento[]; isAdmin: boolean; eventosSalvosIds: Set<number>; onToggleSalvar: (id: number) => void; salvandoEvento: number | null }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [podeEsquerda, setPodeEsquerda] = useState(false);
   const [podeDireita, setPodeDireita] = useState(true);
@@ -110,6 +110,19 @@ function CarrosselEventos({ eventos, isAdmin }: { eventos: Evento[]; isAdmin: bo
               style={{ background: evento.destaque ? "linear-gradient(90deg,#FFB800,#FF6B00)" : "linear-gradient(90deg,#5CC800,transparent)" }} />
 
             <div className="p-4">
+              {/* Bookmark button — canto superior direito */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleSalvar(evento.id); }}
+                disabled={salvandoEvento === evento.id}
+                className="absolute top-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg transition-all hover:scale-110"
+                title={eventosSalvosIds.has(evento.id) ? "Remover dos salvos" : "Salvar evento"}
+                style={{ background: eventosSalvosIds.has(evento.id) ? "rgba(255,184,0,0.25)" : "rgba(255,255,255,0.07)", color: eventosSalvosIds.has(evento.id) ? "#FFB800" : "#8B949E", border: "1px solid " + (eventosSalvosIds.has(evento.id) ? "rgba(255,184,0,0.4)" : "rgba(255,255,255,0.08)") }}>
+                {salvandoEvento === evento.id
+                  ? <span className="h-3.5 w-3.5 block animate-spin rounded-full border-2 border-yellow-400/30 border-t-yellow-400" />
+                  : eventosSalvosIds.has(evento.id) ? <BookmarkCheck size={14} strokeWidth={2} /> : <Bookmark size={14} strokeWidth={2} />
+                }
+              </button>
+
               {/* Data */}
               <div className="flex items-center gap-1.5 mb-2">
                 <Calendar size={11} color="#5CC800" strokeWidth={2} />
@@ -188,6 +201,10 @@ export default function EventosPage(): React.JSX.Element {
   const [cidadePorEstado, setCidadePorEstado] = useState<Record<string, string>>({});
   const [eventosSalvosIds, setEventosSalvosIds] = useState<Set<number>>(new Set());
   const [salvandoEvento, setSalvandoEvento] = useState<number | null>(null);
+  const [estadosFiltroSalvos, setEstadosFiltroSalvos] = useState<string[]>([]);
+  const [cidadesFiltroSalvas, setCidadesFiltroSalvas] = useState<string[]>([]);
+  const [mostrarFiltroPersonalizado, setMostrarFiltroPersonalizado] = useState(false);
+  const [salvandoFiltro, setSalvandoFiltro] = useState(false);
 
   const cidadeFiltro = searchParams.get("cidade") || "";
   const estadoFiltro = searchParams.get("estado") || "";
@@ -202,6 +219,16 @@ export default function EventosPage(): React.JSX.Element {
         // Carregar IDs de eventos salvos
         const { data: salvos } = await authSupabase.from("user_eventos_salvos").select("evento_id").eq("user_id", user.id);
         if (salvos) setEventosSalvosIds(new Set(salvos.map((s: { evento_id: number }) => s.evento_id)));
+
+        // Carregar cidades favoritas do usuário para pré-filtrar eventos
+        const { data: cidadesFav } = await authSupabase
+          .from("user_cidades_interesse")
+          .select("cidade, estado")
+          .eq("user_id", user.id);
+        if (cidadesFav && cidadesFav.length > 0) {
+          setEstadosFiltroSalvos([...new Set(cidadesFav.map((c: { estado: string }) => c.estado))]);
+          setCidadesFiltroSalvas(cidadesFav.map((c: { cidade: string }) => c.cidade));
+        }
       }
     }
     carregarUser();
@@ -263,6 +290,31 @@ export default function EventosPage(): React.JSX.Element {
     const d = new Date(e.data_evento + "T00:00:00");
     return d > em7dias && d <= em30dias;
   }), [eventos]); // eslint-disable-line
+
+  async function salvarEstadosFiltro(estados: string[]) {
+    const { data: { user } } = await authSupabase.auth.getUser();
+    if (!user) return;
+    setSalvandoFiltro(true);
+
+    // Deletar cidades antigas e inserir novas
+    await authSupabase.from("user_cidades_interesse").delete().eq("user_id", user.id);
+
+    if (estados.length > 0) {
+      const rows = estados.map(uf => ({ user_id: user.id, cidade: uf, estado: uf }));
+      await authSupabase.from("user_cidades_interesse").insert(rows);
+    }
+
+    setEstadosFiltroSalvos(estados);
+    setSalvandoFiltro(false);
+  }
+
+  async function toggleEstadoFiltro(uf: string) {
+    const novos = estadosFiltroSalvos.includes(uf)
+      ? estadosFiltroSalvos.filter(e => e !== uf)
+      : [...estadosFiltroSalvos, uf];
+    setEstadosFiltroSalvos(novos);
+    await salvarEstadosFiltro(novos);
+  }
 
   async function toggleSalvarEvento(eventoId: number) {
     const { data: { user } } = await authSupabase.auth.getUser();
@@ -334,23 +386,61 @@ export default function EventosPage(): React.JSX.Element {
 
           {/* Abas de estados rápidos */}
           {estadosDisponiveis.length > 0 && !loading && (
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => setEstadoSelecionado("")}
-                className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
-                style={{ background: estadoSelecionado === "" ? "#5CC800" : "rgba(92,200,0,0.08)", color: estadoSelecionado === "" ? "#0D1117" : "#8B949E", border: estadoSelecionado === "" ? "1px solid #5CC800" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                TODOS ({eventos.length})
-              </button>
-              {estadosDisponiveis.map(uf => {
-                const count = eventos.filter(e => e.estado === uf).length;
-                const ativo = estadoSelecionado === uf;
-                return (
-                  <button key={uf} onClick={() => setEstadoSelecionado(uf === estadoSelecionado ? "" : uf)}
-                    className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
-                    style={{ background: ativo ? "#5CC800" : "rgba(92,200,0,0.08)", color: ativo ? "#0D1117" : "#8B949E", border: ativo ? "1px solid #5CC800" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {uf} ({count})
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setEstadoSelecionado("")}
+                  className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
+                  style={{ background: estadoSelecionado === "" ? "#5CC800" : "rgba(92,200,0,0.08)", color: estadoSelecionado === "" ? "#0D1117" : "#8B949E", border: estadoSelecionado === "" ? "1px solid #5CC800" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  TODOS ({eventos.length})
+                </button>
+                {estadosDisponiveis.map(uf => {
+                  const count = eventos.filter(e => e.estado === uf).length;
+                  const ativo = estadoSelecionado === uf;
+                  const favorito = estadosFiltroSalvos.includes(uf);
+                  return (
+                    <div key={uf} className="relative">
+                      <button onClick={() => setEstadoSelecionado(uf === estadoSelecionado ? "" : uf)}
+                        className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
+                        style={{ background: ativo ? "#5CC800" : favorito ? "rgba(255,184,0,0.12)" : "rgba(92,200,0,0.08)", color: ativo ? "#0D1117" : favorito ? "#FFB800" : "#8B949E", border: ativo ? "1px solid #5CC800" : favorito ? "1px solid rgba(255,184,0,0.35)" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {uf} ({count})
+                      </button>
+                      {/* Estrela para salvar estado como favorito */}
+                      {userEmail && (
+                        <button onClick={() => toggleEstadoFiltro(uf)}
+                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full transition-all hover:scale-110"
+                          title={favorito ? "Remover dos favoritos" : "Salvar estado como favorito"}
+                          style={{ background: favorito ? "#FFB800" : "#21262D", border: "1px solid " + (favorito ? "#FFB800" : "rgba(255,255,255,0.15)") }}>
+                          <Star size={8} strokeWidth={favorito ? 0 : 2} fill={favorito ? "#0D1117" : "none"} color={favorito ? "#0D1117" : "#8B949E"} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Banner: estados favoritos ativos */}
+              {estadosFiltroSalvos.length > 0 && userEmail && (
+                <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{ background: "rgba(255,184,0,0.08)", border: "1px solid rgba(255,184,0,0.2)" }}>
+                  <Star size={12} color="#FFB800" strokeWidth={0} fill="#FFB800" />
+                  <p className="text-xs font-bold flex-1" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    Estados favoritos: <span style={{ color: "#E6EDF3" }}>{estadosFiltroSalvos.join(", ")}</span>
+                    {" — "}destacados em amarelo
+                  </p>
+                  <button onClick={() => { setEstadoSelecionado(""); estadosFiltroSalvos.forEach(uf => toggleEstadoFiltro(uf)); }}
+                    className="text-xs font-black"
+                    style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    LIMPAR
                   </button>
-                );
-              })}
+                </div>
+              )}
+
+              {/* CTA para não logados */}
+              {!userEmail && (
+                <p className="text-xs" style={{ color: "#8B949E" }}>
+                  <a href="/login" style={{ color: "#5CC800" }}>Entre</a> para salvar seus estados favoritos e vê-los destacados sempre que voltar.
+                </p>
+              )}
             </div>
           )}
 
@@ -387,7 +477,7 @@ export default function EventosPage(): React.JSX.Element {
                 <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>EM DESTAQUE</h2>
                 <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{destaques.length}</span>
               </div>
-              <CarrosselEventos eventos={destaques} isAdmin={isAdmin} />
+              <CarrosselEventos eventos={destaques} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
             </div>
           )}
 
@@ -399,7 +489,7 @@ export default function EventosPage(): React.JSX.Element {
                 <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>ESSA SEMANA</h2>
                 <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{essaSemana.length} eventos</span>
               </div>
-              <CarrosselEventos eventos={essaSemana} isAdmin={isAdmin} />
+              <CarrosselEventos eventos={essaSemana} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
             </div>
           )}
 
@@ -411,7 +501,7 @@ export default function EventosPage(): React.JSX.Element {
                 <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS 30 DIAS</h2>
                 <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{proximos30.length}</span>
               </div>
-              <CarrosselEventos eventos={proximos30} isAdmin={isAdmin} />
+              <CarrosselEventos eventos={proximos30} isAdmin={isAdmin} eventosSalvosIds={eventosSalvosIds} onToggleSalvar={toggleSalvarEvento} salvandoEvento={salvandoEvento} />
             </div>
           )}
 
