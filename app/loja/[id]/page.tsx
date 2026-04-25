@@ -151,11 +151,12 @@ export default function ProdutoPage(): React.JSX.Element {
 
   function montarMsgWhatsapp() {
     const base = `Olá! Tenho interesse no produto *${produto!.nome}*`;
-    const cor = corSelecionada ? ` — Cor: *${corSelecionada}*` : "";
-    const tam = tamanhoSelecionado ? ` — Tamanho: *${tamanhoSelecionado}*` : "";
-    const preco = ` — Valor: *${formatarPreco(precoFinal)}*`;
-    const link = `\n\n🔗 ${window.location.href}`;
-    return produto!.whatsapp_msg || (base + cor + tam + preco + link);
+    const cor = corSelecionada ? `\nCor: *${corSelecionada}*` : "";
+    const tam = tamanhoSelecionado ? `\nTamanho: *${tamanhoSelecionado}*` : "";
+    const preco = `\nValor: *${formatarPreco(precoFinal)}*`;
+    const link = `\n\n🔗 Página do produto:\n${window.location.href}`;
+    const foto = fotosAtuais[fotoAtiva] ? `\n\n🖼 Foto:\n${fotosAtuais[fotoAtiva]}` : "";
+    return produto!.whatsapp_msg || (base + cor + tam + preco + foto + link);
   }
 
   function abrirWhatsapp() {
