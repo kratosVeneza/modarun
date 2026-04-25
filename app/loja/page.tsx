@@ -28,18 +28,16 @@ function parseVariacoes(raw: unknown): VariacaoCor[] {
   return [];
 }
 
-const CATEGORIAS = ["Todos","Conjuntos","Camisetas","Shorts","Calçados","Meias","Bonés","Acessórios","Performance","Nutrição","Hidratação"];
-const CAT_MAP: Record<string, string[]> = {
-  "Conjuntos": ["Conjunto"], "Camisetas": ["Camiseta"], "Shorts": ["Shorts"],
-  "Calçados": ["Calçado"], "Meias": ["Meia"], "Bonés": ["Boné"],
-  "Acessórios": ["Acessório"], "Performance": ["Nutrição","Hidratação","Outro"],
-  "Nutrição": ["Nutrição"], "Hidratação": ["Hidratação"],
+// Categorias são geradas dinamicamente dos produtos — nenhuma categoria hardcoded
+// Ícones padrão por nome (insensitive), qualquer categoria nova recebe 🏷
+const CAT_ICONS_DEFAULT: Record<string, string> = {
+  "todos":"🛒","conjunto":"👗","camiseta":"👕","shorts":"🩳","calçado":"👟",
+  "meia":"🧦","boné":"🧢","acessório":"⌚","nutrição":"🍌","hidratação":"💧",
+  "jaqueta":"🧥","moletom":"🧥","legging":"🩱","top":"👙","outro":"🏷",
 };
-const CAT_ICONS: Record<string, string> = {
-  "Todos":"🛒","Conjuntos":"👗","Camisetas":"👕","Shorts":"🩳",
-  "Calçados":"👟","Meias":"🧦","Bonés":"🧢","Acessórios":"⌚",
-  "Performance":"⚡","Nutrição":"🍌","Hidratação":"💧",
-};
+function getCatIcon(cat: string): string {
+  return CAT_ICONS_DEFAULT[cat.toLowerCase()] || "🏷";
+}
 
 // ─── Banner rotativo ──────────────────────────────────────────────────────────
 function BannerRotativo({ banners }: { banners: Banner[] }): React.JSX.Element {
@@ -353,13 +351,15 @@ export default function LojaPage(): React.JSX.Element {
     carregar();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtro por categoria
+  // Categorias disponíveis geradas dos produtos reais — inclui qualquer categoria nova
+  const categoriasDinamicas: string[] = ["Todos", ...Array.from(
+    new Set(produtos.map(p => p.categoria).filter(Boolean))
+  ).sort()];
+
+  // Filtro por categoria — comparação direta sem CAT_MAP
   const produtosFiltrados = categoriaSelecionada === "Todos"
     ? produtos
-    : produtos.filter(p => {
-        const cats = CAT_MAP[categoriaSelecionada] || [categoriaSelecionada];
-        return cats.some(c => p.categoria.toLowerCase() === c.toLowerCase() || p.categoria === c);
-      });
+    : produtos.filter(p => p.categoria === categoriaSelecionada);
 
   const destaques = produtos.filter(p => p.destaque);
 
@@ -425,11 +425,8 @@ export default function LojaPage(): React.JSX.Element {
         <section className="px-4 py-4 sticky top-[57px] z-40" style={{ background: "rgba(13,17,23,0.97)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(92,200,0,0.1)" }}>
           <div className="mx-auto max-w-6xl">
             <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              {CATEGORIAS.map(cat => {
-                const count = cat === "Todos" ? produtos.length : produtos.filter(p => {
-                  const cats = CAT_MAP[cat] || [cat];
-                  return cats.some(c => p.categoria.toLowerCase() === c.toLowerCase() || p.categoria === c);
-                }).length;
+              {categoriasDinamicas.map(cat => {
+                const count = cat === "Todos" ? produtos.length : produtos.filter(p => p.categoria === cat).length;
                 if (count === 0 && cat !== "Todos") return null;
                 const ativo = categoriaSelecionada === cat;
                 return (
@@ -442,7 +439,7 @@ export default function LojaPage(): React.JSX.Element {
                       fontFamily: "'Barlow Condensed', sans-serif",
                       letterSpacing: "0.05em",
                     }}>
-                    <span>{CAT_ICONS[cat]}</span>
+                    <span>{getCatIcon(cat)}</span>
                     <span>{cat.toUpperCase()}</span>
                     {cat !== "Todos" && count > 0 && <span className="rounded-full px-1.5 py-0.5 text-xs" style={{ background: ativo ? "rgba(0,0,0,0.2)" : "rgba(92,200,0,0.15)", color: ativo ? "#0D1117" : "#5CC800" }}>{count}</span>}
                   </button>
@@ -459,7 +456,7 @@ export default function LojaPage(): React.JSX.Element {
               <div className="flex items-center gap-3">
                 <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
                 <h2 className="text-xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
-                  {categoriaSelecionada === "Todos" ? "TODOS OS PRODUTOS" : `${CAT_ICONS[categoriaSelecionada]} ${categoriaSelecionada.toUpperCase()}`}
+                  {categoriaSelecionada === "Todos" ? "TODOS OS PRODUTOS" : `${getCatIcon(categoriaSelecionada)} ${categoriaSelecionada.toUpperCase()}`}
                 </h2>
               </div>
               <span className="text-sm" style={{ color: "#8B949E" }}>{loading ? "..." : `${produtosFiltrados.length} item${produtosFiltrados.length !== 1 ? "s" : ""}`}</span>
@@ -473,7 +470,7 @@ export default function LojaPage(): React.JSX.Element {
 
             {!loading && produtosFiltrados.length === 0 && (
               <div className="rounded-2xl p-12 text-center" style={{ background: "#21262D", border: "1px dashed rgba(92,200,0,0.2)" }}>
-                <p className="text-5xl mb-3">{CAT_ICONS[categoriaSelecionada] || "🛍"}</p>
+                <p className="text-5xl mb-3">{getCatIcon(categoriaSelecionada)}</p>
                 <p className="font-black text-xl mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
                   {categoriaSelecionada === "Todos" ? "PRODUTOS EM BREVE" : `SEM PRODUTOS EM ${categoriaSelecionada.toUpperCase()}`}
                 </p>
