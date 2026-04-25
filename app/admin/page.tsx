@@ -68,7 +68,7 @@ export default function AdminPage(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes">("eventos");
+  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync">("eventos");
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -114,7 +114,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {/* Tabs */}
           <div className="flex gap-3">
-            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"]] as const).map(([id,icon,label,desc]) => (
+            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
                 style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: `1px solid ${aba===id ? "rgba(92,200,0,0.4)" : "rgba(92,200,0,0.1)"}` }}>
@@ -128,6 +128,7 @@ export default function AdminPage(): React.JSX.Element {
           {aba === "produtos" && <AbaProdutos produtos={produtos} setProdutos={setProdutos} />}
           {aba === "banners" && <AbaBanners key="banners-tab" />}
           {aba === "sugestoes" && <AbaSugestoes key="sugestoes-tab" onAprovar={(ev) => { setEventos([ev, ...eventos]); setAba("eventos"); }} />}
+          {aba === "sync" && <AbaSync key="sync-tab" onImportar={(novos) => { setEventos(prev => [...novos, ...prev]); }} />}
         </div>
       </main>
     </>
@@ -1496,6 +1497,174 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── AbaSync ─────────────────────────────────────────────────────────────────
+const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+
+function AbaSync({ onImportar }: { onImportar: (novos: Evento[]) => void }): React.JSX.Element {
+  const supabase = (typeof window !== "undefined" ? require("@/utils/supabase/client").createClient() : null);
+  const [estadosSel, setEstadosSel] = useState<string[]>(["PA"]);
+  const [carregando, setCarregando] = useState(false);
+  const [resultado, setResultado] = useState<{ importados: number; ignorados: number; erros?: string[] } | null>(null);
+  const [ultimaSync, setUltimaSync] = useState<string | null>(null);
+
+  function toggleEstado(uf: string) {
+    setEstadosSel(prev => prev.includes(uf) ? prev.filter(u => u !== uf) : [...prev, uf]);
+  }
+
+  async function sincronizar(todos = false) {
+    setCarregando(true); setResultado(null);
+    try {
+      const body = todos ? { todos: true } : { estado: estadosSel[0] };
+      // Se múltiplos estados, chamar um por um e agregar
+      let totalImportados = 0, totalIgnorados = 0;
+      const erros: string[] = [];
+      const estados = todos ? ESTADOS_UF : estadosSel;
+
+      for (const uf of estados) {
+        const res = await fetch("/api/admin/sync-corridasbr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: uf }),
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json() as { importados?: number; ignorados?: number; erros?: string[] };
+          totalImportados += data.importados || 0;
+          totalIgnorados += data.ignorados || 0;
+          if (data.erros) erros.push(...data.erros);
+        } else {
+          erros.push(`${uf}: erro ${res.status}`);
+        }
+      }
+
+      setResultado({ importados: totalImportados, ignorados: totalIgnorados, erros: erros.length ? erros : undefined });
+      setUltimaSync(new Date().toLocaleString("pt-BR"));
+    } catch (err) {
+      setResultado({ importados: 0, ignorados: 0, erros: ["Erro de conexão. Tente novamente."] });
+    }
+    setCarregando(false);
+  }
+
+  const s = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties;
+  const lbl = { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" } as React.CSSProperties;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="rounded-2xl p-5" style={{ background:"linear-gradient(135deg,#161B22,#1a2030)", border:"1px solid rgba(92,200,0,0.2)" }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-black text-xl mb-1" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.03em" }}>
+              🔄 SINCRONIZAR EVENTOS
+            </h2>
+            <p className="text-sm" style={{ color:"#8B949E" }}>
+              Busca eventos novos do <span style={{ color:"#5CC800" }}>corridasbr.com.br</span> e importa automaticamente, ignorando os que já existem.
+            </p>
+            {ultimaSync && (
+              <p className="text-xs mt-2" style={{ color:"rgba(92,200,0,0.6)" }}>✓ Última sincronização: {ultimaSync}</p>
+            )}
+          </div>
+          <div className="shrink-0 rounded-xl px-3 py-2 text-xs font-black text-center" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.15)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            <p>CRON</p>
+            <p style={{ color:"#8B949E", fontWeight:400 }}>09:00 diário</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Seleção de estados */}
+      <div className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.12)" }}>
+        <label style={lbl}>📍 SELECIONAR ESTADOS</label>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {ESTADOS_UF.map(uf => (
+            <button key={uf} onClick={() => toggleEstado(uf)}
+              className="rounded-lg px-3 py-1.5 text-xs font-black transition-all"
+              style={{
+                background: estadosSel.includes(uf) ? "rgba(92,200,0,0.2)" : "#21262D",
+                color: estadosSel.includes(uf) ? "#5CC800" : "#8B949E",
+                border: `1px solid ${estadosSel.includes(uf) ? "rgba(92,200,0,0.4)" : "transparent"}`,
+                fontFamily:"'Barlow Condensed', sans-serif",
+              }}>
+              {uf}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setEstadosSel(ESTADOS_UF)}
+            className="rounded-lg px-3 py-1.5 text-xs font-black"
+            style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.2)", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            TODOS
+          </button>
+          <button onClick={() => setEstadosSel([])}
+            className="rounded-lg px-3 py-1.5 text-xs font-black"
+            style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            LIMPAR
+          </button>
+          <span className="ml-auto text-xs self-center" style={{ color:"#8B949E" }}>{estadosSel.length} estado{estadosSel.length !== 1 ? "s" : ""} selecionado{estadosSel.length !== 1 ? "s" : ""}</span>
+        </div>
+      </div>
+
+      {/* Botões de sync */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button onClick={() => sincronizar(false)} disabled={carregando || estadosSel.length === 0}
+          className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50"
+          style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          {carregando ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              SINCRONIZANDO...
+            </span>
+          ) : (
+            <span>🔄 SYNC ESTADOS SELECIONADOS<br /><span className="text-xs font-normal opacity-70">{estadosSel.join(", ") || "nenhum"}</span></span>
+          )}
+        </button>
+        <button onClick={() => sincronizar(true)} disabled={carregando}
+          className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50"
+          style={{ background:"linear-gradient(135deg,#FF6B00,#cc5500)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          {carregando ? "..." : <span>🌎 SYNC BRASIL COMPLETO<br /><span className="text-xs font-normal opacity-70">Todos os 27 estados</span></span>}
+        </button>
+      </div>
+
+      {/* Resultado */}
+      {resultado && (
+        <div className="rounded-2xl p-5 animate-slide-up" style={{ background: resultado.erros ? "rgba(255,107,0,0.08)" : "rgba(92,200,0,0.08)", border: `1px solid ${resultado.erros ? "rgba(255,107,0,0.2)" : "rgba(92,200,0,0.2)"}` }}>
+          <p className="font-black text-lg mb-3" style={{ color: resultado.importados > 0 ? "#5CC800" : "#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            {resultado.importados > 0 ? `✅ ${resultado.importados} NOVOS EVENTOS IMPORTADOS!` : "ℹ️ NENHUM EVENTO NOVO"}
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(92,200,0,0.1)" }}>
+              <p className="text-2xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados}</p>
+              <p className="text-xs" style={{ color:"#8B949E" }}>IMPORTADOS</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(255,255,255,0.04)" }}>
+              <p className="text-2xl font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.ignorados}</p>
+              <p className="text-xs" style={{ color:"#8B949E" }}>JÁ EXISTIAM</p>
+            </div>
+          </div>
+          {resultado.erros && resultado.erros.length > 0 && (
+            <div className="rounded-xl p-3" style={{ background:"rgba(255,107,0,0.1)" }}>
+              <p className="text-xs font-black mb-1" style={{ color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>AVISOS:</p>
+              {resultado.erros.map((e, i) => <p key={i} className="text-xs" style={{ color:"#FF6B00" }}>{e}</p>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Instruções */}
+      <div className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(255,184,0,0.1)" }}>
+        <p className="font-black text-sm mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>💡 COMO FUNCIONA</p>
+        <div className="space-y-2 text-xs" style={{ color:"#8B949E" }}>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Automático:</strong> Todo dia às 9h o sistema sincroniza automaticamente via Cron Job da Vercel.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Manual:</strong> Selecione os estados acima e clique em SYNC para buscar agora.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Anti-duplicata:</strong> Eventos com mesmo nome + data + estado são ignorados automaticamente.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Fonte:</strong> corridasbr.com.br — maior calendário de corridas do Brasil.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Eventos passados:</strong> Apenas eventos futuros são importados.</p>
         </div>
       </div>
     </div>
