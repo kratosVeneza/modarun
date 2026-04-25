@@ -154,12 +154,18 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
   const desconto = temDesconto ? Math.round(100 - (produto.preco_promocional! / produto.preco) * 100) : 0;
   const fmtPreco = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  const WHATSAPP_NUM = process.env.NEXT_PUBLIC_WHATSAPP_ORGANIZADOR || "5594920009526";
+
   function gerarLink() {
+    const fotoUrl = fotosAtuais[fotoAtiva] || "";
+    const paginaUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/loja/${produto.id}`;
     let msg = produto.whatsapp_msg || `Olá! Tenho interesse no produto *${produto.nome}* da Moda Run.`;
-    if (corSelecionada) msg += `\n\nCor: ${corSelecionada}`;
-    if (tamanhoSelecionado) msg += `\nTamanho: ${tamanhoSelecionado}`;
-    msg += `\n\nPreço: ${fmtPreco(precoFinal)}`;
-    return `https://wa.me/5594920009526?text=${encodeURIComponent(msg)}`;
+    if (corSelecionada) msg += `\nCor: *${corSelecionada}*`;
+    if (tamanhoSelecionado) msg += `\nTamanho: *${tamanhoSelecionado}*`;
+    msg += `\nPreço: *${fmtPreco(precoFinal)}*`;
+    if (fotoUrl) msg += `\n\n🖼 Foto do produto:\n${fotoUrl}`;
+    msg += `\n\n🔗 Ver produto:\n${paginaUrl}`;
+    return `https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(msg)}`;
   }
 
   return (
