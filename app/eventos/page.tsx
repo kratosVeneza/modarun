@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
+import { Flag, Search, X, MapPin, Calendar, Ruler, Star, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight, Zap, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { createClient } from "@/utils/supabase/client";
 
@@ -27,6 +28,149 @@ function formatarData(data: string) {
     const [ano, mes, dia] = String(data).split("-");
     return `${dia}/${mes}/${ano}`;
   } catch { return String(data); }
+}
+
+
+// ── Componente de Carrossel ───────────────────────────────────────────────
+function CarrosselEventos({ eventos, isAdmin }: { eventos: Evento[]; isAdmin: boolean }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [podeEsquerda, setPodeEsquerda] = useState(false);
+  const [podeDireita, setPodeDireita] = useState(true);
+
+  function formatarData(data: string) {
+    if (!data) return "—";
+    try { const [ano, mes, dia] = String(data).split("-"); return `${dia}/${mes}/${ano}`; }
+    catch { return String(data); }
+  }
+
+  const verificarScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setPodeEsquerda(el.scrollLeft > 10);
+    setPodeDireita(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    verificarScroll();
+    el.addEventListener("scroll", verificarScroll);
+    return () => el.removeEventListener("scroll", verificarScroll);
+  }, [verificarScroll, eventos]);
+
+  function scrollPara(dir: "esq" | "dir") {
+    const el = scrollRef.current;
+    if (!el) return;
+    const card = el.querySelector("article");
+    const largura = card ? card.clientWidth + 12 : 300;
+    el.scrollBy({ left: dir === "dir" ? largura * 2 : -largura * 2, behavior: "smooth" });
+  }
+
+  if (!eventos.length) return null;
+
+  return (
+    <div className="relative">
+      {/* Seta esquerda */}
+      {podeEsquerda && (
+        <button onClick={() => scrollPara("esq")}
+          className="absolute left-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 -translate-x-3 items-center justify-center rounded-full shadow-lg transition-all hover:scale-110"
+          style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800" }}>
+          <ChevronLeft size={18} strokeWidth={2.5} />
+        </button>
+      )}
+
+      {/* Seta direita */}
+      {podeDireita && (
+        <button onClick={() => scrollPara("dir")}
+          className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-3 items-center justify-center rounded-full shadow-lg transition-all hover:scale-110"
+          style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800" }}>
+          <ChevronRight size={18} strokeWidth={2.5} />
+        </button>
+      )}
+
+      {/* Fades nas bordas */}
+      {podeEsquerda && (
+        <div className="absolute left-0 top-0 bottom-0 w-8 z-[5] pointer-events-none rounded-l-xl"
+          style={{ background: "linear-gradient(90deg, #0D1117, transparent)" }} />
+      )}
+      {podeDireita && (
+        <div className="absolute right-0 top-0 bottom-0 w-8 z-[5] pointer-events-none rounded-r-xl"
+          style={{ background: "linear-gradient(270deg, #0D1117, transparent)" }} />
+      )}
+
+      {/* Scroll container */}
+      <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        {eventos.map(evento => (
+          <article key={evento.id}
+            className="relative flex-shrink-0 overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
+            style={{ width: "260px", background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+            {/* Linha topo */}
+            <div className="absolute top-0 left-0 right-0 h-0.5"
+              style={{ background: evento.destaque ? "linear-gradient(90deg,#FFB800,#FF6B00)" : "linear-gradient(90deg,#5CC800,transparent)" }} />
+
+            <div className="p-4">
+              {/* Data */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <Calendar size={11} color="#5CC800" strokeWidth={2} />
+                <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {formatarData(String(evento.data_evento))}
+                </span>
+                {evento.destaque && (
+                  <span className="ml-auto rounded-lg px-1.5 py-0.5 text-xs font-black"
+                    style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", fontSize: "10px" }}>
+                    DESTAQUE
+                  </span>
+                )}
+              </div>
+
+              {/* Nome */}
+              <h3 className="font-black text-sm leading-tight mb-2"
+                style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {evento.nome}
+              </h3>
+
+              {/* Local */}
+              <p className="text-xs flex items-center gap-1 mb-3" style={{ color: "#8B949E" }}>
+                <MapPin size={10} strokeWidth={2} />
+                {evento.cidade} — {evento.estado}
+              </p>
+
+              {/* Chips */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {evento.distancia && (
+                  <span className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-bold"
+                    style={{ background: "#21262D", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <Ruler size={10} strokeWidth={2} />{evento.distancia}
+                  </span>
+                )}
+                {evento.local && (
+                  <span className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold"
+                    style={{ background: "#21262D", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <MapPin size={10} strokeWidth={2} />{evento.local}
+                  </span>
+                )}
+              </div>
+
+              {/* Botão */}
+              {evento.link_inscricao ? (
+                <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
+                  className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black transition-all hover:brightness-110"
+                  style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  INSCREVER-SE <ArrowRight size={12} strokeWidth={2.5} />
+                </a>
+              ) : (
+                <div className="w-full rounded-xl py-2 text-center text-xs font-black"
+                  style={{ background: "rgba(92,200,0,0.08)", color: "rgba(92,200,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  SEM LINK
+                </div>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function EventosPage(): React.JSX.Element {
@@ -98,6 +242,23 @@ export default function EventosPage(): React.JSX.Element {
 
   const totalFiltrado = eventosPorEstado.reduce((acc, [, evs]) => acc + evs.length, 0);
 
+  // Seções de carrossel: destaques, essa semana, próximos 30 dias
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const em7dias = new Date(hoje); em7dias.setDate(hoje.getDate() + 7);
+  const em30dias = new Date(hoje); em30dias.setDate(hoje.getDate() + 30);
+
+  const destaques = useMemo(() => eventos.filter(e => e.destaque), [eventos]);
+
+  const essaSemana = useMemo(() => eventos.filter(e => {
+    const d = new Date(e.data_evento + "T00:00:00");
+    return d >= hoje && d <= em7dias && !e.destaque;
+  }), [eventos]); // eslint-disable-line
+
+  const proximos30 = useMemo(() => eventos.filter(e => {
+    const d = new Date(e.data_evento + "T00:00:00");
+    return d > em7dias && d <= em30dias;
+  }), [eventos]); // eslint-disable-line
+
   function limparFiltros() {
     setBusca(""); setEstadoSelecionado(""); router.push("/eventos");
   }
@@ -114,9 +275,8 @@ export default function EventosPage(): React.JSX.Element {
           <section className="relative overflow-hidden rounded-2xl px-6 py-10" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
             <div className="relative max-w-2xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black"
-                style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
-                🏁 EVENTOS DE CORRIDA
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black flex gap-1.5" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>
+                <Flag size={12} strokeWidth={2.5} /> EVENTOS DE CORRIDA
               </div>
               <h1 className="text-4xl font-black sm:text-5xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", lineHeight: 1 }}>
                 PRÓXIMAS CORRIDAS<br /><span style={{ color: "#5CC800" }}>NO BRASIL</span>
@@ -124,7 +284,7 @@ export default function EventosPage(): React.JSX.Element {
               <p className="mt-3 text-sm" style={{ color: "#8B949E" }}>Encontre corridas, provas de rua e maratonas perto de você.</p>
               <a href="/sugerir-evento" className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black"
                 style={{ background: "rgba(92,200,0,0.15)", border: "1px solid rgba(92,200,0,0.3)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                🏁 SUGERIR UM EVENTO
+                SUGERIR UM EVENTO
               </a>
             </div>
           </section>
@@ -132,12 +292,11 @@ export default function EventosPage(): React.JSX.Element {
           {/* Filtros */}
           <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
             <div className="flex items-center gap-2 mb-3">
-              <span>🔍</span>
+              <Search size={14} color="#5CC800" strokeWidth={2} />
               <h2 className="font-black text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.05em" }}>FILTRAR EVENTOS</h2>
               {(busca || estadoSelecionado) && (
-                <button onClick={limparFiltros} className="ml-auto rounded-lg px-2.5 py-1 text-xs font-black"
-                  style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  ✕ LIMPAR
+                <button onClick={limparFiltros} className="ml-auto rounded-lg px-2.5 py-1 text-xs font-black flex items-center gap-1" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <X size={12} strokeWidth={2.5} /> LIMPAR
                 </button>
               )}
             </div>
@@ -160,7 +319,7 @@ export default function EventosPage(): React.JSX.Element {
               <button onClick={() => setEstadoSelecionado("")}
                 className="shrink-0 rounded-xl px-3 py-2 text-xs font-black transition-all"
                 style={{ background: estadoSelecionado === "" ? "#5CC800" : "rgba(92,200,0,0.08)", color: estadoSelecionado === "" ? "#0D1117" : "#8B949E", border: estadoSelecionado === "" ? "1px solid #5CC800" : "1px solid rgba(92,200,0,0.15)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                🇧🇷 TODOS ({eventos.length})
+                TODOS ({eventos.length})
               </button>
               {estadosDisponiveis.map(uf => {
                 const count = eventos.filter(e => e.estado === uf).length;
@@ -176,147 +335,6 @@ export default function EventosPage(): React.JSX.Element {
             </div>
           )}
 
-          {/* Destaques e Próximos — só quando sem filtro ativo */}
-          {!loading && !error && !busca && !estadoSelecionado && (
-            <>
-              {/* Eventos em destaque */}
-              {eventos.filter(e => e.destaque).length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
-                    <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>⭐ EM DESTAQUE</h2>
-                    <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                      {eventos.filter(e => e.destaque).length}
-                    </span>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {eventos.filter(e => e.destaque).map(evento => (
-                      <article key={`dest-${evento.id}`} className="relative overflow-hidden rounded-2xl"
-                        style={{ background: "linear-gradient(135deg, #1a1200, #2a1e00)", border: "1px solid rgba(255,184,0,0.3)" }}>
-                        <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#FFB800,#FF6B00)" }} />
-                        <div className="p-4">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="font-black text-base leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
-                            <span className="shrink-0 rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.2)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>
-                          </div>
-                          <p className="text-xs mb-3" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
-                          <div className="flex flex-wrap gap-2">
-                            <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              📅 {formatarData(String(evento.data_evento))}
-                            </span>
-                            {evento.distancia && <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>📏 {evento.distancia}</span>}
-                            {evento.link_inscricao && (
-                              <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
-                                className="rounded-lg px-2.5 py-1 text-xs font-black transition-all hover:brightness-110"
-                                style={{ background: "linear-gradient(135deg,#FFB800,#FF8C00)", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}
-                                onClick={e => e.stopPropagation()}>
-                                INSCREVER-SE →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Próximos 7 dias */}
-              {(() => {
-                const hoje = new Date();
-                const em7dias = new Date(); em7dias.setDate(hoje.getDate() + 7);
-                const proximos = eventos.filter(e => {
-                  const d = new Date(e.data_evento + "T00:00:00");
-                  return d >= hoje && d <= em7dias && !e.destaque;
-                });
-                if (proximos.length === 0) return null;
-                return (
-                  <section className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
-                      <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>⚡ ESSA SEMANA</h2>
-                      <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {proximos.length} evento{proximos.length > 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-                      {proximos.map(evento => (
-                        <article key={`prox-${evento.id}`} className="shrink-0 w-64 relative overflow-hidden rounded-2xl"
-                          style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
-                          <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg,#5CC800,#FF6B00)" }} />
-                          <div className="p-4">
-                            <div className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-black mb-2"
-                              style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              📅 {formatarData(String(evento.data_evento))}
-                            </div>
-                            <h3 className="font-black text-sm leading-tight mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
-                            <p className="text-xs mb-2" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
-                            {evento.distancia && <p className="text-xs font-bold" style={{ color: "#FF6B00" }}>📏 {evento.distancia}</p>}
-                            {evento.link_inscricao && (
-                              <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
-                                className="mt-2 flex items-center justify-center rounded-lg py-2 text-xs font-black transition-all hover:brightness-110"
-                                style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                                INSCREVER-SE →
-                              </a>
-                            )}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })()}
-
-              {/* Próximos 30 dias */}
-              {(() => {
-                const hoje = new Date();
-                const em7dias = new Date(); em7dias.setDate(hoje.getDate() + 7);
-                const em30dias = new Date(); em30dias.setDate(hoje.getDate() + 30);
-                const proximos30 = eventos.filter(e => {
-                  const d = new Date(e.data_evento + "T00:00:00");
-                  return d > em7dias && d <= em30dias;
-                });
-                if (proximos30.length === 0) return null;
-                return (
-                  <section className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-5 w-1 rounded-full" style={{ background: "#FF6B00" }} />
-                      <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>🗓 PRÓXIMOS 30 DIAS</h2>
-                      <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {proximos30.length}
-                      </span>
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-                      {proximos30.map(evento => (
-                        <article key={`p30-${evento.id}`} className="shrink-0 w-56 relative overflow-hidden rounded-xl"
-                          style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.15)" }}>
-                          <div className="p-3">
-                            <div className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-black mb-1.5"
-                              style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              📅 {formatarData(String(evento.data_evento))}
-                            </div>
-                            <h3 className="font-black text-sm leading-tight mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
-                            <p className="text-xs" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
-                            {evento.distancia && <p className="text-xs font-bold mt-0.5" style={{ color: "#FF6B00" }}>📏 {evento.distancia}</p>}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })()}
-
-              {/* Divider antes da lista completa */}
-              {totalFiltrado > 0 && (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px" style={{ background: "rgba(92,200,0,0.1)" }} />
-                  <span className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.1em" }}>TODOS OS EVENTOS</span>
-                  <div className="flex-1 h-px" style={{ background: "rgba(92,200,0,0.1)" }} />
-                </div>
-              )}
-            </>
-          )}
-
           {/* Loading */}
           {loading && (
             <div className="flex justify-center py-10">
@@ -330,7 +348,7 @@ export default function EventosPage(): React.JSX.Element {
           {/* Vazio */}
           {!loading && !error && totalFiltrado === 0 && (
             <div className="rounded-2xl p-10 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
-              <p className="text-4xl mb-2">🏁</p>
+              <Flag size={40} color="rgba(92,200,0,0.3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
               <p className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>NENHUM EVENTO ENCONTRADO</p>
               <p className="text-sm mt-1 mb-4" style={{ color: "#8B949E" }}>{busca || estadoSelecionado ? "Tente outro filtro" : "Nenhum evento cadastrado ainda"}</p>
               {(busca || estadoSelecionado) && (
@@ -339,6 +357,51 @@ export default function EventosPage(): React.JSX.Element {
                   VER TODOS
                 </button>
               )}
+            </div>
+          )}
+
+          {/* ── DESTAQUES ───────────────────────────────────────── */}
+          {!loading && destaques.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>EM DESTAQUE</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{destaques.length}</span>
+              </div>
+              <CarrosselEventos eventos={destaques} isAdmin={isAdmin} />
+            </div>
+          )}
+
+          {/* ── ESSA SEMANA ──────────────────────────────────────── */}
+          {!loading && essaSemana.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>ESSA SEMANA</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{essaSemana.length} eventos</span>
+              </div>
+              <CarrosselEventos eventos={essaSemana} isAdmin={isAdmin} />
+            </div>
+          )}
+
+          {/* ── PRÓXIMOS 30 DIAS ─────────────────────────────────── */}
+          {!loading && proximos30.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-1 rounded-full" style={{ background: "#FF6B00" }} />
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>PRÓXIMOS 30 DIAS</h2>
+                <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{proximos30.length}</span>
+              </div>
+              <CarrosselEventos eventos={proximos30} isAdmin={isAdmin} />
+            </div>
+          )}
+
+          {/* Divisor */}
+          {!loading && (destaques.length > 0 || essaSemana.length > 0 || proximos30.length > 0) && (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+              <span className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TODOS OS EVENTOS POR ESTADO</span>
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
             </div>
           )}
 
@@ -387,22 +450,22 @@ export default function EventosPage(): React.JSX.Element {
                             <h3 className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{evento.nome}</h3>
                             {evento.destaque && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
                           </div>
-                          <p className="text-xs" style={{ color: "#8B949E" }}>📍 {evento.cidade} — {evento.estado}</p>
+                          <p className="text-xs flex items-center gap-1" style={{ color: "#8B949E" }}><MapPin size={11} strokeWidth={2} />{evento.cidade} — {evento.estado}</p>
                         </div>
                         {evento.link_inscricao && (
                           <a href={evento.link_inscricao} target="_blank" rel="noreferrer"
                             className="shrink-0 flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-black transition-all hover:brightness-110"
                             style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                            INSCREVER-SE →
+                            INSCREVER-SE <ArrowRight size={13} strokeWidth={2.5} />
                           </a>
                         )}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          📅 {formatarData(String(evento.data_evento))}
+                        <span className="rounded-lg px-2.5 py-1 text-xs font-black flex items-center gap-1" style={{ background: "#21262D", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          <Calendar size={11} strokeWidth={2} />{formatarData(String(evento.data_evento))}
                         </span>
-                        {evento.distancia && <span className="rounded-lg px-2.5 py-1 text-xs font-black" style={{ background: "#21262D", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>📏 {evento.distancia}</span>}
-                        {evento.local && <span className="rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ background: "#21262D", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>📌 {evento.local}</span>}
+                        {evento.distancia && <span className="rounded-lg px-2.5 py-1 text-xs font-black flex items-center gap-1" style={{ background: "#21262D", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}><Ruler size={11} strokeWidth={2} />{evento.distancia}</span>}
+                        {evento.local && <span className="rounded-lg px-2.5 py-1 text-xs font-semibold flex items-center gap-1" style={{ background: "#21262D", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}><MapPin size={11} strokeWidth={2} />{evento.local}</span>}
                       </div>
                     </div>
                   </article>
@@ -425,7 +488,7 @@ export default function EventosPage(): React.JSX.Element {
                     Conjuntos, tênis, acessórios e nutrição selecionados para corredores.
                   </p>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {["👟 Tênis","👗 Conjuntos","⚡ Nutrição","🧢 Bonés"].map(item => (
+                    {["Tênis","Conjuntos","Nutrição","Bonés"].map(item => (
                       <span key={item} className="rounded-lg px-2 py-1 text-xs font-bold"
                         style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
                         {item}
@@ -435,7 +498,7 @@ export default function EventosPage(): React.JSX.Element {
                 </div>
                 <div className="shrink-0 flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-black self-start sm:self-center"
                   style={{ background: "linear-gradient(135deg,#FF6B00,#FF8C00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  🛒 VER LOJA →
+                  <ShoppingBag size={16} strokeWidth={2} /> VER LOJA
                 </div>
               </div>
             </a>
