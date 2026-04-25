@@ -3,16 +3,66 @@ import Header from "@/components/Header";
 import { getAdminStatus } from "@/utils/supabase/isAdmin";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { Flag, Users, ShoppingBag, Timer, Heart, ClipboardList, TrendingUp, Share2, ArrowRight, Zap, Star, MapPin } from "lucide-react";
 
 export default async function HomePage(): Promise<React.JSX.Element> {
   const { user, isAdmin } = await getAdminStatus();
+
+  const hoje = new Date().toISOString().split("T")[0];
 
   const [{ count: totalTreinos }, { count: totalParticipantes }, { data: proximosTreinos }, { data: proximosEventos }] = await Promise.all([
     supabase.from("encontros").select("*", { count: "exact", head: true }),
     supabase.from("encontro_participantes").select("*", { count: "exact", head: true }),
     supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, horario, tipo_treino, km_planejado, distancia").order("data_encontro", { ascending: true }).limit(3),
-    supabase.from("eventos").select("id, nome, cidade, estado, data_evento, distancia").order("data_evento", { ascending: true }).limit(2),
+    supabase.from("eventos").select("id, nome, cidade, estado, data_evento, distancia").gte("data_evento", hoje).order("data_evento", { ascending: true }).limit(2),
   ]);
+
+  // Eventos personalizados para usuário logado
+  type EventoPersonalizado = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string };
+  let eventosPersonalizados: EventoPersonalizado[] = [];
+  let cidadesFavoritas: { cidade: string; estado: string }[] = [];
+
+  if (user) {
+    const { data: cidades } = await supabase
+      .from("user_cidades_interesse")
+      .select("cidade, estado")
+      .eq("user_id", user.id);
+
+    cidadesFavoritas = cidades || [];
+
+    if (cidadesFavoritas.length > 0) {
+      // Buscar eventos nas cidades favoritas
+      const cidadesNomes = cidadesFavoritas.map(c => c.cidade.toLowerCase());
+      const { data: evPers } = await supabase
+        .from("eventos")
+        .select("id, nome, cidade, estado, data_evento, distancia, link_inscricao")
+        .gte("data_evento", hoje)
+        .order("data_evento", { ascending: true })
+        .limit(10);
+
+      // Filtrar pelos que são das cidades favoritas
+      eventosPersonalizados = (evPers || []).filter(e =>
+        cidadesNomes.some(c => e.cidade?.toLowerCase().includes(c))
+      );
+    }
+
+    // Também incluir eventos salvos
+    const { data: salvos } = await supabase
+      .from("user_eventos_salvos")
+      .select("eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)")
+      .eq("user_id", user.id)
+      .limit(5);
+
+    const eventosSalvos = (salvos || [])
+      .map((s: { eventos: EventoPersonalizado | EventoPersonalizado[] | null }) =>
+        Array.isArray(s.eventos) ? s.eventos[0] : s.eventos
+      )
+      .filter((e): e is EventoPersonalizado => !!e && e.data_evento >= hoje);
+
+    // Merge sem duplicatas
+    const idsJa = new Set(eventosPersonalizados.map(e => e.id));
+    eventosSalvos.forEach(e => { if (!idsJa.has(e.id)) eventosPersonalizados.push(e); });
+  }
 
   function formatarData(data: string) {
     if (!data) return "—";
@@ -152,6 +202,95 @@ export default async function HomePage(): Promise<React.JSX.Element> {
           </div>
         </section>
 
+        {/* PARA VOCÊ — eventos personalizados */}
+        {user && eventosPersonalizados.length > 0 && (
+          <section className="px-4 py-12" style={{ background: "#161B22" }}>
+            <div className="mx-auto max-w-6xl">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-6 w-1 rounded-full" style={{ background: "#FFB800" }} />
+                  <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
+                    EVENTOS PARA VOCÊ
+                  </h2>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {cidadesFavoritas.map(c => c.cidade).join(", ")}
+                  </span>
+                </div>
+                <Link href="/eventos" className="text-xs font-bold" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  VER TODOS →
+                </Link>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {eventosPersonalizados.slice(0, 6).map(e => (
+                  <div key={e.id} className="relative overflow-hidden rounded-2xl transition-all hover:-translate-y-0.5"
+                    style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.15)" }}>
+                    <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "linear-gradient(90deg, #FFB800, transparent)" }} />
+                    <div className="p-4">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <span className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          {(() => { const [ano, mes, dia] = String(e.data_evento).split("-"); return `${dia}/${mes}/${ano}`; })()}
+                        </span>
+                      </div>
+                      <h3 className="font-black text-sm leading-tight mb-1"
+                        style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {e.nome}
+                      </h3>
+                      <p className="text-xs mb-3" style={{ color: "#8B949E" }}>
+                        📍 {e.cidade} — {e.estado}
+                        {e.distancia && <span style={{ color: "#FF6B00" }}> · {e.distancia}</span>}
+                      </p>
+                      {e.link_inscricao ? (
+                        <a href={e.link_inscricao} target="_blank" rel="noreferrer"
+                          className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
+                          style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          INSCREVER-SE →
+                        </a>
+                      ) : (
+                        <Link href="/eventos"
+                          className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2 text-xs font-black"
+                          style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          VER EVENTO →
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* CTA personalizar */}
+              <div className="mt-4 text-center">
+                <Link href="/perfil" className="inline-flex items-center gap-1.5 text-xs font-bold"
+                  style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ⚙️ Gerenciar cidades favoritas no perfil
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* CTA adicionar cidade - para logados sem cidades favoritas */}
+        {user && cidadesFavoritas.length === 0 && (
+          <section className="px-4 py-8">
+            <div className="mx-auto max-w-6xl">
+              <div className="rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-4"
+                style={{ background: "#161B22", border: "1px dashed rgba(255,184,0,0.25)" }}>
+                <div className="flex-1">
+                  <p className="font-black text-base mb-0.5" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    📍 PERSONALIZE SUA PÁGINA INICIAL
+                  </p>
+                  <p className="text-sm" style={{ color: "#8B949E" }}>
+                    Adicione suas cidades favoritas e veja eventos relevantes aqui.
+                  </p>
+                </div>
+                <Link href="/perfil"
+                  className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black transition-all hover:scale-105"
+                  style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  CONFIGURAR CIDADES
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* PRÓXIMOS EVENTOS */}
         {proximosEventos && proximosEventos.length > 0 && (
           <section className="px-4 py-12" style={{ background: "#0D1117" }}>
@@ -185,16 +324,16 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         <section className="px-4 py-12" style={{ background: "#161B22" }}>
           <div className="mx-auto max-w-6xl">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { href: "/eventos", icon: "🏁", label: "EVENTOS", desc: "Corridas e provas no Brasil", color: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
-                { href: "/encontros", icon: "⚡", label: "TREINOS", desc: "Grupos de corrida na sua cidade", color: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
-                { href: "/loja", icon: "🛒", label: "LOJA", desc: "Roupas, calçados e acessórios", color: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
-                { href: "/meus-treinos", icon: "📋", label: "MEUS TREINOS", desc: "Treinos que você organizou", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
-              ].map((item) => (
+              {([
+                { href: "/eventos", Icon: Flag, label: "EVENTOS", desc: "Corridas e provas no Brasil", color: "#FF6B00", bg: "rgba(255,107,0,0.1)", border: "rgba(255,107,0,0.2)" },
+                { href: "/encontros", Icon: Zap, label: "TREINOS", desc: "Grupos de corrida na sua cidade", color: "#5CC800", bg: "rgba(92,200,0,0.1)", border: "rgba(92,200,0,0.2)" },
+                { href: "/loja", Icon: ShoppingBag, label: "LOJA", desc: "Roupas, calçados e acessórios", color: "#FFB800", bg: "rgba(255,184,0,0.1)", border: "rgba(255,184,0,0.2)" },
+                { href: "/meus-treinos", Icon: ClipboardList, label: "MEUS TREINOS", desc: "Treinos que você organizou", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
+              ] as { href: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>; label: string; desc: string; color: string; bg: string; border: string }[]).map((item) => (
                 <Link key={item.href} href={item.href}
                   className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1"
                   style={{ background: item.bg, border: `1px solid ${item.border}` }}>
-                  <span className="text-3xl block mb-3">{item.icon}</span>
+                  <item.Icon size={28} strokeWidth={1.75} style={{ color: item.color, marginBottom: "12px" }} />
                   <h3 className="font-black text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: item.color, letterSpacing: "0.03em" }}>{item.label}</h3>
                   <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{item.desc}</p>
                   <p className="mt-4 text-xs font-black transition-transform group-hover:translate-x-1" style={{ color: item.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>ACESSAR →</p>
@@ -233,6 +372,33 @@ export default async function HomePage(): Promise<React.JSX.Element> {
                   </Link>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FERRAMENTAS */}
+        <section className="px-4 py-12" style={{ background: "#161B22" }}>
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="h-6 w-1 rounded-full" style={{ background: "#FFB800" }} />
+              <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>FERRAMENTAS DO CORREDOR</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {([
+                { href: "/calculadora-pace", Icon: Timer, label: "CALCULADORA DE PACE", desc: "Calcule ritmo, tempo e distância", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
+                { href: "/calculadora-fc", Icon: Heart, label: "ZONAS DE FC", desc: "Zonas Z1-Z5 por frequência cardíaca", color: "#FF6B00", bg: "rgba(255,107,0,0.08)", border: "rgba(255,107,0,0.15)" },
+                { href: "/planos-treino", Icon: ClipboardList, label: "PLANOS DE TREINO", desc: "Do zero ao 5km, 10km e meia", color: "#FFB800", bg: "rgba(255,184,0,0.08)", border: "rgba(255,184,0,0.15)" },
+                { href: "/compartilhar-resultado", Icon: Share2, label: "COMPARTILHAR", desc: "Crie imagem para Instagram e WhatsApp", color: "#5CC800", bg: "rgba(92,200,0,0.08)", border: "rgba(92,200,0,0.15)" },
+              ] as { href: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>; label: string; desc: string; color: string; bg: string; border: string }[]).map((item) => (
+                <a key={item.href} href={item.href}
+                  className="group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-1"
+                  style={{ background: item.bg, border: `1px solid ${item.border}` }}>
+                  <item.Icon size={28} strokeWidth={1.75} style={{ color: item.color, marginBottom: "12px" }} />
+                  <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: item.color, letterSpacing: "0.03em" }}>{item.label}</h3>
+                  <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{item.desc}</p>
+                  <p className="mt-4 text-xs font-black transition-transform group-hover:translate-x-1" style={{ color: item.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>ACESSAR →</p>
+                </a>
+              ))}
             </div>
           </div>
         </section>
