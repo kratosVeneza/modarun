@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import React, { useEffect, useState, useRef } from "react";
 import Header from "@/components/Header";
@@ -222,7 +223,10 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
         <div className="p-4 space-y-3">
           <div>
             <p className="text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>{produto.categoria.toUpperCase()}</p>
-            <h3 className="font-black leading-tight mt-0.5" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", fontSize: "18px" }}>{produto.nome}</h3>
+            <Link href={`/loja/${produto.id}`} onClick={e => e.stopPropagation()}
+              className="group/nome hover:opacity-80 transition-opacity block mt-0.5">
+              <h3 className="font-black leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", fontSize: "18px" }}>{produto.nome}</h3>
+            </Link>
             {produto.descricao && <p className="mt-1 text-xs line-clamp-2" style={{ color: "#8B949E" }}>{produto.descricao}</p>}
           </div>
           <div>
