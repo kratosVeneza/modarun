@@ -19,27 +19,25 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // Verificar duplicidade por WhatsApp (prioritário) ou nome
     if (whatsapp?.trim()) {
-      const { data: existentePorWhatsapp } = await supabase
+      const { data: existente } = await supabase
         .from("encontro_participantes")
         .select("id, nome")
         .eq("encontro_id", encontro_id)
         .eq("whatsapp", whatsapp.trim())
         .single();
-
-      if (existentePorWhatsapp) {
+      if (existente) {
         return NextResponse.json({
-          error: `Este WhatsApp já está confirmado neste treino (${existentePorWhatsapp.nome}).`,
+          error: `Este WhatsApp já está confirmado neste treino (${existente.nome}).`,
         }, { status: 409 });
       }
     } else {
-      const { data: existentePorNome } = await supabase
+      const { data: existente } = await supabase
         .from("encontro_participantes")
         .select("id")
         .eq("encontro_id", encontro_id)
         .ilike("nome", nome.trim())
         .single();
-
-      if (existentePorNome) {
+      if (existente) {
         return NextResponse.json({
           error: `"${nome}" já está na lista. Se você é outra pessoa com o mesmo nome, informe seu WhatsApp para diferenciar.`,
         }, { status: 409 });
@@ -49,49 +47,56 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Inserir participante
     const { data, error } = await supabase
       .from("encontro_participantes")
-      .insert([{ encontro_id, nome, whatsapp }])
+      .insert([{ encontro_id, nome, whatsapp: whatsapp?.trim() || null }])
       .select();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     // Buscar dados do treino para notificar o organizador
     const { data: treino } = await supabase
       .from("encontros")
-      .select("titulo, cidade, estado, data_encontro, horario, whatsapp_organizador, organizador_nome")
+      .select("titulo, cidade, estado, data_encontro, horario, organizador_whatsapp, organizador_nome")
       .eq("id", encontro_id)
       .single();
+
+    // Contar total de participantes
+    const { count } = await supabase
+      .from("encontro_participantes")
+      .select("id", { count: "exact", head: true })
+      .eq("encontro_id", encontro_id);
+
+    const total = count || 1;
 
     // Montar link de notificação WhatsApp para o organizador
     let whatsappNotificacaoUrl: string | null = null;
 
-    if (treino?.whatsapp_organizador) {
-      const participantesCount = await supabase
-        .from("encontro_participantes")
-        .select("id", { count: "exact" })
-        .eq("encontro_id", encontro_id);
-
-      const total = participantesCount.count || 1;
+    if (treino?.organizador_whatsapp) {
       const linkTreino = `${SITE_URL}/treinos/${encontro_id}/publico`;
 
-      const msg = [
+      const linhas = [
         `🏃 *Nova confirmação no seu treino!*`,
         ``,
-        `👤 *${nome}* confirmou presença${whatsapp ? ` (WhatsApp: ${whatsapp})` : ""}`,
+        `👤 *${nome}* confirmou presença${whatsapp ? ` — WhatsApp: ${whatsapp}` : ""}`,
+        ``,
         `📋 *${treino.titulo}*`,
         `📍 ${treino.cidade}/${treino.estado}`,
-        `👥 Total: ${total} participante${total !== 1 ? "s" : ""}`,
+        `📅 ${treino.data_encontro} às ${treino.horario}`,
+        `👥 Total agora: *${total} participante${total !== 1 ? "s" : ""}*`,
         ``,
-        `👉 Ver treino: ${linkTreino}`,
-      ].join("\n");
+        `👉 Ver lista completa:`,
+        linkTreino,
+      ];
 
-      const numeroLimpo = treino.whatsapp_organizador.replace(/\D/g, "");
+      const msg = linhas.join("\n");
+      const numeroLimpo = treino.organizador_whatsapp.replace(/\D/g, "");
       whatsappNotificacaoUrl = `https://wa.me/${numeroLimpo}?text=${encodeURIComponent(msg)}`;
     }
 
     return NextResponse.json({
       success: true,
       data,
-      // Retorna o link de notificação para o frontend abrir
       whatsapp_organizador_url: whatsappNotificacaoUrl,
     });
 
