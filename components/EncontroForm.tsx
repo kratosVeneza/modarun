@@ -52,6 +52,12 @@ const lbl = { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E",
 export default function EncontroForm(): React.JSX.Element {
   const router = useRouter();
   const [etapa, setEtapa] = useState(1);
+  // Estado explícito para data e hora (compatível com Instagram/WhatsApp browser)
+  const [dataDia, setDataDia] = useState("");
+  const [dataMes, setDataMes] = useState("");
+  const [dataAno, setDataAno] = useState("");
+  const [horaH, setHoraH] = useState("");
+  const [horaM, setHoraM] = useState("");
   const [form, setForm] = useState({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",organizador_whatsapp:"",tipo_treino:"",km_planejado:"" });
   const [pontoEncontro, setPontoEncontro] = useState<LatLng|null>(null);
   const [rotaCoords, setRotaCoords] = useState<LatLng[]>([]);
@@ -214,54 +220,78 @@ export default function EncontroForm(): React.JSX.Element {
                 </select>
               </div>
             </div>
-            {/* DATA — selects customizados (compatível com Instagram/WhatsApp browser) */}
+            {/* DATA — estado explícito por parte (máxima compatibilidade com Instagram/WhatsApp browser) */}
             <div>
               <label style={lbl}>DATA *</label>
               <div className="grid grid-cols-3 gap-2">
-                {(() => {
-                  const { dia, mes, ano } = parseDateParts(form.data_encontro);
-                  const s = { ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties;
-                  return (
-                    <>
-                      <select value={dia} onChange={e => setForm({ ...form, data_encontro: buildDate(e.target.value, mes, ano) })} style={s}>
-                        <option value="">Dia</option>
-                        {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
-                      <select value={mes} onChange={e => setForm({ ...form, data_encontro: buildDate(dia, e.target.value, ano) })} style={s}>
-                        <option value="">Mês</option>
-                        {MESES.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
-                      </select>
-                      <select value={ano} onChange={e => setForm({ ...form, data_encontro: buildDate(dia, mes, e.target.value) })} style={s}>
-                        <option value="">Ano</option>
-                        {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </>
-                  );
-                })()}
+                <select
+                  value={dataDia}
+                  onChange={e => {
+                    setDataDia(e.target.value);
+                    setForm(f => ({ ...f, data_encontro: buildDate(e.target.value, dataMes, dataAno) }));
+                  }}
+                  style={{ ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties}>
+                  <option value="">Dia</option>
+                  {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <select
+                  value={dataMes}
+                  onChange={e => {
+                    setDataMes(e.target.value);
+                    setForm(f => ({ ...f, data_encontro: buildDate(dataDia, e.target.value, dataAno) }));
+                  }}
+                  style={{ ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties}>
+                  <option value="">Mês</option>
+                  {MESES.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+                </select>
+                <select
+                  value={dataAno}
+                  onChange={e => {
+                    setDataAno(e.target.value);
+                    setForm(f => ({ ...f, data_encontro: buildDate(dataDia, dataMes, e.target.value) }));
+                  }}
+                  style={{ ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties}>
+                  <option value="">Ano</option>
+                  {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
               </div>
+              {dataDia && dataMes && dataAno && (
+                <p className="mt-1 text-xs" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ✓ {dataDia}/{dataMes}/{dataAno}
+                </p>
+              )}
             </div>
 
-            {/* HORÁRIO — selects customizados */}
+            {/* HORÁRIO — estado explícito por parte */}
             <div>
               <label style={lbl}>HORÁRIO *</label>
               <div className="grid grid-cols-2 gap-2">
-                {(() => {
-                  const { hora, minuto } = parseTimeParts(form.horario);
-                  const s = { ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties;
-                  return (
-                    <>
-                      <select value={hora} onChange={e => setForm({ ...form, horario: buildTime(e.target.value, minuto) })} style={s}>
-                        <option value="">Hora</option>
-                        {HORAS.map(h => <option key={h} value={h}>{h}h</option>)}
-                      </select>
-                      <select value={minuto} onChange={e => setForm({ ...form, horario: buildTime(hora, e.target.value) })} style={s}>
-                        <option value="">Minuto</option>
-                        {MINUTOS.map(m => <option key={m} value={m}>{m}min</option>)}
-                      </select>
-                    </>
-                  );
-                })()}
+                <select
+                  value={horaH}
+                  onChange={e => {
+                    setHoraH(e.target.value);
+                    setForm(f => ({ ...f, horario: buildTime(e.target.value, horaM) }));
+                  }}
+                  style={{ ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties}>
+                  <option value="">Hora</option>
+                  {HORAS.map(h => <option key={h} value={h}>{h}h</option>)}
+                </select>
+                <select
+                  value={horaM}
+                  onChange={e => {
+                    setHoraM(e.target.value);
+                    setForm(f => ({ ...f, horario: buildTime(horaH, e.target.value) }));
+                  }}
+                  style={{ ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties}>
+                  <option value="">Minuto</option>
+                  {MINUTOS.map(m => <option key={m} value={m}>{m}min</option>)}
+                </select>
               </div>
+              {horaH && horaM && (
+                <p className="mt-1 text-xs" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ✓ {horaH}:{horaM}
+                </p>
+              )}
             </div>
             <div>
               <label style={lbl}>PONTO DE ENCONTRO <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>( opcional)</span></label>
