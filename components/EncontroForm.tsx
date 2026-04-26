@@ -11,6 +11,38 @@ const MapaTreinoEditor = dynamic(() => import("@/components/MapaTreinoEditor"), 
 type LatLng = { lat: number; lng: number };
 
 const tiposTreino = ["Caminhada longa","Corrida leve","Corrida moderada","Longão","Tiro","Fartlek","Intervalado","Regenerativo","Subida","Trail","Outro"];
+
+// Selects customizados para data/hora — funcionam no Instagram/Facebook/WhatsApp browser
+const DIAS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+const MESES = [
+  { v: "01", l: "Janeiro" }, { v: "02", l: "Fevereiro" }, { v: "03", l: "Março" },
+  { v: "04", l: "Abril" },   { v: "05", l: "Maio" },      { v: "06", l: "Junho" },
+  { v: "07", l: "Julho" },   { v: "08", l: "Agosto" },    { v: "09", l: "Setembro" },
+  { v: "10", l: "Outubro" }, { v: "11", l: "Novembro" },  { v: "12", l: "Dezembro" },
+];
+const anoAtual = new Date().getFullYear();
+const ANOS = Array.from({ length: 3 }, (_, i) => String(anoAtual + i));
+const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTOS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
+function parseDateParts(iso: string) {
+  if (!iso) return { dia: "", mes: "", ano: "" };
+  const [ano, mes, dia] = iso.split("-");
+  return { dia: dia || "", mes: mes || "", ano: ano || "" };
+}
+function parseTimeParts(t: string) {
+  if (!t) return { hora: "", minuto: "" };
+  const [hora, minuto] = t.split(":");
+  return { hora: hora || "", minuto: minuto || "" };
+}
+function buildDate(dia: string, mes: string, ano: string) {
+  if (!dia || !mes || !ano) return "";
+  return `${ano}-${mes}-${dia}`;
+}
+function buildTime(hora: string, minuto: string) {
+  if (!hora || !minuto) return "";
+  return `${hora}:${minuto}`;
+}
 const estadosBR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.vercel.app";
 
@@ -20,7 +52,7 @@ const lbl = { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E",
 export default function EncontroForm(): React.JSX.Element {
   const router = useRouter();
   const [etapa, setEtapa] = useState(1);
-  const [form, setForm] = useState({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",tipo_treino:"",km_planejado:"" });
+  const [form, setForm] = useState({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",organizador_whatsapp:"",tipo_treino:"",km_planejado:"" });
   const [pontoEncontro, setPontoEncontro] = useState<LatLng|null>(null);
   const [rotaCoords, setRotaCoords] = useState<LatLng[]>([]);
   const [distanciaReal, setDistanciaReal] = useState(0);
@@ -46,12 +78,12 @@ export default function EncontroForm(): React.JSX.Element {
     try {
       const res = await fetch("/api/encontros", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : null, ponto_encontro_lat: pontoEncontro?.lat ?? null, ponto_encontro_lng: pontoEncontro?.lng ?? null, rota_coords: rotaCoords }),
+        body: JSON.stringify({ ...form, whatsapp_organizador: form.organizador_whatsapp || null, distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : null, ponto_encontro_lat: pontoEncontro?.lat ?? null, ponto_encontro_lng: pontoEncontro?.lng ?? null, rota_coords: rotaCoords }),
       });
       const result = await res.json();
       if (!res.ok) { setErro(result.error || "Erro ao criar treino."); setLoading(false); return; }
       setTreinoId(result.data?.id || result.id);
-      setForm({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",tipo_treino:"",km_planejado:"" });
+      setForm({ titulo:"",cidade:"",estado:"",data_encontro:"",horario:"",local_saida:"",percurso:"",ritmo:"",observacoes:"",organizador_nome:"",organizador_whatsapp:"",tipo_treino:"",km_planejado:"" });
       setPontoEncontro(null); setRotaCoords([]); setDistanciaReal(0); setEtapa(1);
       setTimeout(() => router.refresh(), 100);
     } catch { setErro("Erro ao enviar os dados."); }
@@ -162,6 +194,11 @@ export default function EncontroForm(): React.JSX.Element {
                 <input name="organizador_nome" type="text" placeholder="Organizador" value={form.organizador_nome} onChange={handleChange} style={inp}
                   onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
               </div>
+              <div>
+                <label style={lbl}>SEU WHATSAPP <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>(para receber confirmações)</span></label>
+                <input name="organizador_whatsapp" type="tel" placeholder="Ex: 5591999999999" value={form.organizador_whatsapp} onChange={handleChange} style={inp}
+                  onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -177,14 +214,53 @@ export default function EncontroForm(): React.JSX.Element {
                 </select>
               </div>
             </div>
-            <div className="grid gap-3 grid-cols-2">
-              <div>
-                <label style={lbl}>DATA *</label>
-                <input name="data_encontro" type="date" value={form.data_encontro} onChange={handleChange} style={inp} />
+            {/* DATA — selects customizados (compatível com Instagram/WhatsApp browser) */}
+            <div>
+              <label style={lbl}>DATA *</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(() => {
+                  const { dia, mes, ano } = parseDateParts(form.data_encontro);
+                  const s = { ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties;
+                  return (
+                    <>
+                      <select value={dia} onChange={e => setForm({ ...form, data_encontro: buildDate(e.target.value, mes, ano) })} style={s}>
+                        <option value="">Dia</option>
+                        {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <select value={mes} onChange={e => setForm({ ...form, data_encontro: buildDate(dia, e.target.value, ano) })} style={s}>
+                        <option value="">Mês</option>
+                        {MESES.map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+                      </select>
+                      <select value={ano} onChange={e => setForm({ ...form, data_encontro: buildDate(dia, mes, e.target.value) })} style={s}>
+                        <option value="">Ano</option>
+                        {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </>
+                  );
+                })()}
               </div>
-              <div>
-                <label style={lbl}>HORÁRIO *</label>
-                <input name="horario" type="time" value={form.horario} onChange={handleChange} style={inp} />
+            </div>
+
+            {/* HORÁRIO — selects customizados */}
+            <div>
+              <label style={lbl}>HORÁRIO *</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(() => {
+                  const { hora, minuto } = parseTimeParts(form.horario);
+                  const s = { ...inp, padding: "10px 8px", fontSize: "13px" } as React.CSSProperties;
+                  return (
+                    <>
+                      <select value={hora} onChange={e => setForm({ ...form, horario: buildTime(e.target.value, minuto) })} style={s}>
+                        <option value="">Hora</option>
+                        {HORAS.map(h => <option key={h} value={h}>{h}h</option>)}
+                      </select>
+                      <select value={minuto} onChange={e => setForm({ ...form, horario: buildTime(hora, e.target.value) })} style={s}>
+                        <option value="">Minuto</option>
+                        {MINUTOS.map(m => <option key={m} value={m}>{m}min</option>)}
+                      </select>
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div>

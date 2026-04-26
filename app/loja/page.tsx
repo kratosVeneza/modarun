@@ -331,6 +331,41 @@ function ProdutoCard({ produto }: { produto: Produto }): React.JSX.Element {
 // ─── Página Principal ─────────────────────────────────────────────────────────
 export default function LojaPage(): React.JSX.Element {
   const authSupabase = createClient();
+
+  // ── Gate de cidade ─────────────────────────────────────────
+  const [cidadeConfirmada, setCidadeConfirmada] = useState<boolean | null>(null);
+  const [registrandoInteresse, setRegistrandoInteresse] = useState(false);
+  const [interesseEnviado, setInteresseEnviado] = useState(false);
+  const [cidadeInteresse, setCidadeInteresse] = useState("");
+
+  useEffect(() => {
+    const salvo = localStorage.getItem("modarun_cidade_confirmada");
+    if (salvo === "sim") setCidadeConfirmada(true);
+    else if (salvo === "nao") setCidadeConfirmada(false);
+    else setCidadeConfirmada(null);
+  }, []);
+
+  function confirmarCidade(sim: boolean) {
+    localStorage.setItem("modarun_cidade_confirmada", sim ? "sim" : "nao");
+    setCidadeConfirmada(sim);
+  }
+
+  async function registrarInteresse() {
+    if (!cidadeInteresse.trim()) return;
+    setRegistrandoInteresse(true);
+    try {
+      await authSupabase.from("sugestoes_eventos").insert({
+        nome: "Interesse na loja Moda Run",
+        cidade: cidadeInteresse.trim(),
+        estado: "",
+        observacoes: "Usuário demonstrou interesse na loja para sua cidade.",
+      });
+    } catch { /* ignora */ }
+    setInteresseEnviado(true);
+    setRegistrandoInteresse(false);
+  }
+  // ──────────────────────────────────────────────────────────
+
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const [isAdmin, setIsAdmin] = useState(false);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -372,6 +407,133 @@ export default function LojaPage(): React.JSX.Element {
   return (
     <>
       <Header userEmail={userEmail} isAdmin={isAdmin} />
+
+      {/* ── GATE: Tela de confirmação de cidade ─────────────── */}
+      {cidadeConfirmada === null && (
+        <main className="flex min-h-screen items-center justify-center px-4 py-16"
+          style={{ background: "#0D1117" }}>
+          <div className="w-full max-w-md text-center space-y-6 animate-slide-up">
+            {/* Ícone */}
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl text-4xl"
+              style={{ background: "linear-gradient(135deg, rgba(92,200,0,0.15), rgba(255,107,0,0.1))", border: "1px solid rgba(92,200,0,0.25)" }}>
+              🛒
+            </div>
+            {/* Texto */}
+            <div>
+              <h1 className="text-3xl font-black mb-2"
+                style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
+                VOCÊ ESTÁ EM<br /><span style={{ color: "#5CC800" }}>TUCURUÍ/PA?</span>
+              </h1>
+              <p className="text-sm" style={{ color: "#8B949E" }}>
+                A loja Moda Run realiza entregas apenas em Tucuruí por enquanto.
+              </p>
+            </div>
+            {/* Botões */}
+            <div className="space-y-3">
+              <button onClick={() => confirmarCidade(true)}
+                className="w-full rounded-2xl py-4 font-black text-base transition-all hover:brightness-110 hover:scale-[1.02]"
+                style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 4px 20px rgba(92,200,0,0.25)" }}>
+                ✅ SIM, ESTOU EM TUCURUÍ
+              </button>
+              <button onClick={() => confirmarCidade(false)}
+                className="w-full rounded-2xl py-4 font-black text-base transition-all hover:brightness-110"
+                style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                ❌ NÃO ESTOU EM TUCURUÍ
+              </button>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* ── GATE: Fora da área de entrega ───────────────────── */}
+      {cidadeConfirmada === false && (
+        <main className="flex min-h-screen items-center justify-center px-4 py-16"
+          style={{ background: "#0D1117" }}>
+          <div className="w-full max-w-md space-y-6 animate-slide-up">
+
+            {/* Mensagem */}
+            <div className="rounded-2xl p-6 text-center"
+              style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.2)" }}>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl"
+                style={{ background: "rgba(255,107,0,0.1)" }}>
+                📦
+              </div>
+              <h2 className="text-2xl font-black mb-2"
+                style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
+                EM BREVE NA SUA CIDADE!
+              </h2>
+              <p className="text-sm leading-relaxed" style={{ color: "#8B949E" }}>
+                No momento, a loja <strong style={{ color: "#5CC800" }}>Moda Run</strong> atende apenas{" "}
+                <strong style={{ color: "#FFB800" }}>Tucuruí/PA</strong>.<br />
+                Em breve chegaremos a outras cidades!
+              </p>
+            </div>
+
+            {/* CTA Instagram e WhatsApp */}
+            <div className="grid grid-cols-2 gap-3">
+              <a href="https://instagram.com/modarun" target="_blank" rel="noreferrer"
+                className="flex flex-col items-center gap-2 rounded-2xl p-4 transition-all hover:brightness-110"
+                style={{ background: "linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <span className="text-2xl">📸</span>
+                <span className="font-black text-xs letterSpacing-wide">INSTAGRAM</span>
+                <span className="text-xs opacity-80">Acompanhe novidades</span>
+              </a>
+              <a href="https://wa.me/5594920009526?text=Olá! Vim pelo app Moda Run e quero consultar disponibilidade para minha cidade."
+                target="_blank" rel="noreferrer"
+                className="flex flex-col items-center gap-2 rounded-2xl p-4 transition-all hover:brightness-110"
+                style={{ background: "linear-gradient(135deg, #25D366, #1ebe5d)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <span className="text-2xl">💬</span>
+                <span className="font-black text-xs">WHATSAPP</span>
+                <span className="text-xs opacity-80">Consultar disponibilidade</span>
+              </a>
+            </div>
+
+            {/* Cadastrar interesse */}
+            <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
+              <p className="font-black text-sm mb-3" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                📍 CADASTRE SUA CIDADE
+              </p>
+              {interesseEnviado ? (
+                <div className="rounded-xl p-3 text-center" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.2)" }}>
+                  <p className="font-black text-sm" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    ✅ Interesse registrado! Avisaremos quando chegarmos aí.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Sua cidade..."
+                    value={cidadeInteresse}
+                    onChange={e => setCidadeInteresse(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && registrarInteresse()}
+                    className="flex-1 rounded-xl px-4 py-2.5 text-sm"
+                    style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.2)", color: "#E6EDF3", outline: "none" }}
+                  />
+                  <button onClick={registrarInteresse} disabled={registrandoInteresse || !cidadeInteresse.trim()}
+                    className="rounded-xl px-4 py-2.5 font-black text-xs transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", whiteSpace: "nowrap" }}>
+                    {registrandoInteresse ? "..." : "ENVIAR"}
+                  </button>
+                </div>
+              )}
+              <p className="text-xs mt-2" style={{ color: "#8B949E" }}>
+                Registre sua cidade e avisaremos quando a loja chegar lá.
+              </p>
+            </div>
+
+            {/* Botão voltar */}
+            <button onClick={() => { localStorage.removeItem("modarun_cidade_confirmada"); setCidadeConfirmada(null); }}
+              className="w-full rounded-xl py-2.5 text-xs font-black"
+              style={{ background: "rgba(255,255,255,0.04)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              ← Voltar e responder novamente
+            </button>
+          </div>
+        </main>
+      )}
+
+      {/* ── LOJA — só aparece se cidade confirmada ──────────── */}
+      {cidadeConfirmada === true && (
       <main style={{ background: "#0D1117", minHeight: "100vh" }}>
 
         {/* Hero compacto */}
@@ -517,6 +679,7 @@ export default function LojaPage(): React.JSX.Element {
           </div>
         </section>
       </main>
+      )} {/* fim cidadeConfirmada === true */}
     </>
   );
 }
