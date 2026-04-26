@@ -69,9 +69,17 @@ export default function AdminPage(): React.JSX.Element {
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync">("eventos");
+  const [lojaRestrita, setLojaRestrita] = useState<boolean | null>(null);
+  const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
+
+  useEffect(() => {
+    // Carregar configuração da loja
+    supabase.from("app_config").select("valor").eq("chave", "loja_restrita_cidade").single()
+      .then(({ data }) => setLojaRestrita(data?.valor !== "false"));
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     async function init() {
@@ -92,6 +100,15 @@ export default function AdminPage(): React.JSX.Element {
     init();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function toggleLojaRestrita() {
+    const novoValor = !lojaRestrita;
+    setSalvandoConfig(true);
+    await supabase.from("app_config")
+      .upsert({ chave: "loja_restrita_cidade", valor: novoValor ? "true" : "false", updated_at: new Date().toISOString() });
+    setLojaRestrita(novoValor);
+    setSalvandoConfig(false);
+  }
+
   if (carregando) return (
     <main className="flex min-h-screen items-center justify-center" style={{ background:"#0D1117" }}>
       <div className="h-12 w-12 animate-spin rounded-full border-4" style={{ borderColor:"rgba(92,200,0,0.2)", borderTopColor:"#5CC800" }} />
@@ -104,6 +121,46 @@ export default function AdminPage(): React.JSX.Element {
       <Header userEmail={userEmail} isAdmin={true} />
       <main style={{ background:"#0D1117", minHeight:"100vh" }}>
         <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+
+          {/* ── CONFIG: Restrição da loja por cidade ─────────── */}
+          <div className="rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+            style={{ background: "#161B22", border: "1px solid " + (lojaRestrita ? "rgba(255,184,0,0.25)" : "rgba(92,200,0,0.25)") }}>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">🛒</span>
+                <p className="font-black text-base" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.03em" }}>
+                  RESTRIÇÃO DA LOJA POR CIDADE
+                </p>
+              </div>
+              <p className="text-xs" style={{ color: "#8B949E" }}>
+                {lojaRestrita
+                  ? "🔒 Loja restrita — só usuários que confirmam estar em Tucuruí/PA têm acesso."
+                  : "🌎 Loja aberta — qualquer usuário pode acessar, sem restrição de cidade."}
+              </p>
+            </div>
+            <button onClick={toggleLojaRestrita} disabled={salvandoConfig || lojaRestrita === null}
+              className="shrink-0 rounded-xl px-6 py-3 font-black text-sm transition-all hover:brightness-110 hover:scale-105 disabled:opacity-50"
+              style={{
+                background: lojaRestrita
+                  ? "linear-gradient(135deg, #5CC800, #4aaa00)"
+                  : "linear-gradient(135deg, #FF6B00, #cc5500)",
+                color: "#fff",
+                fontFamily: "'Barlow Condensed', sans-serif",
+                letterSpacing: "0.05em",
+                boxShadow: lojaRestrita ? "0 4px 16px rgba(92,200,0,0.2)" : "0 4px 16px rgba(255,107,0,0.2)",
+              }}>
+              {salvandoConfig ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  SALVANDO...
+                </span>
+              ) : lojaRestrita ? (
+                "🌎 LIBERAR PARA TODOS"
+              ) : (
+                "🔒 RESTRINGIR A TUCURUÍ"
+              )}
+            </button>
+          </div>
 
           <section className="relative overflow-hidden rounded-2xl p-7 text-white" style={{ background:"linear-gradient(135deg, #161B22, #21262D)", border:"1px solid rgba(92,200,0,0.2)" }}>
             <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background:"linear-gradient(90deg, #5CC800, #FF6B00)" }} />

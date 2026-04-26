@@ -339,11 +339,30 @@ export default function LojaPage(): React.JSX.Element {
   const [cidadeInteresse, setCidadeInteresse] = useState("");
 
   useEffect(() => {
-    const salvo = localStorage.getItem("modarun_cidade_confirmada");
-    if (salvo === "sim") setCidadeConfirmada(true);
-    else if (salvo === "nao") setCidadeConfirmada(false);
-    else setCidadeConfirmada(null);
-  }, []);
+    async function verificarConfig() {
+      // Verificar se a restrição está ativa no Supabase
+      const { data } = await authSupabase
+        .from("app_config")
+        .select("valor")
+        .eq("chave", "loja_restrita_cidade")
+        .single();
+
+      const restrita = data?.valor !== "false"; // default true se não existir
+
+      if (!restrita) {
+        // Admin liberou para todos — pular o gate
+        setCidadeConfirmada(true);
+        return;
+      }
+
+      // Restrição ativa — verificar resposta salva do usuário
+      const salvo = localStorage.getItem("modarun_cidade_confirmada");
+      if (salvo === "sim") setCidadeConfirmada(true);
+      else if (salvo === "nao") setCidadeConfirmada(false);
+      else setCidadeConfirmada(null);
+    }
+    verificarConfig();
+  }, []); // eslint-disable-line
 
   function confirmarCidade(sim: boolean) {
     localStorage.setItem("modarun_cidade_confirmada", sim ? "sim" : "nao");
