@@ -74,7 +74,13 @@ async function buscarEstado(uf: string): Promise<EventoRaw[]> {
     });
     if (!res.ok) return [];
 
-    const html = await res.text();
+    const buffer = await res.arrayBuffer();
+
+let html = new TextDecoder("utf-8").decode(buffer);
+
+if (html.includes("�")) {
+  html = new TextDecoder("windows-1252").decode(buffer);
+}
     const hoje = new Date().toISOString().split("T")[0];
     const eventos: EventoRaw[] = [];
 
