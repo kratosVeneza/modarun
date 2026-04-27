@@ -13,6 +13,7 @@ type EventoRaw = {
   data_evento: string;
   distancia?: string;
   link_inscricao?: string;
+  chave_evento: string;
 };
 
 async function verificarAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -20,6 +21,31 @@ async function verificarAdmin(supabase: Awaited<ReturnType<typeof createClient>>
   if (!user) return false;
   const { data } = await supabase.from("admins").select("email").eq("email", (user.email || "").toLowerCase()).single();
   return !!data;
+}
+
+function normalizarTexto(valor: string): string {
+  return (valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&amp;/g, "e")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function criarChaveEvento(evento: {
+  nome: string;
+  cidade: string;
+  estado: string;
+  data_evento: string;
+}): string {
+  return [
+    normalizarTexto(evento.nome),
+    normalizarTexto(evento.cidade),
+    normalizarTexto(evento.estado).toUpperCase(),
+    evento.data_evento,
+  ].join("|");
 }
 
 function parsearData(raw: string): string | null {
@@ -84,14 +110,19 @@ async function buscarEstado(uf: string): Promise<EventoRaw[]> {
         link = href.startsWith("http") ? href : `https://www.corridasbr.com.br/${uf.toLowerCase()}/${href.replace(/^[./]+/, "")}`;
       }
 
-      eventos.push({
-        nome,
-        cidade,
-        estado: uf.toUpperCase(),
-        data_evento: dataISO,
-        distancia: distancia && distancia.length < 60 ? distancia : undefined,
-        link_inscricao: link,
-      });
+     const eventoBase = {
+  nome,
+  cidade,
+  estado: uf.toUpperCase(),
+  data_evento: dataISO,
+};
+
+eventos.push({
+  ...eventoBase,
+  distancia: distancia && distancia.length < 60 ? distancia : undefined,
+  link_inscricao: link,
+  chave_evento: criarChaveEvento(eventoBase),
+});
     }
 
     return eventos;
