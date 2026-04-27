@@ -186,20 +186,21 @@ export default function AdminPage(): React.JSX.Element {
           {aba === "banners" && <AbaBanners key="banners-tab" />}
           {aba === "sugestoes" && <AbaSugestoes key="sugestoes-tab" onAprovar={(ev) => { setEventos([ev, ...eventos]); setAba("eventos"); }} />}
           {aba === "sync" && (
-  <AbaSync
-    key="sync-tab"
-    onImportar={async () => {
-      const { data: ev, error } = await supabase
-        .from("eventos")
-        .select("*")
-        .order("data_evento", { ascending: true });
+            <AbaSync
+              key="sync-tab"
+              eventosAtuais={eventos}
+              onImportar={async () => {
+                const { data: ev, error } = await supabase
+                  .from("eventos")
+                  .select("*")
+                  .order("data_evento", { ascending: true });
 
-      if (!error) {
-        setEventos(ev || []);
-      }
-    }}
-  />
-)}
+                if (!error) {
+                  setEventos(ev || []);
+                }
+              }}
+            />
+          )}
         </div>
       </main>
     </>
@@ -1666,172 +1667,270 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
 
 
 // ─── AbaSync ─────────────────────────────────────────────────────────────────
-const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+type EventoPreview = {
+  nome: string;
+  cidade: string;
+  estado: string;
+  data_evento: string;
+  distancia?: string | null;
+  local?: string | null;
+  link_inscricao?: string | null;
+  selecionado?: boolean;
+  jaExiste?: boolean;
+};
 
-function AbaSync({ onImportar }: { onImportar: () => Promise<void> }): React.JSX.Element {
+function normalizarTextoEvento(valor: string): string {
+  return (valor || "")
+    .replace(/�/g, "")
+    .replace(/ª/g, "a")
+    .replace(/º/g, "o")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function chaveEventoLocal(evento: { nome: string; cidade: string; estado: string; data_evento: string }): string {
+  return [
+    normalizarTextoEvento(evento.nome),
+    normalizarTextoEvento(evento.cidade),
+    normalizarTextoEvento(evento.estado).toUpperCase(),
+    evento.data_evento,
+  ].join("|");
+}
+
+function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImportar: () => Promise<void> }): React.JSX.Element {
   const [estadosSel, setEstadosSel] = useState<string[]>(["PA"]);
   const [carregando, setCarregando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [preview, setPreview] = useState<EventoPreview[]>([]);
   const [resultado, setResultado] = useState<{ importados: number; ignorados: number; erros?: string[] } | null>(null);
-  const [ultimaSync, setUltimaSync] = useState<string | null>(null);
+  const [ultimaBusca, setUltimaBusca] = useState<string | null>(null);
+
+  const chavesExistentes = new Set(
+    eventosAtuais.map((ev) =>
+      chaveEventoLocal({ nome: ev.nome || "", cidade: ev.cidade || "", estado: ev.estado || "", data_evento: ev.data_evento || "" })
+    )
+  );
 
   function toggleEstado(uf: string) {
-    setEstadosSel(prev => prev.includes(uf) ? prev.filter(u => u !== uf) : [...prev, uf]);
+    setEstadosSel((prev) => (prev.includes(uf) ? prev.filter((u) => u !== uf) : [...prev, uf]));
   }
 
-  async function sincronizar(todos = false) {
-    setCarregando(true); setResultado(null);
+  function selecionarTodosNovos() {
+    setPreview((prev) => prev.map((ev) => ({ ...ev, selecionado: !ev.jaExiste })));
+  }
+
+  function limparSelecao() {
+    setPreview((prev) => prev.map((ev) => ({ ...ev, selecionado: false })));
+  }
+
+  async function buscarParaConferencia(todos = false) {
+    setCarregando(true);
+    setResultado(null);
+    setPreview([]);
+
     try {
-      const body = todos ? { todos: true } : { estado: estadosSel[0] };
-      // Se múltiplos estados, chamar um por um e agregar
-      let totalImportados = 0, totalIgnorados = 0;
+      const estados = todos ? estadosBR : estadosSel;
+      const encontrados: EventoPreview[] = [];
       const erros: string[] = [];
-      const estados = todos ? ESTADOS_UF : estadosSel;
 
       for (const uf of estados) {
-        const res = await fetch("/api/sync-corridasbr", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ estado: uf }),
-  credentials: "include",
-});
-        if (res.ok) {
-          const data = await res.json() as { importados?: number; ignorados?: number; erros?: string[] };
-          totalImportados += data.importados || 0;
-          totalIgnorados += data.ignorados || 0;
-          if (data.erros) erros.push(...data.erros);
-        } else {
+        const res = await fetch(`/api/sync-corridasbr?estado=${uf}`, { method: "GET", credentials: "include" });
+        if (!res.ok) {
           erros.push(`${uf}: erro ${res.status}`);
+          continue;
+        }
+
+        const data = (await res.json()) as { eventos?: EventoPreview[]; error?: string };
+        if (data.error) {
+          erros.push(`${uf}: ${data.error}`);
+          continue;
+        }
+
+        for (const ev of data.eventos || []) {
+          const chave = chaveEventoLocal({
+            nome: ev.nome || "",
+            cidade: ev.cidade || "",
+            estado: ev.estado || uf,
+            data_evento: ev.data_evento || "",
+          });
+          const jaExiste = chavesExistentes.has(chave);
+
+          encontrados.push({
+            nome: ev.nome,
+            cidade: ev.cidade,
+            estado: ev.estado || uf,
+            data_evento: ev.data_evento,
+            distancia: ev.distancia || null,
+            local: ev.local || null,
+            link_inscricao: ev.link_inscricao || null,
+            jaExiste,
+            selecionado: !jaExiste,
+          });
         }
       }
 
-      setResultado({
-  importados: totalImportados,
-  ignorados: totalIgnorados,
-  erros: erros.length ? erros : undefined,
-});
+      const vistas = new Set<string>();
+      const semDuplicar = encontrados.filter((ev) => {
+        const chave = chaveEventoLocal({ nome: ev.nome, cidade: ev.cidade, estado: ev.estado, data_evento: ev.data_evento });
+        if (vistas.has(chave)) return false;
+        vistas.add(chave);
+        return true;
+      });
 
-await onImportar();
-
-setUltimaSync(new Date().toLocaleString("pt-BR"));
-    } catch (err) {
-      setResultado({ importados: 0, ignorados: 0, erros: ["Erro de conexão. Tente novamente."] });
+      setPreview(semDuplicar);
+      setResultado({ importados: 0, ignorados: semDuplicar.filter((ev) => ev.jaExiste).length, erros: erros.length ? erros : undefined });
+      setUltimaBusca(new Date().toLocaleString("pt-BR"));
+    } catch {
+      setResultado({ importados: 0, ignorados: 0, erros: ["Erro de conexão ao buscar eventos."] });
     }
+
     setCarregando(false);
   }
 
-  const s = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties;
+  async function confirmarImportacao() {
+    const selecionados = preview.filter((ev) => ev.selecionado && !ev.jaExiste);
+
+    if (selecionados.length === 0) {
+      setResultado({ importados: 0, ignorados: preview.filter((ev) => ev.jaExiste).length, erros: ["Nenhum evento novo selecionado para importar."] });
+      return;
+    }
+
+    setConfirmando(true);
+    let importados = 0;
+    const erros: string[] = [];
+
+    for (const ev of selecionados) {
+      const res = await fetch("/api/admin/eventos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          nome: ev.nome,
+          cidade: ev.cidade,
+          estado: ev.estado,
+          data_evento: ev.data_evento,
+          distancia: ev.distancia || "",
+          local: ev.local || "",
+          link_inscricao: ev.link_inscricao || "",
+          destaque: false,
+        }),
+      });
+
+      if (res.ok) importados += 1;
+      else {
+        const data = await res.json().catch(() => null);
+        erros.push(`${ev.estado} - ${ev.nome}: ${data?.error || res.status}`);
+      }
+    }
+
+    setResultado({ importados, ignorados: preview.filter((ev) => ev.jaExiste).length, erros: erros.length ? erros : undefined });
+    setPreview((prev) => prev.map((ev) => (ev.selecionado && !ev.jaExiste ? { ...ev, jaExiste: true, selecionado: false } : ev)));
+    await onImportar();
+    setConfirmando(false);
+  }
+
   const lbl = { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" } as React.CSSProperties;
+  const novos = preview.filter((ev) => !ev.jaExiste);
+  const selecionados = preview.filter((ev) => ev.selecionado && !ev.jaExiste);
+  const repetidos = preview.filter((ev) => ev.jaExiste);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="rounded-2xl p-5" style={{ background:"linear-gradient(135deg,#161B22,#1a2030)", border:"1px solid rgba(92,200,0,0.2)" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-black text-xl mb-1" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.03em" }}>
-              🔄 SINCRONIZAR EVENTOS
-            </h2>
-            <p className="text-sm" style={{ color:"#8B949E" }}>
-              Busca eventos novos do <span style={{ color:"#5CC800" }}>corridasbr.com.br</span> e importa automaticamente, ignorando os que já existem.
-            </p>
-            {ultimaSync && (
-              <p className="text-xs mt-2" style={{ color:"rgba(92,200,0,0.6)" }}>✓ Última sincronização: {ultimaSync}</p>
-            )}
+            <h2 className="font-black text-xl mb-1" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.03em" }}>🔎 CONFERIR EVENTOS ANTES DE IMPORTAR</h2>
+            <p className="text-sm" style={{ color:"#8B949E" }}>Busque eventos do <span style={{ color:"#5CC800" }}>corridasbr.com.br</span>, confira a lista e importe somente os eventos aprovados por você.</p>
+            {ultimaBusca && <p className="text-xs mt-2" style={{ color:"rgba(92,200,0,0.6)" }}>✓ Última busca: {ultimaBusca}</p>}
           </div>
-          <div className="shrink-0 rounded-xl px-3 py-2 text-xs font-black text-center" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.15)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
-            <p>CRON</p>
-            <p style={{ color:"#8B949E", fontWeight:400 }}>09:00 diário</p>
+          <div className="shrink-0 rounded-xl px-3 py-2 text-xs font-black text-center" style={{ background:"rgba(255,184,0,0.08)", border:"1px solid rgba(255,184,0,0.18)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>
+            <p>IMPORTAÇÃO</p><p style={{ color:"#8B949E", fontWeight:400 }}>com aprovação</p>
           </div>
         </div>
       </div>
 
-      {/* Seleção de estados */}
       <div className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.12)" }}>
         <label style={lbl}>📍 SELECIONAR ESTADOS</label>
         <div className="flex flex-wrap gap-2 mb-4">
-          {ESTADOS_UF.map(uf => (
-            <button key={uf} onClick={() => toggleEstado(uf)}
-              className="rounded-lg px-3 py-1.5 text-xs font-black transition-all"
-              style={{
-                background: estadosSel.includes(uf) ? "rgba(92,200,0,0.2)" : "#21262D",
-                color: estadosSel.includes(uf) ? "#5CC800" : "#8B949E",
-                border: `1px solid ${estadosSel.includes(uf) ? "rgba(92,200,0,0.4)" : "transparent"}`,
-                fontFamily:"'Barlow Condensed', sans-serif",
-              }}>
-              {uf}
-            </button>
+          {estadosBR.map((uf) => (
+            <button key={uf} type="button" onClick={() => toggleEstado(uf)} className="rounded-lg px-3 py-1.5 text-xs font-black transition-all" style={{ background: estadosSel.includes(uf) ? "rgba(92,200,0,0.2)" : "#21262D", color: estadosSel.includes(uf) ? "#5CC800" : "#8B949E", border: `1px solid ${estadosSel.includes(uf) ? "rgba(92,200,0,0.4)" : "transparent"}`, fontFamily:"'Barlow Condensed', sans-serif" }}>{uf}</button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setEstadosSel(ESTADOS_UF)}
-            className="rounded-lg px-3 py-1.5 text-xs font-black"
-            style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.2)", fontFamily:"'Barlow Condensed', sans-serif" }}>
-            TODOS
-          </button>
-          <button onClick={() => setEstadosSel([])}
-            className="rounded-lg px-3 py-1.5 text-xs font-black"
-            style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
-            LIMPAR
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setEstadosSel(estadosBR)} className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.2)", fontFamily:"'Barlow Condensed', sans-serif" }}>TODOS</button>
+          <button type="button" onClick={() => setEstadosSel([])} className="rounded-lg px-3 py-1.5 text-xs font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>LIMPAR</button>
           <span className="ml-auto text-xs self-center" style={{ color:"#8B949E" }}>{estadosSel.length} estado{estadosSel.length !== 1 ? "s" : ""} selecionado{estadosSel.length !== 1 ? "s" : ""}</span>
         </div>
       </div>
 
-      {/* Botões de sync */}
       <div className="grid gap-3 sm:grid-cols-2">
-        <button onClick={() => sincronizar(false)} disabled={carregando || estadosSel.length === 0}
-          className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50"
-          style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          {carregando ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              SINCRONIZANDO...
-            </span>
-          ) : (
-            <span>🔄 SYNC ESTADOS SELECIONADOS<br /><span className="text-xs font-normal opacity-70">{estadosSel.join(", ") || "nenhum"}</span></span>
-          )}
+        <button type="button" onClick={() => buscarParaConferencia(false)} disabled={carregando || estadosSel.length === 0 || confirmando} className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50" style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          {carregando ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />BUSCANDO...</span> : <span>🔎 BUSCAR PARA CONFERIR<br /><span className="text-xs font-normal opacity-70">{estadosSel.join(", ") || "nenhum"}</span></span>}
         </button>
-        <button onClick={() => sincronizar(true)} disabled={carregando}
-          className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50"
-          style={{ background:"linear-gradient(135deg,#FF6B00,#cc5500)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          {carregando ? "..." : <span>🌎 SYNC BRASIL COMPLETO<br /><span className="text-xs font-normal opacity-70">Todos os 27 estados</span></span>}
+        <button type="button" onClick={() => buscarParaConferencia(true)} disabled={carregando || confirmando} className="rounded-2xl py-5 font-black text-base transition-all hover:brightness-110 disabled:opacity-50" style={{ background:"linear-gradient(135deg,#FF6B00,#cc5500)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          {carregando ? "..." : <span>🌎 BUSCAR BRASIL COMPLETO<br /><span className="text-xs font-normal opacity-70">Apenas para conferência</span></span>}
         </button>
       </div>
 
-      {/* Resultado */}
-      {resultado && (
-        <div className="rounded-2xl p-5 animate-slide-up" style={{ background: resultado.erros ? "rgba(255,107,0,0.08)" : "rgba(92,200,0,0.08)", border: `1px solid ${resultado.erros ? "rgba(255,107,0,0.2)" : "rgba(92,200,0,0.2)"}` }}>
-          <p className="font-black text-lg mb-3" style={{ color: resultado.importados > 0 ? "#5CC800" : "#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
-            {resultado.importados > 0 ? `✅ ${resultado.importados} NOVOS EVENTOS IMPORTADOS!` : "ℹ️ NENHUM EVENTO NOVO"}
-          </p>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(92,200,0,0.1)" }}>
-              <p className="text-2xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados}</p>
-              <p className="text-xs" style={{ color:"#8B949E" }}>IMPORTADOS</p>
+      {preview.length > 0 && (
+        <div className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.12)" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div>
+              <h3 className="font-black text-lg" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>📋 EVENTOS ENCONTRADOS PARA CONFERÊNCIA</h3>
+              <p className="text-xs" style={{ color:"#8B949E" }}>{preview.length} encontrados · {novos.length} novos · {repetidos.length} já existentes · {selecionados.length} selecionados para importar</p>
             </div>
-            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(255,255,255,0.04)" }}>
-              <p className="text-2xl font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.ignorados}</p>
-              <p className="text-xs" style={{ color:"#8B949E" }}>JÁ EXISTIAM</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={selecionarTodosNovos} className="rounded-lg px-3 py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.12)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.25)", fontFamily:"'Barlow Condensed', sans-serif" }}>SELECIONAR NOVOS</button>
+              <button type="button" onClick={limparSelecao} className="rounded-lg px-3 py-2 text-xs font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>LIMPAR SELEÇÃO</button>
             </div>
           </div>
-          {resultado.erros && resultado.erros.length > 0 && (
-            <div className="rounded-xl p-3" style={{ background:"rgba(255,107,0,0.1)" }}>
-              <p className="text-xs font-black mb-1" style={{ color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>AVISOS:</p>
-              {resultado.erros.map((e, i) => <p key={i} className="text-xs" style={{ color:"#FF6B00" }}>{e}</p>)}
-            </div>
-          )}
+
+          <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
+            {preview.map((ev, index) => (
+              <div key={`${ev.estado}-${ev.data_evento}-${ev.nome}-${index}`} className="rounded-2xl p-4" style={{ background: ev.jaExiste ? "rgba(255,255,255,0.035)" : ev.selecionado ? "rgba(92,200,0,0.08)" : "#21262D", border: ev.jaExiste ? "1px solid rgba(255,255,255,0.06)" : ev.selecionado ? "1px solid rgba(92,200,0,0.35)" : "1px solid rgba(255,255,255,0.08)", opacity: ev.jaExiste ? 0.55 : 1 }}>
+                <div className="flex gap-3">
+                  <input type="checkbox" checked={!!ev.selecionado} disabled={ev.jaExiste} onChange={() => setPreview((prev) => prev.map((item, i) => i === index ? { ...item, selecionado: !item.selecionado } : item))} className="mt-1 h-5 w-5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h4 className="font-black text-base" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{ev.nome}</h4>
+                      {ev.jaExiste ? <span className="rounded-full px-2 py-1 text-[10px] font-black" style={{ background:"rgba(255,184,0,0.12)", color:"#FFB800" }}>JÁ EXISTE</span> : <span className="rounded-full px-2 py-1 text-[10px] font-black" style={{ background:"rgba(92,200,0,0.15)", color:"#5CC800" }}>NOVO</span>}
+                    </div>
+                    <p className="text-xs" style={{ color:"#8B949E" }}>📍 {ev.cidade} — {ev.estado} · 📅 {fmtData(ev.data_evento)}{ev.distancia ? ` · 📏 ${ev.distancia}` : ""}</p>
+                    {ev.link_inscricao && <a href={ev.link_inscricao} target="_blank" rel="noreferrer" className="text-xs font-bold hover:underline" style={{ color:"#5CC800" }}>🔗 Ver página de inscrição</a>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button type="button" onClick={confirmarImportacao} disabled={confirmando || selecionados.length === 0} className="mt-5 w-full rounded-2xl py-4 font-black text-base transition-all hover:brightness-110 disabled:opacity-50" style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+            {confirmando ? <span className="flex items-center justify-center gap-2"><span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />IMPORTANDO EVENTOS SELECIONADOS...</span> : `✅ CONFIRMAR IMPORTAÇÃO DE ${selecionados.length} EVENTO${selecionados.length !== 1 ? "S" : ""}`}
+          </button>
         </div>
       )}
 
-      {/* Instruções */}
+      {resultado && (
+        <div className="rounded-2xl p-5 animate-slide-up" style={{ background: resultado.erros ? "rgba(255,107,0,0.08)" : "rgba(92,200,0,0.08)", border: `1px solid ${resultado.erros ? "rgba(255,107,0,0.2)" : "rgba(92,200,0,0.2)"}` }}>
+          <p className="font-black text-lg mb-3" style={{ color: resultado.importados > 0 ? "#5CC800" : "#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados > 0 ? `✅ ${resultado.importados} EVENTOS IMPORTADOS!` : "ℹ️ BUSCA REALIZADA"}</p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(92,200,0,0.1)" }}><p className="text-2xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados}</p><p className="text-xs" style={{ color:"#8B949E" }}>IMPORTADOS</p></div>
+            <div className="rounded-xl p-3 text-center" style={{ background:"rgba(255,255,255,0.04)" }}><p className="text-2xl font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.ignorados}</p><p className="text-xs" style={{ color:"#8B949E" }}>JÁ EXISTIAM</p></div>
+          </div>
+          {resultado.erros && resultado.erros.length > 0 && <div className="rounded-xl p-3" style={{ background:"rgba(255,107,0,0.1)" }}><p className="text-xs font-black mb-1" style={{ color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>AVISOS:</p>{resultado.erros.map((e, i) => <p key={i} className="text-xs" style={{ color:"#FF6B00" }}>{e}</p>)}</div>}
+        </div>
+      )}
+
       <div className="rounded-2xl p-5" style={{ background:"#161B22", border:"1px solid rgba(255,184,0,0.1)" }}>
-        <p className="font-black text-sm mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>💡 COMO FUNCIONA</p>
+        <p className="font-black text-sm mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>💡 COMO FUNCIONA AGORA</p>
         <div className="space-y-2 text-xs" style={{ color:"#8B949E" }}>
-          <p>• <strong style={{ color:"#E6EDF3" }}>Automático:</strong> Todo dia às 9h o sistema sincroniza automaticamente via Cron Job da Vercel.</p>
-          <p>• <strong style={{ color:"#E6EDF3" }}>Manual:</strong> Selecione os estados acima e clique em SYNC para buscar agora.</p>
-          <p>• <strong style={{ color:"#E6EDF3" }}>Anti-duplicata:</strong> Eventos com mesmo nome + data + estado são ignorados automaticamente.</p>
-          <p>• <strong style={{ color:"#E6EDF3" }}>Fonte:</strong> corridasbr.com.br — maior calendário de corridas do Brasil.</p>
-          <p>• <strong style={{ color:"#E6EDF3" }}>Eventos passados:</strong> Apenas eventos futuros são importados.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Buscar:</strong> primeiro o sistema apenas procura os eventos e mostra nesta tela.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Conferir:</strong> você vê nome, cidade, data, distância e link antes de importar.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Confirmar:</strong> somente os eventos marcados entram oficialmente na aba Eventos.</p>
+          <p>• <strong style={{ color:"#E6EDF3" }}>Duplicados:</strong> eventos que já existem aparecem como “JÁ EXISTE” e não podem ser marcados.</p>
         </div>
       </div>
     </div>
