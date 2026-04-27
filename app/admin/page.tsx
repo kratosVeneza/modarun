@@ -1674,12 +1674,12 @@ function AbaSync({ onImportar }: { onImportar: (novos: Evento[]) => void }): Rea
       const estados = todos ? ESTADOS_UF : estadosSel;
 
       for (const uf of estados) {
-        const res = await fetch("/api/admin/sync-corridasbr", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ estado: uf }),
-          credentials: "include",
-        });
+        const res = await fetch("/api/sync-corridasbr", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ estado: uf }),
+  credentials: "include",
+});
         if (res.ok) {
           const data = await res.json() as { importados?: number; ignorados?: number; erros?: string[] };
           totalImportados += data.importados || 0;
