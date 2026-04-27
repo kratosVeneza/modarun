@@ -1820,11 +1820,13 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
         }),
       });
 
-      if (res.ok) importados += 1;
-      else {
-        const data = await res.json().catch(() => null);
-        erros.push(`${ev.estado} - ${ev.nome}: ${data?.error || res.status}`);
-      }
+      const data = await res.json().catch(() => null);
+
+if (res.ok && data?.success) {
+  importados += 1;
+} else {
+  erros.push(`${ev.estado} - ${ev.nome}: ${data?.error || res.status}`);
+}
     }
 
     setResultado({ importados, ignorados: preview.filter((ev) => ev.jaExiste).length, erros: erros.length ? erros : undefined });
