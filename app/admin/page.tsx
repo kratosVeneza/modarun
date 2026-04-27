@@ -185,7 +185,21 @@ export default function AdminPage(): React.JSX.Element {
           {aba === "produtos" && <AbaProdutos produtos={produtos} setProdutos={setProdutos} />}
           {aba === "banners" && <AbaBanners key="banners-tab" />}
           {aba === "sugestoes" && <AbaSugestoes key="sugestoes-tab" onAprovar={(ev) => { setEventos([ev, ...eventos]); setAba("eventos"); }} />}
-          {aba === "sync" && <AbaSync key="sync-tab" onImportar={(novos) => { setEventos(prev => [...novos, ...prev]); }} />}
+          {aba === "sync" && (
+  <AbaSync
+    key="sync-tab"
+    onImportar={async () => {
+      const { data: ev, error } = await supabase
+        .from("eventos")
+        .select("*")
+        .order("data_evento", { ascending: true });
+
+      if (!error) {
+        setEventos(ev || []);
+      }
+    }}
+  />
+)}
         </div>
       </main>
     </>
@@ -1654,7 +1668,7 @@ function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React
 // ─── AbaSync ─────────────────────────────────────────────────────────────────
 const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
-function AbaSync({ onImportar }: { onImportar: (novos: Evento[]) => void }): React.JSX.Element {
+function AbaSync({ onImportar }: { onImportar: () => Promise<void> }): React.JSX.Element {
   const [estadosSel, setEstadosSel] = useState<string[]>(["PA"]);
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState<{ importados: number; ignorados: number; erros?: string[] } | null>(null);
@@ -1690,8 +1704,15 @@ function AbaSync({ onImportar }: { onImportar: (novos: Evento[]) => void }): Rea
         }
       }
 
-      setResultado({ importados: totalImportados, ignorados: totalIgnorados, erros: erros.length ? erros : undefined });
-      setUltimaSync(new Date().toLocaleString("pt-BR"));
+      setResultado({
+  importados: totalImportados,
+  ignorados: totalIgnorados,
+  erros: erros.length ? erros : undefined,
+});
+
+await onImportar();
+
+setUltimaSync(new Date().toLocaleString("pt-BR"));
     } catch (err) {
       setResultado({ importados: 0, ignorados: 0, erros: ["Erro de conexão. Tente novamente."] });
     }
