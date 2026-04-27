@@ -21,14 +21,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     await Promise.all(lote.map(async (uf) => {
       try {
-        const res = await fetch(`${baseUrl}/api/admin/sync-corridasbr`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-cron-key": process.env.CRON_SECRET || "",
-          },
-          body: JSON.stringify({ estado: uf }),
-        });
+        const res = await fetch(`${baseUrl}/api/sync-corridasbr`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-cron-key": process.env.CRON_SECRET || "",
+  },
+  body: JSON.stringify({ estado: uf }),
+});
         if (res.ok) {
           const data = await res.json() as { importados?: number; ignorados?: number; erros?: string[] };
           totalImportados += data.importados || 0;
