@@ -243,16 +243,22 @@ export default function EventosPage(): React.JSX.Element {
     setLoading(true);
     const hoje = new Date().toISOString().split("T")[0];
     const supabaseClient = createClient();
-    let query = supabaseClient.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true }).limit(2000);
-    if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
-    if (estadosFiltroUrl.length > 0) {
-      query = query.in("estado", estadosFiltroUrl);
-    } else if (estadoFiltro) {
-      query = query.ilike("estado", `%${estadoFiltro}%`);
+    // Buscar em paginas de 1000 para contornar o limite padrao do Supabase
+    let todosEventos: Evento[] = [];
+    let pagina = 0;
+    const PAGINA = 1000;
+    while (true) {
+      let q = supabaseClient.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true }).range(pagina * PAGINA, (pagina + 1) * PAGINA - 1);
+      if (cidadeFiltro) q = q.ilike("cidade", `%${cidadeFiltro}%`);
+      if (estadosFiltroUrl.length > 0) { q = q.in("estado", estadosFiltroUrl); } else if (estadoFiltro) { q = q.ilike("estado", `%${estadoFiltro}%`); }
+      const { data: pagData, error: pagErr } = await q;
+      if (pagErr) { setError(pagErr.message); break; }
+      if (!pagData || pagData.length === 0) break;
+      todosEventos = [...todosEventos, ...(pagData as Evento[])];
+      if (pagData.length < PAGINA) break;
+      pagina++;
     }
-    const { data, error: err } = await query;
-    if (err) setError(err.message);
-    else setEventos(data || []);
+    setEventos(todosEventos);
     setLoading(false);
   }, [cidadeFiltro, estadoFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
 
