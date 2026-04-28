@@ -98,6 +98,7 @@ export default function ProdutoPage(): React.JSX.Element {
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [modalAberto, setModalAberto] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [copiandoFoto, setCopiandoFoto] = useState(false);
 
   const carregar = useCallback(async () => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -148,8 +149,6 @@ export default function ProdutoPage(): React.JSX.Element {
   const precoFinal = produto.preco_promocional || produto.preco;
   const temDesconto = !!produto.preco_promocional && produto.preco_promocional < produto.preco;
   const desconto = temDesconto ? Math.round((1 - produto.preco_promocional! / produto.preco) * 100) : 0;
-
-  const [copiandoFoto, setCopiandoFoto] = useState(false);
 
   function montarMsgWhatsapp(incluirAvisoFoto: boolean) {
     const base = `Olá! Tenho interesse no produto *${produto!.nome}*`;
