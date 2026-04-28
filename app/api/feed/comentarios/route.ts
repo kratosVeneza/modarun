@@ -4,22 +4,20 @@ import { createClient } from "@/utils/supabase/server";
 export async function POST(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Nao autorizado." }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const post_id = Number(body.post_id);
-  const texto = String(body.texto ?? "").trim();
+  const b = await req.json();
+  const post_id = Number(b.post_id);
+  const texto = String(b.texto ?? "").trim();
   if (!texto) return NextResponse.json({ error: "Comentario vazio." }, { status: 400 });
 
-  const autor_nome = String(
-    (user.user_metadata as Record<string, unknown>)?.full_name ?? 
-    user.email?.split("@")[0] ?? 
-    "Corredor"
-  );
+  const meta = user.user_metadata as Record<string, unknown>;
+  const autor_nome = String(meta?.full_name ?? user.email?.split("@")[0] ?? "Corredor");
+  const autor_avatar = (meta?.avatar_url as string | undefined) ?? null;
 
   const { data, error } = await supabase
     .from("feed_comentarios")
-    .insert({ post_id, user_id: user.id, texto, autor_nome })
+    .insert({ post_id, user_id: user.id, texto, autor_nome, autor_avatar })
     .select()
     .single();
 
@@ -32,7 +30,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   await supabase.from("feed_posts").update({ total_comentarios: count ?? 0 }).eq("id", post_id);
 
-  return NextResponse.json({ success: true, comentario: { ...data, autor_nome } });
+  return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar } });
 }
 
 export async function GET(req: Request): Promise<NextResponse> {
@@ -42,7 +40,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const { data, error } = await supabase
     .from("feed_comentarios")
-    .select("id, texto, created_at, autor_nome")
+    .select("id, texto, created_at, autor_nome, autor_avatar")
     .eq("post_id", post_id)
     .order("created_at", { ascending: true });
 
