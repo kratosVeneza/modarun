@@ -334,6 +334,7 @@ export default function LojaPage(): React.JSX.Element {
 
   // ── Gate de cidade ─────────────────────────────────────────
   const [cidadeConfirmada, setCidadeConfirmada] = useState<boolean | null>(null);
+  const [verificandoGate, setVerificandoGate] = useState(true);
   const [registrandoInteresse, setRegistrandoInteresse] = useState(false);
   const [interesseEnviado, setInteresseEnviado] = useState(false);
   const [cidadeInteresse, setCidadeInteresse] = useState("");
@@ -352,6 +353,7 @@ export default function LojaPage(): React.JSX.Element {
       if (!restrita) {
         // Admin liberou para todos — pular o gate
         setCidadeConfirmada(true);
+        setVerificandoGate(false);
         return;
       }
 
@@ -360,6 +362,7 @@ export default function LojaPage(): React.JSX.Element {
       if (salvo === "sim") setCidadeConfirmada(true);
       else if (salvo === "nao") setCidadeConfirmada(false);
       else setCidadeConfirmada(null);
+      setVerificandoGate(false);
     }
     verificarConfig();
   }, []); // eslint-disable-line
@@ -428,7 +431,7 @@ export default function LojaPage(): React.JSX.Element {
       <Header userEmail={userEmail} isAdmin={isAdmin} />
 
       {/* ── GATE: Tela de confirmação de cidade ─────────────── */}
-      {cidadeConfirmada === null && (
+      {!verificandoGate && cidadeConfirmada === null && (
         <main className="flex min-h-screen items-center justify-center px-4 py-16"
           style={{ background: "#0D1117" }}>
           <div className="w-full max-w-md text-center space-y-6 animate-slide-up">
