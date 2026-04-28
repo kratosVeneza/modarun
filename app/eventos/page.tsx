@@ -4,7 +4,6 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import { Flag, Search, X, MapPin, Calendar, Ruler, Star, ShoppingBag, ArrowRight, ChevronLeft, ChevronRight, Bookmark, BookmarkCheck } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { createClient } from "@/utils/supabase/client";
 
 type Evento = {
@@ -240,24 +239,33 @@ export default function EventosPage(): React.JSX.Element {
     carregarUser();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    async function carregarEventos() {
-      setLoading(true);
-      const hoje = new Date().toISOString().split("T")[0];
-      let query = supabase.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true });
-      if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
-      if (estadosFiltroUrl.length > 0) {
-        query = query.in("estado", estadosFiltroUrl);
-      } else if (estadoFiltro) {
-        query = query.ilike("estado", `%${estadoFiltro}%`);
-      }
-      const { data, error: err } = await query;
-      if (err) setError(err.message);
-      else setEventos(data || []);
-      setLoading(false);
+  const carregarEventos = useCallback(async () => {
+    setLoading(true);
+    const hoje = new Date().toISOString().split("T")[0];
+    const supabaseClient = createClient();
+    let query = supabaseClient.from("eventos").select("*").gte("data_evento", hoje).order("data_evento", { ascending: true }).limit(2000);
+    if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);
+    if (estadosFiltroUrl.length > 0) {
+      query = query.in("estado", estadosFiltroUrl);
+    } else if (estadoFiltro) {
+      query = query.ilike("estado", `%${estadoFiltro}%`);
     }
-    carregarEventos();
+    const { data, error: err } = await query;
+    if (err) setError(err.message);
+    else setEventos(data || []);
+    setLoading(false);
   }, [cidadeFiltro, estadoFiltro]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    carregarEventos();
+  }, [carregarEventos]);
+
+  // Recarregar ao voltar para a aba: eventos vencidos somem, novos aparecem
+  useEffect(() => {
+    function handleFocus() { carregarEventos(); }
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [carregarEventos]);
 
   // Agrupar por estado — respeita filtro por URL (cidades do perfil) + filtro manual
   const eventosPorEstado = useMemo(() => {
