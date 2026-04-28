@@ -46,6 +46,7 @@ type Comentario = {
   texto: string;
   created_at: string;
   autor_nome: string;
+  autor_avatar: string | null;
 };
 
 // ─── Utils ───────────────────────────────────────────────────────────────────
@@ -140,10 +141,14 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
           ) : (
             comentarios.map(c => (
               <div key={c.id} className="flex gap-2">
-                <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
-                  style={{ width: 28, height: 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {c.autor_nome[0]?.toUpperCase()}
-                </div>
+                {c.autor_avatar ? (
+                  <img src={c.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: 28, height: 28 }} />
+                ) : (
+                  <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
+                    style={{ width: 28, height: 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {c.autor_nome[0]?.toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 rounded-xl px-3 py-2" style={{ background: "#21262D" }}>
                   <span className="text-xs font-black mr-2" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</span>
                   <span className="text-sm" style={{ color: "#C9D1D9" }}>{c.texto}</span>
@@ -181,6 +186,22 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
   const [curtindo, setCurtindo] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [fotoAtiva, setFotoAtiva] = useState(0);
+  const [seguindo, setSeguindo] = useState(false);
+  const [carregandoFollow, setCarregandoFollow] = useState(false);
+
+  async function toggleFollow() {
+    if (!usuarioLogado || carregandoFollow || userId === post.user_id) return;
+    setCarregandoFollow(true);
+    const acao = seguindo ? "desseguir" : "seguir";
+    setSeguindo(v => !v);
+    await fetch("/api/feed/follows", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ following_id: post.user_id, acao }),
+    });
+    setCarregandoFollow(false);
+  }
 
   async function toggleCurtida() {
     if (!usuarioLogado || curtindo) return;
@@ -270,6 +291,18 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                 style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", border: "1px solid rgba(255,107,0,0.3)" }}>
                 <Activity size={10} strokeWidth={2} /> ATIVIDADE
               </span>
+            )}
+            {usuarioLogado && userId !== post.user_id && (
+              <button onClick={toggleFollow} disabled={carregandoFollow}
+                className="rounded-full px-3 py-1 text-xs font-black transition-all hover:scale-105 disabled:opacity-60"
+                style={{
+                  background: seguindo ? "rgba(92,200,0,0.15)" : "rgba(92,200,0,0.08)",
+                  color: seguindo ? "#5CC800" : "#8B949E",
+                  border: seguindo ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                }}>
+                {seguindo ? "SEGUINDO" : "+ SEGUIR"}
+              </button>
             )}
             {userId === post.user_id && (
               <button onClick={deletar} className="rounded-lg p-1.5 transition-colors hover:bg-red-500/10" style={{ color: "#8B949E" }}>
