@@ -34,7 +34,6 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   return NextResponse.json({ success: true, seguidores: seguidores ?? 0, seguindo: seguindo ?? 0 });
 }
-
 export async function GET(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
   const url = new URL(req.url);
