@@ -1802,39 +1802,38 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
     }
 
     setConfirmando(true);
-    const erros: string[] = [];
     let importados = 0;
+    const erros: string[] = [];
 
-    // Inserir direto via Supabase client (sem depender de constraint UNIQUE em chave_evento)
-    const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
-    const sb = createBrowserClient();
+    // Enviar tudo de uma vez para a API server-side (tem sessao autenticada, bypassa RLS)
+    const res = await fetch("/api/admin/eventos/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        eventos: selecionados.map((ev) => ({
+          nome: ev.nome,
+          cidade: ev.cidade,
+          estado: ev.estado,
+          data_evento: ev.data_evento,
+          distancia: ev.distancia || null,
+          local: ev.local || null,
+          link_inscricao: ev.link_inscricao || null,
+          destaque: false,
+        })),
+      }),
+    });
 
-    // Lote de 20 para nao sobrecarregar
-    const LOTE = 20;
-    for (let i = 0; i < selecionados.length; i += LOTE) {
-      const batch = selecionados.slice(i, i + LOTE).map((ev) => ({
-        nome: ev.nome,
-        cidade: ev.cidade,
-        estado: ev.estado,
-        data_evento: ev.data_evento,
-        distancia: ev.distancia || null,
-        local: ev.local || null,
-        link_inscricao: ev.link_inscricao || null,
-        destaque: false,
-      }));
+    const data = await res.json().catch(() => null);
 
-      const { data: inserted, error } = await sb
-        .from("eventos")
-        .insert(batch)
-        .select();
-
-      if (error) {
-        console.error("[confirmarImportacao] erro no lote:", error.message);
-        erros.push(error.message);
-      } else {
-        importados += inserted?.length ?? batch.length;
-      }
+    if (!res.ok || !data?.success) {
+      const msg = data?.error || `HTTP ${res.status}`;
+      console.error("[confirmarImportacao] erro:", msg, data?.details || "");
+      erros.push(msg);
+    } else {
+      importados = data.importados ?? selecionados.length;
     }
+
 
     setResultado({ importados, ignorados: preview.filter((ev) => ev.jaExiste).length, erros: erros.length ? erros : undefined });
     setPreview((prev) => prev.map((ev) => (ev.selecionado && !ev.jaExiste ? { ...ev, jaExiste: true, selecionado: false } : ev)));
