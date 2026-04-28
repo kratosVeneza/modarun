@@ -1802,35 +1802,38 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
     }
 
     setConfirmando(true);
-    let importados = 0;
     const erros: string[] = [];
+    let importados = 0;
 
-    for (const ev of selecionados) {
-      const res = await fetch("/api/admin/eventos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          nome: ev.nome,
-          cidade: ev.cidade,
-          estado: ev.estado,
-          data_evento: ev.data_evento,
-          distancia: ev.distancia || "",
-          local: ev.local || "",
-          link_inscricao: ev.link_inscricao || "",
-          destaque: false,
-        }),
-      });
+    // Inserir direto via Supabase client (sem depender de constraint UNIQUE em chave_evento)
+    const { createClient: createBrowserClient } = await import("@/utils/supabase/client");
+    const sb = createBrowserClient();
 
-      const data = await res.json().catch(() => null);
+    // Lote de 20 para nao sobrecarregar
+    const LOTE = 20;
+    for (let i = 0; i < selecionados.length; i += LOTE) {
+      const batch = selecionados.slice(i, i + LOTE).map((ev) => ({
+        nome: ev.nome,
+        cidade: ev.cidade,
+        estado: ev.estado,
+        data_evento: ev.data_evento,
+        distancia: ev.distancia || null,
+        local: ev.local || null,
+        link_inscricao: ev.link_inscricao || null,
+        destaque: false,
+      }));
 
-if (res.ok && data?.success) {
-  importados += 1;
-} else {
-  const msg = data?.error || `HTTP ${res.status}`;
-  console.error(`[importar] ${ev.estado} - ${ev.nome}:`, msg);
-  erros.push(`${ev.estado} - ${ev.nome}: ${msg}`);
-}
+      const { data: inserted, error } = await sb
+        .from("eventos")
+        .insert(batch)
+        .select();
+
+      if (error) {
+        console.error("[confirmarImportacao] erro no lote:", error.message);
+        erros.push(error.message);
+      } else {
+        importados += inserted?.length ?? batch.length;
+      }
     }
 
     setResultado({ importados, ignorados: preview.filter((ev) => ev.jaExiste).length, erros: erros.length ? erros : undefined });
