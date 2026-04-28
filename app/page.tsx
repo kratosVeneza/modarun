@@ -3,51 +3,30 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
+import Link from "next/link";
 import {
   Heart, MessageCircle, Share2, Plus, Image as ImageIcon,
-  Activity, Newspaper, X, Send, Flame, ExternalLink, Loader2
+  Activity, Newspaper, X, Send, Flame, ExternalLink, Loader2,
+  Flag, Zap, Timer, Users
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Post = {
-  id: number;
-  user_id: string;
-  tipo: "post" | "atividade" | "noticia";
-  texto: string | null;
-  fotos: string[];
-  atividade_distancia: number | null;
-  atividade_tempo: string | null;
-  atividade_pace: string | null;
-  atividade_tipo: string | null;
-  noticia_titulo: string | null;
-  noticia_url: string | null;
-  noticia_fonte: string | null;
-  noticia_imagem: string | null;
-  total_curtidas: number;
-  total_comentarios: number;
-  created_at: string;
-  autor_nome: string | null;
-  autor_avatar: string | null;
-  autor_email: string | null;
+  id: number; user_id: string; tipo: "post" | "atividade" | "noticia";
+  texto: string | null; fotos: string[];
+  atividade_distancia: number | null; atividade_tempo: string | null;
+  atividade_pace: string | null; atividade_tipo: string | null;
+  noticia_titulo: string | null; noticia_url: string | null;
+  noticia_fonte: string | null; noticia_imagem: string | null;
+  total_curtidas: number; total_comentarios: number; created_at: string;
+  autor_nome: string | null; autor_avatar: string | null; autor_email: string | null;
 };
 
-type Noticia = {
-  titulo: string;
-  url: string;
-  fonte: string;
-  imagem: string | null;
-  data: string;
-  resumo: string;
-};
-
-type Comentario = {
-  id: number;
-  texto: string;
-  created_at: string;
-  autor_nome: string;
-  autor_avatar: string | null;
-};
+type Noticia = { titulo: string; url: string; fonte: string; imagem: string | null; data: string; resumo: string; };
+type Comentario = { id: number; texto: string; created_at: string; autor_nome: string; autor_avatar: string | null; };
+type EventoDestaque = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string; destaque?: boolean; };
+type Treino = { id: number; titulo: string; cidade: string; estado: string; data_encontro: string; horario?: string; tipo_treino?: string; km_planejado?: number; distancia?: string; };
 
 // ─── Utils ───────────────────────────────────────────────────────────────────
 
@@ -75,7 +54,13 @@ function nomeExibicao(nome: string | null, email: string | null): string {
   return "Corredor";
 }
 
-// ─── Componentes ─────────────────────────────────────────────────────────────
+function formatarData(data: string) {
+  if (!data) return "—";
+  const [, mes, dia] = String(data).split("-");
+  return `${dia}/${mes}`;
+}
+
+// ─── Componentes menores ──────────────────────────────────────────────────────
 
 function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avatar: string | null; email: string | null; size?: number }) {
   const [erro, setErro] = useState(false);
@@ -105,23 +90,16 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
     setCarregando(false);
   }
 
-  function toggle() {
-    if (!aberto) carregar();
-    setAberto(v => !v);
-  }
+  function toggle() { if (!aberto) carregar(); setAberto(v => !v); }
 
   async function enviar() {
     if (!texto.trim() || enviando) return;
     setEnviando(true);
     await fetch("/api/feed/comentarios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ post_id: postId, texto }),
     });
-    setTexto("");
-    await carregar();
-    setEnviando(false);
+    setTexto(""); await carregar(); setEnviando(false);
   }
 
   return (
@@ -131,7 +109,6 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
         <MessageCircle size={16} strokeWidth={2} />
         {total > 0 ? total : ""} {total === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
       </button>
-
       {aberto && (
         <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {carregando ? (
@@ -157,7 +134,6 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
               </div>
             ))
           )}
-
           {usuarioLogado && (
             <div className="flex gap-2 pt-1">
               <input value={texto} onChange={e => setTexto(e.target.value)}
@@ -189,43 +165,35 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
   const [seguindo, setSeguindo] = useState(false);
   const [carregandoFollow, setCarregandoFollow] = useState(false);
 
+  async function toggleCurtida() {
+    if (!usuarioLogado || curtindo) return;
+    setCurtindo(true);
+    const acao = curtido ? "descurtir" : "curtir";
+    setCurtido(v => !v); setTotalCurtidas(v => v + (curtido ? -1 : 1));
+    await fetch("/api/feed/curtir", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ post_id: post.id, acao }),
+    });
+    setCurtindo(false);
+  }
+
   async function toggleFollow() {
     if (!usuarioLogado || carregandoFollow || userId === post.user_id) return;
     setCarregandoFollow(true);
     const acao = seguindo ? "desseguir" : "seguir";
     setSeguindo(v => !v);
     await fetch("/api/feed/follows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ following_id: post.user_id, acao }),
     });
     setCarregandoFollow(false);
   }
 
-  async function toggleCurtida() {
-    if (!usuarioLogado || curtindo) return;
-    setCurtindo(true);
-    const acao = curtido ? "descurtir" : "curtir";
-    setCurtido(v => !v);
-    setTotalCurtidas(v => v + (curtido ? -1 : 1));
-    await fetch("/api/feed/curtir", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ post_id: post.id, acao }),
-    });
-    setCurtindo(false);
-  }
-
   async function compartilhar() {
-    const url = `${window.location.origin}/feed#post-${post.id}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: "Post Moda Run", url }); return; } catch { /* fallback */ }
-    }
+    const url = `${window.location.origin}/#post-${post.id}`;
+    if (navigator.share) { try { await navigator.share({ title: "Post Moda Run", url }); return; } catch { /* fallback */ } }
     await navigator.clipboard.writeText(url);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
+    setCopiado(true); setTimeout(() => setCopiado(false), 2000);
   }
 
   async function deletar() {
@@ -256,9 +224,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                 <Newspaper size={12} strokeWidth={2} /> NOTÍCIA
               </span>
             )}
-            <h3 className="font-black text-base leading-tight mb-1" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {post.noticia_titulo}
-            </h3>
+            <h3 className="font-black text-base leading-tight mb-1" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{post.noticia_titulo}</h3>
             <p className="text-xs flex items-center gap-1 mt-1" style={{ color: "#8B949E" }}>
               <ExternalLink size={10} strokeWidth={2} /> {post.noticia_fonte}
             </p>
@@ -272,9 +238,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
     <article id={`post-${post.id}`} className="rounded-2xl overflow-hidden"
       style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.08)" }}>
       <div className="h-0.5 w-full" style={{ background: post.tipo === "atividade" ? "linear-gradient(90deg, #FF6B00, #5CC800)" : "linear-gradient(90deg, #5CC800, #4aaa00)" }} />
-
       <div className="p-4">
-        {/* Header do post */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <Avatar nome={post.autor_nome} avatar={post.autor_avatar} email={post.autor_email} size={38} />
@@ -312,7 +276,6 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
           </div>
         </div>
 
-        {/* Card de atividade */}
         {post.tipo === "atividade" && (post.atividade_distancia || post.atividade_tempo) && (
           <div className="rounded-2xl p-4 mb-3" style={{ background: "linear-gradient(135deg, rgba(255,107,0,0.1), rgba(92,200,0,0.1))", border: "1px solid rgba(92,200,0,0.2)" }}>
             <div className="flex items-center gap-1.5 mb-3">
@@ -324,25 +287,19 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
             <div className="grid grid-cols-3 gap-3">
               {post.atividade_distancia && (
                 <div className="text-center">
-                  <p className="text-2xl font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {post.atividade_distancia}
-                  </p>
+                  <p className="text-2xl font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{post.atividade_distancia}</p>
                   <p className="text-xs" style={{ color: "#8B949E" }}>km</p>
                 </div>
               )}
               {post.atividade_tempo && (
                 <div className="text-center">
-                  <p className="text-2xl font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {post.atividade_tempo}
-                  </p>
+                  <p className="text-2xl font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{post.atividade_tempo}</p>
                   <p className="text-xs" style={{ color: "#8B949E" }}>tempo</p>
                 </div>
               )}
               {post.atividade_pace && (
                 <div className="text-center">
-                  <p className="text-2xl font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {post.atividade_pace}
-                  </p>
+                  <p className="text-2xl font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{post.atividade_pace}</p>
                   <p className="text-xs" style={{ color: "#8B949E" }}>/km</p>
                 </div>
               )}
@@ -350,12 +307,8 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
           </div>
         )}
 
-        {/* Texto */}
-        {post.texto && (
-          <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>
-        )}
+        {post.texto && <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>}
 
-        {/* Fotos */}
         {post.fotos?.length > 0 && (
           <div className="relative overflow-hidden rounded-xl mb-3 cursor-pointer" style={{ maxHeight: 360 }}>
             <img src={post.fotos[fotoAtiva]} alt="" className="w-full object-cover rounded-xl" style={{ maxHeight: 360 }} />
@@ -371,7 +324,6 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
           </div>
         )}
 
-        {/* Ações */}
         <div className="flex items-center justify-between pt-2 mt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
           <div className="flex items-center gap-4">
             <button onClick={toggleCurtida} disabled={!usuarioLogado}
@@ -397,7 +349,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
 function CardNoticia({ noticia }: { noticia: Noticia }) {
   return (
     <a href={noticia.url} target="_blank" rel="noreferrer"
-      className="block rounded-2xl overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-xl"
+      className="block rounded-2xl overflow-hidden transition-all hover:-translate-y-0.5"
       style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.12)" }}>
       <div className="h-0.5" style={{ background: "linear-gradient(90deg, #FF6B00, #FFB800)" }} />
       {noticia.imagem && (
@@ -418,8 +370,6 @@ function CardNoticia({ noticia }: { noticia: Noticia }) {
   );
 }
 
-// ─── Modal de criar post ──────────────────────────────────────────────────────
-
 function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPublicado: (post: Post) => void }) {
   const [tipo, setTipo] = useState<"post" | "atividade">("post");
   const [texto, setTexto] = useState("");
@@ -433,7 +383,6 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
   const fileRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
-  // Calcular pace automaticamente
   useEffect(() => {
     if (distancia && tempo) {
       const [h = "0", m = "0", s = "0"] = tempo.split(":");
@@ -464,32 +413,19 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
   async function publicar() {
     if (publicando) return;
     setErro("");
-    if (tipo === "post" && !texto.trim() && fotos.length === 0) {
-      setErro("Escreva algo ou adicione uma foto.");
-      return;
-    }
+    if (tipo === "post" && !texto.trim() && fotos.length === 0) { setErro("Escreva algo ou adicione uma foto."); return; }
     setPublicando(true);
     const res = await fetch("/api/feed/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({
-        tipo,
-        texto: texto.trim() || null,
-        fotos,
+        tipo, texto: texto.trim() || null, fotos,
         atividade_distancia: distancia ? parseFloat(distancia) : null,
-        atividade_tempo: tempo || null,
-        atividade_pace: pace || null,
-        atividade_tipo: tipoAtiv,
+        atividade_tempo: tempo || null, atividade_pace: pace || null, atividade_tipo: tipoAtiv,
       }),
     });
     const data = await res.json();
-    if (data.success) {
-      onPublicado(data.post);
-      onClose();
-    } else {
-      setErro(data.error || "Erro ao publicar.");
-    }
+    if (data.success) { onPublicado(data.post); onClose(); }
+    else setErro(data.error || "Erro ao publicar.");
     setPublicando(false);
   }
 
@@ -499,25 +435,16 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-lg rounded-2xl overflow-hidden" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
         <div className="h-0.5" style={{ background: "linear-gradient(90deg, #5CC800, #FF6B00)" }} />
-
-        {/* Tabs tipo */}
         <div className="flex border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {([["post", "📝 POST"], ["atividade", "🏃 ATIVIDADE"]] as const).map(([t, label]) => (
             <button key={t} onClick={() => setTipo(t)}
               className="flex-1 py-3 text-sm font-black transition-colors"
-              style={{
-                fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em",
-                color: tipo === t ? "#5CC800" : "#8B949E",
-                borderBottom: tipo === t ? "2px solid #5CC800" : "2px solid transparent",
-                background: "transparent",
-              }}>
+              style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", color: tipo === t ? "#5CC800" : "#8B949E", borderBottom: tipo === t ? "2px solid #5CC800" : "2px solid transparent", background: "transparent" }}>
               {label}
             </button>
           ))}
         </div>
-
         <div className="p-4 space-y-4">
-
           {tipo === "atividade" && (
             <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.2)" }}>
               <div className="grid grid-cols-2 gap-2">
@@ -531,8 +458,7 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
                 </div>
                 <div>
                   <label className="text-xs font-black mb-1 block" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>DISTÂNCIA (km)</label>
-                  <input type="number" step="0.1" value={distancia} onChange={e => setDistancia(e.target.value)}
-                    placeholder="5.0"
+                  <input type="number" step="0.1" value={distancia} onChange={e => setDistancia(e.target.value)} placeholder="5.0"
                     className="w-full rounded-lg px-3 py-2 text-sm outline-none"
                     style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
                 </div>
@@ -540,8 +466,7 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-black mb-1 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>TEMPO (hh:mm:ss)</label>
-                  <input type="text" value={tempo} onChange={e => setTempo(e.target.value)}
-                    placeholder="00:25:00"
+                  <input type="text" value={tempo} onChange={e => setTempo(e.target.value)} placeholder="00:25:00"
                     className="w-full rounded-lg px-3 py-2 text-sm outline-none"
                     style={{ background: "#21262D", border: "1px solid rgba(255,255,255,0.1)", color: "#E6EDF3" }} />
                 </div>
@@ -554,14 +479,10 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
               </div>
             </div>
           )}
-
           <textarea value={texto} onChange={e => setTexto(e.target.value)}
             placeholder={tipo === "atividade" ? "Conta como foi a atividade..." : "O que você quer compartilhar com a comunidade?"}
-            rows={3}
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+            rows={3} className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
             style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.15)", color: "#E6EDF3" }} />
-
-          {/* Fotos selecionadas */}
           {fotos.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {fotos.map((f, i) => (
@@ -576,9 +497,7 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
               ))}
             </div>
           )}
-
           {erro && <p className="text-xs text-center" style={{ color: "#FF6B00" }}>{erro}</p>}
-
           <div className="flex items-center justify-between pt-1">
             <button onClick={() => fileRef.current?.click()}
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all hover:scale-105"
@@ -586,13 +505,8 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
               <ImageIcon size={14} strokeWidth={2} /> FOTO
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={selecionarFoto} />
-
             <div className="flex gap-2">
-              <button onClick={onClose}
-                className="rounded-xl px-4 py-2 text-sm font-black"
-                style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                CANCELAR
-              </button>
+              <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
               <button onClick={publicar} disabled={publicando}
                 className="rounded-xl px-5 py-2 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -608,12 +522,15 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
-export default function FeedPage(): React.JSX.Element {
+export default function HomePage(): React.JSX.Element {
   const supabase = createClient();
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [noticias, setNoticias] = useState<Noticia[]>([]);
+  const [proximosEventos, setProximosEventos] = useState<EventoDestaque[]>([]);
+  const [proximosTreinos, setProximosTreinos] = useState<Treino[]>([]);
+  const [totalTreinos, setTotalTreinos] = useState(0);
   const [pagina, setPagina] = useState(0);
   const [temMais, setTemMais] = useState(true);
   const [carregando, setCarregando] = useState(true);
@@ -623,7 +540,6 @@ export default function FeedPage(): React.JSX.Element {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelaRef = useRef<HTMLDivElement>(null);
 
-  // Carregar usuário
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user: u } }) => {
       setUser(u ? { id: u.id, email: u.email } : null);
@@ -632,79 +548,147 @@ export default function FeedPage(): React.JSX.Element {
           .then(({ data }) => setIsAdmin(!!data));
       }
     });
+
+    // Carregar eventos e treinos próximos
+    const hoje = new Date().toISOString().split("T")[0];
+    supabase.from("eventos").select("id, nome, cidade, estado, data_evento, distancia, link_inscricao, destaque")
+      .gte("data_evento", hoje).order("destaque", { ascending: false }).order("data_evento", { ascending: true }).limit(3)
+      .then(({ data }) => setProximosEventos(data || []));
+
+    supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, horario, tipo_treino, km_planejado, distancia")
+      .gte("data_encontro", hoje).order("data_encontro", { ascending: true }).limit(3)
+      .then(({ data }) => setProximosTreinos(data || []));
+
+    supabase.from("encontros").select("*", { count: "exact", head: true })
+      .then(({ count }) => setTotalTreinos(count || 0));
+
+    fetch("/api/feed/noticias").then(r => r.json()).then(d => setNoticias(d.noticias || []));
   }, []); // eslint-disable-line
 
-  // Carregar posts iniciais
   const carregarPosts = useCallback(async (pag = 0) => {
-    if (pag === 0) setCarregando(true);
-    else setCarregandoMais(true);
+    if (pag === 0) setCarregando(true); else setCarregandoMais(true);
     const res = await fetch(`/api/feed/posts?page=${pag}`);
     const data = await res.json();
-    if (pag === 0) setPosts(data.posts || []);
-    else setPosts(prev => [...prev, ...(data.posts || [])]);
-    setTemMais(data.tem_mais);
-    setPagina(pag);
-    if (pag === 0) setCarregando(false);
-    else setCarregandoMais(false);
+    if (pag === 0) setPosts(data.posts || []); else setPosts(prev => [...prev, ...(data.posts || [])]);
+    setTemMais(data.tem_mais); setPagina(pag);
+    if (pag === 0) setCarregando(false); else setCarregandoMais(false);
   }, []);
 
   useEffect(() => { carregarPosts(0); }, [carregarPosts]);
 
-  // Carregar notícias
-  useEffect(() => {
-    fetch("/api/feed/noticias").then(r => r.json()).then(d => setNoticias(d.noticias || []));
-  }, []);
-
-  // Scroll infinito
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
     observerRef.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && temMais && !carregandoMais) {
-        carregarPosts(pagina + 1);
-      }
+      if (entries[0].isIntersecting && temMais && !carregandoMais) carregarPosts(pagina + 1);
     }, { threshold: 0.1 });
     if (sentinelaRef.current) observerRef.current.observe(sentinelaRef.current);
     return () => observerRef.current?.disconnect();
   }, [temMais, carregandoMais, pagina, carregarPosts]);
 
-  function novoPost(post: Post) {
-    setPosts(prev => [post, ...prev]);
-  }
-
-  function deletarPost(id: number) {
-    setPosts(prev => prev.filter(p => p.id !== id));
-  }
+  function novoPost(post: Post) { setPosts(prev => [post, ...prev]); }
+  function deletarPost(id: number) { setPosts(prev => prev.filter(p => p.id !== id)); }
 
   return (
     <>
       <Header userEmail={user?.email} isAdmin={isAdmin} />
       <main style={{ background: "#0D1117", minHeight: "100vh" }}>
 
-        {/* Hero compacto */}
-        <div className="relative overflow-hidden px-4 py-8" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
-          <div className="absolute inset-0 pointer-events-none opacity-5">
-            <svg width="100%" height="100%"><defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0L0 0 0 40" fill="none" stroke="#5CC800" strokeWidth="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>
-          </div>
-          <div className="relative mx-auto max-w-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.02em" }}>
-                  🏃 COMUNIDADE
-                </h1>
-                <p className="text-sm" style={{ color: "#8B949E" }}>Feed de corredores Moda Run</p>
+        {/* ── HERO / BOAS-VINDAS ── */}
+        {!user && (
+          <section className="relative overflow-hidden px-4 py-16" style={{ background: "linear-gradient(135deg, #0D1117 0%, #161B22 50%, #0D1117 100%)" }}>
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute -right-40 top-0 h-96 w-96 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #5CC800, transparent 70%)" }} />
+              <svg className="absolute inset-0 w-full h-full opacity-5" xmlns="http://www.w3.org/2000/svg">
+                <defs><pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#5CC800" strokeWidth="0.5"/></pattern></defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+              </svg>
+            </div>
+            <div className="relative mx-auto max-w-2xl text-center">
+              <h1 className="text-5xl font-black leading-none sm:text-6xl mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <span style={{ color: "#E6EDF3" }}>CORRA NA </span><span style={{ color: "#5CC800" }}>MODA.</span>
+              </h1>
+              <p className="text-base mb-6" style={{ color: "#8B949E" }}>
+                Comunidade de corredores. Compartilhe atividades, encontre treinos e descubra corridas no Brasil.
+              </p>
+              <div className="flex justify-center gap-3">
+                <Link href="/cadastro" className="rounded-xl px-6 py-3 font-black text-sm"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  🚀 CRIAR CONTA GRÁTIS
+                </Link>
+                <Link href="/login" className="rounded-xl px-6 py-3 font-black text-sm"
+                  style={{ border: "2px solid rgba(92,200,0,0.4)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  JÁ TENHO CONTA
+                </Link>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── DESTAQUES RÁPIDOS (logado) ── */}
+        {user && (proximosEventos.length > 0 || proximosTreinos.length > 0) && (
+          <section className="px-4 py-5" style={{ background: "#161B22", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <div className="mx-auto max-w-2xl">
+              <div className="grid grid-cols-3 gap-3">
+                <Link href="/encontros" className="rounded-xl p-3 flex flex-col items-center gap-1 transition-all hover:brightness-110"
+                  style={{ background: "rgba(92,200,0,0.08)", border: "1px solid rgba(92,200,0,0.15)" }}>
+                  <Zap size={18} strokeWidth={2} style={{ color: "#5CC800" }} />
+                  <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{totalTreinos} TREINOS</p>
+                </Link>
+                <Link href="/eventos" className="rounded-xl p-3 flex flex-col items-center gap-1 transition-all hover:brightness-110"
+                  style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.15)" }}>
+                  <Flag size={18} strokeWidth={2} style={{ color: "#FF6B00" }} />
+                  <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EVENTOS</p>
+                </Link>
+                <Link href="/ferramentas" className="rounded-xl p-3 flex flex-col items-center gap-1 transition-all hover:brightness-110"
+                  style={{ background: "rgba(255,184,0,0.08)", border: "1px solid rgba(255,184,0,0.15)" }}>
+                  <Timer size={18} strokeWidth={2} style={{ color: "#FFB800" }} />
+                  <p className="text-xs font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>FERRAMENTAS</p>
+                </Link>
+              </div>
+
+              {proximosEventos.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>PRÓXIMAS CORRIDAS</p>
+                  <div className="space-y-2">
+                    {proximosEventos.slice(0, 2).map(e => (
+                      <Link key={e.id} href="/eventos"
+                        className="flex items-center gap-3 rounded-xl p-3 transition-all hover:brightness-110"
+                        style={{ background: "#21262D", border: "1px solid rgba(255,107,0,0.1)" }}>
+                        <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg"
+                          style={{ background: "rgba(255,107,0,0.15)" }}>
+                          <p className="text-xs font-black leading-none" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{formatarData(e.data_evento)}</p>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-sm truncate" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{e.nome}</p>
+                          <p className="text-xs" style={{ color: "#8B949E" }}>{e.cidade} — {e.estado}{e.distancia ? ` · ${e.distancia}` : ""}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── FEED + PUBLICAR ── */}
+        <div className="px-4 pt-5 pb-2">
+          <div className="mx-auto max-w-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
+                🏃 COMUNIDADE
+              </h2>
               {user && (
                 <button onClick={() => setModalAberto(true)}
-                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:scale-105 hover:brightness-110"
+                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:scale-105"
                   style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 4px 20px rgba(92,200,0,0.3)" }}>
                   <Plus size={16} strokeWidth={2.5} /> PUBLICAR
                 </button>
               )}
             </div>
 
-            {/* Caixa de post rápido */}
             {user && (
-              <button onClick={() => setModalAberto(true)} className="w-full rounded-2xl p-4 text-left transition-all hover:border-green-500/30"
+              <button onClick={() => setModalAberto(true)} className="w-full rounded-2xl p-4 text-left mb-4 transition-all hover:border-green-500/30"
                 style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
                 <div className="flex items-center gap-3">
                   <Avatar nome={null} avatar={null} email={user.email ?? null} size={36} />
@@ -725,7 +709,7 @@ export default function FeedPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* Abas */}
+        {/* Abas feed/notícias */}
         <div className="sticky top-0 z-10 px-4 py-2" style={{ background: "#0D1117", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="mx-auto max-w-2xl flex gap-1">
             {([["feed", "🏃 FEED"], ["noticias", "📰 NOTÍCIAS"]] as const).map(([aba, label]) => (
@@ -746,7 +730,6 @@ export default function FeedPage(): React.JSX.Element {
         {/* Conteúdo */}
         <div className="px-4 py-6">
           <div className="mx-auto max-w-2xl space-y-4">
-
             {abaAtiva === "feed" && (
               <>
                 {carregando ? (
@@ -771,8 +754,6 @@ export default function FeedPage(): React.JSX.Element {
                     <CardPost key={post.id} post={post} usuarioLogado={!!user} userId={user?.id ?? null} onDelete={deletarPost} />
                   ))
                 )}
-
-                {/* Sentinela scroll infinito */}
                 <div ref={sentinelaRef} className="h-4" />
                 {carregandoMais && (
                   <div className="flex justify-center py-4">
@@ -780,9 +761,7 @@ export default function FeedPage(): React.JSX.Element {
                   </div>
                 )}
                 {!temMais && posts.length > 0 && (
-                  <p className="text-center text-xs py-4" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    — FIM DO FEED —
-                  </p>
+                  <p className="text-center text-xs py-4" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>— FIM DO FEED —</p>
                 )}
               </>
             )}
@@ -801,7 +780,6 @@ export default function FeedPage(): React.JSX.Element {
                 )}
               </>
             )}
-
           </div>
         </div>
 
@@ -814,7 +792,7 @@ export default function FeedPage(): React.JSX.Element {
           </button>
         )}
 
-        {/* Não logado */}
+        {/* Banner login (não logado) */}
         {!user && (
           <div className="fixed bottom-0 left-0 right-0 p-4" style={{ background: "linear-gradient(to top, #0D1117, transparent)" }}>
             <div className="mx-auto max-w-md rounded-2xl p-4 text-center" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
@@ -830,9 +808,7 @@ export default function FeedPage(): React.JSX.Element {
         )}
       </main>
 
-      {modalAberto && (
-        <ModalCriarPost onClose={() => setModalAberto(false)} onPublicado={novoPost} />
-      )}
+      {modalAberto && <ModalCriarPost onClose={() => setModalAberto(false)} onPublicado={novoPost} />}
     </>
   );
 }
