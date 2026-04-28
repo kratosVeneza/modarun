@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import { Camera, Edit2, Check, X, LogOut, ShoppingBag, Flag, Zap, ClipboardList, MapPin, Star, Trash2, Calendar, Ruler, ArrowRight } from "lucide-react";
+import { Camera, Edit2, Check, X, LogOut, ShoppingBag, Flag, Zap, ClipboardList, MapPin, Star, Trash2, Calendar, Ruler, ArrowRight, Users } from "lucide-react";
 
 type Treino = { id: number; titulo: string; cidade: string; estado: string; data_encontro: string; tipo_treino?: string; km_planejado?: number; distancia?: string };
 type CidadeInteresse = { id: number; cidade: string; estado: string };
 type EventoSalvo = { id: number; evento_id: number; eventos: { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string } };
 
 const ESTADOS_UF = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
-
 const inp = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none" } as React.CSSProperties;
 
 function formatarData(data: string) {
@@ -42,8 +41,8 @@ export default function PerfilPage(): React.JSX.Element {
   const [uploadandoFoto, setUploadandoFoto] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  // Preferências
+  const [seguidores, setSeguidores] = useState(0);
+  const [seguindo, setSeguindo] = useState(0);
   const [cidadesInteresse, setCidadesInteresse] = useState<CidadeInteresse[]>([]);
   const [eventosSalvos, setEventosSalvos] = useState<EventoSalvo[]>([]);
   const [abaPref, setAbaPref] = useState<"cidades" | "eventos">("cidades");
@@ -62,17 +61,21 @@ export default function PerfilPage(): React.JSX.Element {
     setNomeExibicao(nome); setNomeTemp(nome);
     setAvatarUrl(user.user_metadata?.avatar_url || null);
 
-    const [{ data: adminRow }, { data: treinosData }, { data: cidades }, { data: eventos }] = await Promise.all([
+    const [{ data: adminRow }, { data: treinosData }, { data: cidades }, { data: eventos }, { count: seg }, { count: seg2 }] = await Promise.all([
       supabase.from("admins").select("email").eq("email", user.email?.toLowerCase() ?? "").single(),
       supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, tipo_treino, km_planejado, distancia").eq("user_id", user.id).order("data_encontro", { ascending: false }),
       supabase.from("user_cidades_interesse").select("id, cidade, estado").eq("user_id", user.id).order("created_at"),
       supabase.from("user_eventos_salvos").select("id, evento_id, eventos(id, nome, cidade, estado, data_evento, distancia, link_inscricao)").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
+      supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
     ]);
 
     setIsAdmin(!!adminRow);
     setTreinos(treinosData || []);
     setCidadesInteresse((cidades || []) as CidadeInteresse[]);
     setEventosSalvos((eventos || []) as unknown as EventoSalvo[]);
+    setSeguidores(seg ?? 0);
+    setSeguindo(seg2 ?? 0);
     setLoading(false);
   }, []); // eslint-disable-line
 
@@ -114,10 +117,7 @@ export default function PerfilPage(): React.JSX.Element {
     const { data, error } = await supabase.from("user_cidades_interesse").insert({
       user_id: user.id, cidade: novaCidade.trim(), estado: novoEstado,
     }).select("id, cidade, estado").single();
-    if (!error && data) {
-      setCidadesInteresse(prev => [...prev, data as CidadeInteresse]);
-      setNovaCidade("");
-    }
+    if (!error && data) { setCidadesInteresse(prev => [...prev, data as CidadeInteresse]); setNovaCidade(""); }
     setSalvandoCidade(false);
   }
 
@@ -150,25 +150,19 @@ export default function PerfilPage(): React.JSX.Element {
 
   const inicial = nomeExibicao[0]?.toUpperCase() || "?";
   const totalKm = treinos.reduce((acc, t) => acc + (t.km_planejado || 0), 0);
-
-  // Link para eventos filtrados pelas cidades favoritas
   const estadosFavoritosUnicos = [...new Set(cidadesInteresse.map(c => c.estado))];
-  const linkEventosCidades = cidadesInteresse.length > 0
-    ? `/eventos?estado=${encodeURIComponent(estadosFavoritosUnicos.join(","))}`
-    : "/eventos";
+  const linkEventosCidades = cidadesInteresse.length > 0 ? `/eventos?estado=${encodeURIComponent(estadosFavoritosUnicos.join(","))}` : "/eventos";
 
   return (
     <>
       <Header userEmail={userEmail} isAdmin={isAdmin} />
       <main style={{ background: "#0D1117", minHeight: "100vh" }}>
 
-        {/* Hero */}
         <section className="relative overflow-hidden px-4 py-10" style={{ background: "linear-gradient(135deg, #0D1117, #161B22)" }}>
           <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full opacity-5" style={{ background: "radial-gradient(circle, #5CC800, transparent)" }} />
           <div className="relative mx-auto max-w-3xl">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
-              {/* Avatar */}
               <div className="relative shrink-0 group">
                 <div className="relative h-24 w-24 rounded-2xl overflow-hidden"
                   style={{ boxShadow: avatarUrl ? "0 0 0 3px #5CC800" : "0 0 0 3px rgba(92,200,0,0.3)" }}>
@@ -185,8 +179,7 @@ export default function PerfilPage(): React.JSX.Element {
                     style={{ background: "rgba(0,0,0,0.65)" }}>
                     {uploadandoFoto
                       ? <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                      : <><Camera size={20} color="#fff" strokeWidth={2} /><span className="text-xs font-black mt-1" style={{ color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>TROCAR</span></>
-                    }
+                      : <><Camera size={20} color="#fff" strokeWidth={2} /><span className="text-xs font-black mt-1" style={{ color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>TROCAR</span></>}
                   </button>
                 </div>
                 {avatarUrl && !uploadandoFoto && (
@@ -198,7 +191,6 @@ export default function PerfilPage(): React.JSX.Element {
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.target.value = ""; }} />
               </div>
 
-              {/* Info */}
               <div className="flex-1">
                 {nomeEditando ? (
                   <div className="flex items-center gap-2">
@@ -211,8 +203,7 @@ export default function PerfilPage(): React.JSX.Element {
                       {salvandoNome ? "..." : <span className="flex items-center gap-1"><Check size={14} strokeWidth={2.5} /> SALVAR</span>}
                     </button>
                     <button onClick={() => { setNomeEditando(false); setNomeTemp(nomeExibicao); }}
-                      className="rounded-xl px-3 py-2"
-                      style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>
+                      className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>
                       <X size={16} strokeWidth={2} />
                     </button>
                   </div>
@@ -227,7 +218,26 @@ export default function PerfilPage(): React.JSX.Element {
                   </div>
                 )}
                 <p className="mt-0.5 text-sm" style={{ color: "#8B949E" }}>{userEmail}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
+
+                {/* Seguidores */}
+                <div className="mt-3 flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-xl font-black leading-none" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{seguidores}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUIDORES</p>
+                  </div>
+                  <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.1)" }} />
+                  <div className="text-center">
+                    <p className="text-xl font-black leading-none" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{seguindo}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUINDO</p>
+                  </div>
+                  <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.1)" }} />
+                  <Link href="/feed" className="flex items-center gap-1.5 text-xs font-black transition-colors hover:opacity-70"
+                    style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <Users size={13} strokeWidth={2} /> VER COMUNIDADE
+                  </Link>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
                   <span className="rounded-lg px-3 py-1 text-xs font-black"
                     style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                     {treinos.length} TREINO{treinos.length !== 1 ? "S" : ""}
@@ -263,11 +273,12 @@ export default function PerfilPage(): React.JSX.Element {
         <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {[
               { v: treinos.length, l: "TREINOS", cor: "#5CC800" },
-              { v: `${totalKm}km`, l: "KM PLANEJADOS", cor: "#FF6B00" },
-              { v: cidadesInteresse.length, l: "CIDADES FAV.", cor: "#FFB800" },
+              { v: `${totalKm}km`, l: "KM PLANEJ.", cor: "#FF6B00" },
+              { v: seguidores, l: "SEGUIDORES", cor: "#5CC800" },
+              { v: seguindo, l: "SEGUINDO", cor: "#FFB800" },
             ].map((s, i) => (
               <div key={i} className="rounded-2xl p-4 text-center" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
                 <p className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: s.cor }}>{s.v}</p>
@@ -276,21 +287,15 @@ export default function PerfilPage(): React.JSX.Element {
             ))}
           </div>
 
-          {/* ── PREFERÊNCIAS ─────────────────────────────────────────── */}
+          {/* Preferências */}
           <section className="rounded-2xl overflow-hidden" style={{ background: "#161B22", border: "1px solid rgba(255,184,0,0.2)" }}>
             <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div className="flex items-center gap-2 mb-1">
                 <div className="h-5 w-1 rounded-full" style={{ background: "#FFB800" }} />
-                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.03em" }}>
-                  MINHAS PREFERÊNCIAS
-                </h2>
+                <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.03em" }}>MINHAS PREFERÊNCIAS</h2>
               </div>
-              <p className="text-xs" style={{ color: "#8B949E" }}>
-                Eventos das suas cidades favoritas aparecem na página inicial e filtram automaticamente a aba de eventos.
-              </p>
+              <p className="text-xs" style={{ color: "#8B949E" }}>Eventos das suas cidades favoritas aparecem na página inicial e filtram automaticamente a aba de eventos.</p>
             </div>
-
-            {/* Abas */}
             <div className="flex" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               {([
                 { id: "cidades", label: "📍 CIDADES FAVORITAS", count: cidadesInteresse.length },
@@ -308,25 +313,14 @@ export default function PerfilPage(): React.JSX.Element {
                 </button>
               ))}
             </div>
-
             <div className="p-5">
-              {/* ABA CIDADES */}
               {abaPref === "cidades" && (
                 <div className="space-y-4">
-                  {/* Adicionar cidade */}
                   <div className="rounded-xl p-4" style={{ background: "#21262D" }}>
-                    <p className="text-xs font-black mb-3" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
-                      ADICIONAR CIDADE
-                    </p>
+                    <p className="text-xs font-black mb-3" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>ADICIONAR CIDADE</p>
                     <div className="grid gap-2 sm:grid-cols-[1fr_120px_auto]">
-                      <input
-                        type="text"
-                        placeholder="Ex: Tucuruí, Belém, Manaus..."
-                        value={novaCidade}
-                        onChange={e => setNovaCidade(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && adicionarCidade()}
-                        style={inp}
-                      />
+                      <input type="text" placeholder="Ex: Tucuruí, Belém, Manaus..." value={novaCidade}
+                        onChange={e => setNovaCidade(e.target.value)} onKeyDown={e => e.key === "Enter" && adicionarCidade()} style={inp} />
                       <select value={novoEstado} onChange={e => setNovoEstado(e.target.value)} style={inp}>
                         {ESTADOS_UF.map(uf => <option key={uf} value={uf}>{uf}</option>)}
                       </select>
@@ -337,73 +331,47 @@ export default function PerfilPage(): React.JSX.Element {
                       </button>
                     </div>
                   </div>
-
-                  {/* Lista de cidades */}
                   {cidadesInteresse.length === 0 ? (
                     <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(255,184,0,0.2)" }}>
                       <MapPin size={28} color="rgba(255,184,0,0.3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        NENHUMA CIDADE FAVORITA
-                      </p>
-                      <p className="text-xs mt-1" style={{ color: "#8B949E" }}>
-                        Adicione cidades para ver eventos personalizados na página inicial.
-                      </p>
+                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUMA CIDADE FAVORITA</p>
+                      <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Adicione cidades para ver eventos personalizados na página inicial.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {cidadesInteresse.map(c => (
-                        <div key={c.id}
-                          className="flex items-center justify-between rounded-xl px-4 py-3"
+                        <div key={c.id} className="flex items-center justify-between rounded-xl px-4 py-3"
                           style={{ background: "#21262D", border: "1px solid rgba(255,184,0,0.1)" }}>
                           <div className="flex items-center gap-2">
                             <MapPin size={14} color="#FFB800" strokeWidth={2} />
-                            <span className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              {c.cidade}
-                            </span>
+                            <span className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.cidade}</span>
                             <span className="rounded-lg px-2 py-0.5 text-xs font-black"
-                              style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              {c.estado}
-                            </span>
+                              style={{ background: "rgba(255,184,0,0.15)", color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.estado}</span>
                           </div>
                           <button onClick={() => removerCidade(c.id)} disabled={removendoId === c.id}
                             className="rounded-lg p-1.5 transition-all hover:brightness-110"
                             style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00" }}>
-                            {removendoId === c.id
-                              ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" />
-                              : <Trash2 size={13} strokeWidth={2} />
-                            }
+                            {removendoId === c.id ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" /> : <Trash2 size={13} strokeWidth={2} />}
                           </button>
                         </div>
                       ))}
-
-                      {/* Link para eventos filtrados pelas cidades favoritas */}
-                      <Link
-                        href={linkEventosCidades}
+                      <Link href={linkEventosCidades}
                         className="flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 text-xs font-black mt-2 transition-all hover:brightness-110"
                         style={{ background: "rgba(255,184,0,0.08)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        <Flag size={13} strokeWidth={2} />
-                        VER EVENTOS NESSAS CIDADES
-                        <ArrowRight size={13} strokeWidth={2.5} />
+                        <Flag size={13} strokeWidth={2} /> VER EVENTOS NESSAS CIDADES <ArrowRight size={13} strokeWidth={2.5} />
                       </Link>
                     </div>
                   )}
                 </div>
               )}
-
-              {/* ABA EVENTOS SALVOS */}
               {abaPref === "eventos" && (
                 <div className="space-y-3">
                   {eventosSalvos.length === 0 ? (
                     <div className="rounded-xl p-6 text-center" style={{ background: "#21262D", border: "1px dashed rgba(255,184,0,0.2)" }}>
                       <Star size={28} color="rgba(255,184,0,0.3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        NENHUM EVENTO SALVO
-                      </p>
-                      <p className="text-xs mt-1 mb-4" style={{ color: "#8B949E" }}>
-                        Salve eventos na página de eventos clicando no ícone de bookmark 🔖
-                      </p>
-                      <Link href="/eventos"
-                        className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black"
+                      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUM EVENTO SALVO</p>
+                      <p className="text-xs mt-1 mb-4" style={{ color: "#8B949E" }}>Salve eventos na página de eventos clicando no ícone de bookmark 🔖</p>
+                      <Link href="/eventos" className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black"
                         style={{ background: "linear-gradient(135deg, #FFB800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
                         <Flag size={13} strokeWidth={2} /> VER EVENTOS
                       </Link>
@@ -419,10 +387,7 @@ export default function PerfilPage(): React.JSX.Element {
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className="font-black text-sm leading-tight mb-1"
-                                  style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                                  {ev.nome}
-                                </p>
+                                <p className="font-black text-sm leading-tight mb-1" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{ev.nome}</p>
                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                   <span className="flex items-center gap-1 text-xs" style={{ color: "#5CC800" }}>
                                     <Calendar size={10} strokeWidth={2} />{formatarDataCompleta(ev.data_evento)}
@@ -438,7 +403,7 @@ export default function PerfilPage(): React.JSX.Element {
                                 </div>
                                 {ev.link_inscricao && (
                                   <a href={ev.link_inscricao} target="_blank" rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs font-black transition-all hover:brightness-110"
+                                    className="inline-flex items-center gap-1 text-xs font-black"
                                     style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
                                     INSCREVER-SE <ArrowRight size={11} strokeWidth={2.5} />
                                   </a>
@@ -447,10 +412,7 @@ export default function PerfilPage(): React.JSX.Element {
                               <button onClick={() => removerEventoSalvo(es.id)} disabled={removendoEventoId === es.id}
                                 className="shrink-0 rounded-lg p-1.5 transition-all hover:brightness-110"
                                 style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00" }}>
-                                {removendoEventoId === es.id
-                                  ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" />
-                                  : <Trash2 size={13} strokeWidth={2} />
-                                }
+                                {removendoEventoId === es.id ? <span className="h-3 w-3 block animate-spin rounded-full border border-orange-400 border-t-transparent" /> : <Trash2 size={13} strokeWidth={2} />}
                               </button>
                             </div>
                           </div>
