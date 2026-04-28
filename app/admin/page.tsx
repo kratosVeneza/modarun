@@ -190,13 +190,14 @@ export default function AdminPage(): React.JSX.Element {
               key="sync-tab"
               eventosAtuais={eventos}
               onImportar={async () => {
+                // Recarrega lista de eventos apos importacao
                 const { data: ev, error } = await supabase
                   .from("eventos")
                   .select("*")
                   .order("data_evento", { ascending: true });
 
                 if (error) {
-                  console.error("[onImportar] Erro ao recarregar eventos:", error.message);
+                  console.error("[onImportar] erro:", error.message);
                 } else {
                   setEventos(ev || []);
                 }
@@ -212,6 +213,7 @@ export default function AdminPage(): React.JSX.Element {
 // ─── AbaEventos ───────────────────────────────────────────────────────────────
 
 function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e: Evento[]) => void }): React.JSX.Element {
+  const supabase = React.useRef(createClient()).current;
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<Evento|null>(null);
   const [form, setForm] = useState(eventoVazio);
@@ -299,7 +301,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       if(!res.ok){setSyncErro(result.error||"Erro ao sincronizar.");setSyncing(false);return;}
       setSyncResultado(result);
       // Reload events from DB
-      const { data: ev } = await (await import("@/utils/supabase/client")).createClient().from("eventos").select("*").order("data_evento",{ascending:true});
+      const { data: ev } = await supabase.from("eventos").select("*").order("data_evento",{ascending:true});
       setEventos(ev||[]);
     } catch { setSyncErro("Erro de conexão."); }
     setSyncing(false);
@@ -472,7 +474,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
       const result = await res.json();
       if(!res.ok){setImportErro(result.error||"Erro ao importar.");setImportando(false);return;}
       setImportResultado(result);
-      const supabaseClient = (await import("@/utils/supabase/client")).createClient();
+      const supabaseClient = supabase;
       const { data: ev } = await supabaseClient.from("eventos").select("*").order("data_evento",{ascending:true});
       setEventos(ev||[]);
     } catch { setImportErro("Erro de conexão."); }
@@ -786,7 +788,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 // ─── AbaProdutos ──────────────────────────────────────────────────────────────
 
 function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdutos: (p: Produto[]) => void }): React.JSX.Element {
-  const supabase = createClient();
+  const supabase = React.useRef(createClient()).current;
   const [categorias, setCategorias] = useState<string[]>(["Camiseta","Conjunto","Shorts","Calçado","Meia","Boné","Acessório","Nutrição","Hidratação","Outro"]);
   const [novaCategoria, setNovaCategoria] = useState("");
   const [gerenciarCats, setGerenciarCats] = useState(false);
@@ -796,7 +798,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
 
   // Carregar categorias do banco ao montar
   React.useEffect(() => {
-    const sp = createClient();
+    const sp = supabase;
     sp.from("produto_categorias").select("nome").order("ordem").then(({ data }) => {
       if (data && data.length > 0) setCategorias(data.map((d: { nome: string }) => d.nome));
     });
@@ -806,7 +808,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
     const nome = novaCategoria.trim();
     if (!nome || categorias.includes(nome)) return;
     setSalvandoCat(true);
-    const sp = createClient();
+    const sp = supabase;
     const { error } = await sp.from("produto_categorias").insert({ nome, ordem: categorias.length + 1 });
     if (!error) { setCategorias(prev => [...prev, nome]); setNovaCategoria(""); }
     setSalvandoCat(false);
@@ -815,7 +817,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
   async function removerCategoria(nome: string) {
     if (!confirm(`Remover categoria "${nome}"? Produtos com essa categoria não serão alterados.`)) return;
     setRemovendoCat(nome);
-    const sp = createClient();
+    const sp = supabase;
     await sp.from("produto_categorias").delete().eq("nome", nome);
     setCategorias(prev => prev.filter(c => c !== nome));
     setRemovendoCat(null);
@@ -1247,7 +1249,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
 // ─── AbaBanners ───────────────────────────────────────────────────────────────
 
 function AbaBanners(): React.JSX.Element {
-  const supabase = createClient();
+  const supabase = React.useRef(createClient()).current;
   const [banners, setBanners] = useState<Banner[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [aberto, setAberto] = useState(false);
@@ -1466,7 +1468,7 @@ type Sugestao = {
 };
 
 function AbaSugestoes({ onAprovar }: { onAprovar: (ev: Evento) => void }): React.JSX.Element {
-  const supabase = createClient();
+  const supabase = React.useRef(createClient()).current;
   const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [aprovando, setAprovando] = useState<string | null>(null);
@@ -1824,11 +1826,11 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
       }),
     });
 
-    const data = await res.json().catch(() => null);
+    const data = await res.json().catch(() => ({ error: "Resposta invalida do servidor" }));
 
     if (!res.ok || !data?.success) {
-      const msg = data?.error || `HTTP ${res.status}`;
-      console.error("[confirmarImportacao] erro:", msg, data?.details || "");
+      const msg = `[HTTP ${res.status}] ${data?.error || "erro desconhecido"} | detalhes: ${JSON.stringify(data?.details || data || "")} `;
+      console.error("[confirmarImportacao]", msg);
       erros.push(msg);
     } else {
       importados = data.importados ?? selecionados.length;
