@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Header from "@/components/Header";
 import { TrendingUp, Plus, Trash2, Timer, Ruler, Heart, Mountain, Flame, ClipboardList } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -63,21 +63,27 @@ function MiniBarChart({ dados, campo, cor, label }: { dados: Registro[]; campo: 
 }
 
 function SparkLine({ dados, campo, cor }: { dados: Registro[]; campo: keyof Registro; cor: string }) {
-  const valores = dados.slice(-8).map(d => Number(d[campo]) || 0);
-  if (valores.every(v => v === 0)) return null;
-  const max = Math.max(...valores);
-  const min = Math.min(...valores.filter(v => v > 0));
-  const range = max - min || 1;
+  const points = useMemo(() => {
+    const valores = dados.slice(-8).map(d => Number(d[campo]) || 0);
+    if (valores.every(v => v === 0)) return null;
+    const max = Math.max(...valores);
+    const min = Math.min(...valores.filter(v => v > 0));
+    const range = max - min || 1;
+    const w = 80, h = 30;
+    return valores.map((v, i) => {
+      const x = (i / (valores.length - 1)) * w;
+      const y = h - ((v - min) / range) * (h - 4) - 2;
+      return `${x},${y}`;
+    }).join(" ");
+  }, [dados, campo]);
+
+  if (!points) return null;
   const w = 80, h = 30;
-  const pts = valores.map((v, i) => {
-    const x = (i / (valores.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    return `${x},${y}`;
-  }).join(" ");
+  const lastPt = points.split(" ").pop()?.split(",");
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polyline points={pts} fill="none" stroke={cor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts.split(" ").pop()?.split(",")[0]} cy={pts.split(" ").pop()?.split(",")[1]} r="3" fill={cor} />
+      <polyline points={points} fill="none" stroke={cor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {lastPt && <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={cor} />}
     </svg>
   );
 }

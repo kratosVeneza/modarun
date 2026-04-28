@@ -12,7 +12,16 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll() {},
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // setAll é chamado em Server Components onde não é possível gravar cookies.
+            // Pode ser ignorado com segurança — o middleware lida com o refresh da sessão.
+          }
+        },
       },
     }
   );

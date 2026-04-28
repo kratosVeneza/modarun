@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -8,9 +9,38 @@ const supabase = createClient(
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.com.br";
 
-export async function POST(request: Request): Promise<NextResponse> {
+// Rate-limit simples em memória: máximo 5 inscrições por IP por minuto
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60_000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Rate-limit por IP
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: "Muitas tentativas. Aguarde um minuto e tente novamente." },
+      { status: 429 }
+    );
+  }
   try {
-    const body = await request.json() as { encontro_id: number; nome: string; whatsapp?: string };
+    const body = (await request.json()) as { encontro_id: number; nome: string; whatsapp?: string };
     const { encontro_id, nome, whatsapp } = body;
 
     if (!encontro_id || !nome) {
