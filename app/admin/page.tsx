@@ -195,7 +195,9 @@ export default function AdminPage(): React.JSX.Element {
                   .select("*")
                   .order("data_evento", { ascending: true });
 
-                if (!error) {
+                if (error) {
+                  console.error("[onImportar] Erro ao recarregar eventos:", error.message);
+                } else {
                   setEventos(ev || []);
                 }
               }}
@@ -1825,7 +1827,9 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
 if (res.ok && data?.success) {
   importados += 1;
 } else {
-  erros.push(`${ev.estado} - ${ev.nome}: ${data?.error || res.status}`);
+  const msg = data?.error || `HTTP ${res.status}`;
+  console.error(`[importar] ${ev.estado} - ${ev.nome}:`, msg);
+  erros.push(`${ev.estado} - ${ev.nome}: ${msg}`);
 }
     }
 

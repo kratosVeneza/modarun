@@ -83,33 +83,45 @@ export async function POST(request: Request): Promise<NextResponse> {
     data_evento,
   });
 
+  // Tenta upsert pela chave_evento (requer constraint UNIQUE na coluna)
+  const payload = {
+    nome,
+    cidade,
+    estado,
+    data_evento,
+    distancia: distancia || null,
+    local: local || null,
+    link_inscricao: link_inscricao || null,
+    destaque,
+    chave_evento,
+  };
+
   const { data, error } = await supabase
     .from("eventos")
-    .upsert(
-      {
-        nome,
-        cidade,
-        estado,
-        data_evento,
-        distancia: distancia || null,
-        local: local || null,
-        link_inscricao: link_inscricao || null,
-        destaque,
-        chave_evento,
-      },
-      {
-        onConflict: "chave_evento",
-        ignoreDuplicates: false,
-      }
-    )
+    .upsert(payload, { onConflict: "chave_evento", ignoreDuplicates: false })
     .select()
     .single();
 
+  // Se upsert falhar (ex: constraint UNIQUE nao existe), tenta INSERT simples
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: inserted, error: insertError } = await supabase
+      .from("eventos")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("[admin/eventos POST] upsert:", error.message, "| insert:", insertError.message);
+      return NextResponse.json(
+        { error: insertError.message, upsert_error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: inserted, via: "insert" });
   }
 
-  return NextResponse.json({ success: true, data });
+  return NextResponse.json({ success: true, data, via: "upsert" });
 }
 
 export async function PATCH(request: Request): Promise<NextResponse> {
