@@ -1399,8 +1399,9 @@ function AbaBanners(): React.JSX.Element {
                 <label className="flex cursor-pointer items-center gap-3 flex-1 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
                   <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
                   <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>✅ Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visível na loja</p></div>
-                </div>
-                {/* Campo Paginas */}
+                </label>
+              </div>
+              {/* Campo Paginas */}
                 <div className="rounded-xl p-4" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
                   <p className="text-xs font-black mb-2" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MOSTRAR COMO PROPAGANDA NAS PÁGINAS</p>
                   <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
