@@ -1,5 +1,6 @@
 "use client";
 
+import CardLoja from "@/components/CardLoja";
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
@@ -496,6 +497,9 @@ export default function EventosPage(): React.JSX.Element {
           )}
           {/* Filtros */}
           <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
+            {/* Banner loja */}
+            <CardLoja variante="inline" />
+
             <div className="flex items-center gap-2 mb-3">
               <Search size={14} color="#5CC800" strokeWidth={2} />
               <h2 className="font-black text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3", letterSpacing: "0.05em" }}>FILTRAR EVENTOS</h2>
