@@ -20,6 +20,7 @@ type Banner = {
   imagem_url: string; link_url?: string; link_texto?: string;
   ativo: boolean; ordem: number;
   position_x?: number; position_y?: number;
+  paginas?: string[];
 };
 
 type Evento = {
@@ -68,7 +69,7 @@ export default function AdminPage(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync">("eventos");
+  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync"|"mensagens">("eventos");
   const [lojaRestrita, setLojaRestrita] = useState<boolean | null>(null);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -171,7 +172,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {/* Tabs */}
           <div className="flex gap-3">
-            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"]] as const).map(([id,icon,label,desc]) => (
+            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
                 style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: `1px solid ${aba===id ? "rgba(92,200,0,0.4)" : "rgba(92,200,0,0.1)"}` }}>
@@ -204,6 +205,7 @@ export default function AdminPage(): React.JSX.Element {
               }}
             />
           )}
+          {aba === "mensagens" && <AbaMensagens key="mensagens-tab" />}
         </div>
       </main>
     </>
@@ -1264,15 +1266,15 @@ function AbaBanners(): React.JSX.Element {
     carregar();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editando, setEditando] = useState<Banner | null>(null);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50 });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[] });
   const [loading, setLoading] = useState(false);
   const [uploadando, setUploadando] = useState(false);
   const [erro, setErro] = useState("");
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50 }); setErro(""); setAberto(true); }
-  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem,position_x:b.position_x??50,position_y:b.position_y??50 }); setErro(""); setAberto(true); }
+  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50,paginas:[] }); setErro(""); setAberto(true); }
+  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem,position_x:b.position_x??50,position_y:b.position_y??50,paginas:b.paginas||[] }); setErro(""); setAberto(true); }
 
   async function uploadImagem(file: File) {
     setUploadando(true);
@@ -1293,7 +1295,7 @@ function AbaBanners(): React.JSX.Element {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
-    const formComPosicao = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50 };
+    const formComPosicao = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [] };
     const body = editando ? { id: editando.id, ...formComPosicao } : formComPosicao;
     try {
       const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1397,7 +1399,22 @@ function AbaBanners(): React.JSX.Element {
                 <label className="flex cursor-pointer items-center gap-3 flex-1 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
                   <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
                   <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>✅ Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visível na loja</p></div>
-                </label>
+                </div>
+                {/* Campo Paginas */}
+                <div className="rounded-xl p-4" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
+                  <p className="text-xs font-black mb-2" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MOSTRAR COMO PROPAGANDA NAS PÁGINAS</p>
+                  <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[["feed","Feed / Comunidade"],["eventos","Eventos"],["calculadora-pace","Calculadora de Pace"],["calculadora-fc","Calculadora de FC"]].map(([val, label]) => (
+                      <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2" style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: `1px solid ${(form.paginas||[]).includes(val) ? "rgba(92,200,0,0.3)" : "rgba(255,255,255,0.08)"}` }}>
+                        <input type="checkbox" checked={(form.paginas||[]).includes(val)}
+                          onChange={e => setForm(f => ({ ...f, paginas: e.target.checked ? [...(f.paginas||[]), val] : (f.paginas||[]).filter(p => p !== val) }))}
+                          style={{ accentColor: "#5CC800" }} />
+                        <span className="text-xs font-black" style={{ color: (form.paginas||[]).includes(val) ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
@@ -1425,29 +1442,29 @@ function AbaBanners(): React.JSX.Element {
         </div>
       ) : (
         <div className="space-y-3">
-          {banners.map(b => (
-            <div key={b.id} className="overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+          {banners.map(ban => (
+            <div key={ban.id} className="overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
               <div className="relative h-32">
-                <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full object-cover" />
+                <img src={ban.imagem_url} alt={ban.titulo || "Banner"} className="h-full w-full object-cover" />
                 <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
-                  {b.titulo && <p className="font-black text-sm text-white" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{b.titulo}</p>}
-                  {b.subtitulo && <p className="text-xs text-white/80">{b.subtitulo}</p>}
+                  {ban.titulo && <p className="font-black text-sm text-white" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{ban.titulo}</p>}
+                  {ban.subtitulo && <p className="text-xs text-white/80">{ban.subtitulo}</p>}
                 </div>
                 <div className="absolute top-2 right-2 flex gap-1.5">
-                  <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: b.ativo ? "rgba(92,200,0,0.9)" : "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {b.ativo ? "ATIVO" : "INATIVO"}
+                  <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: ban.ativo ? "rgba(92,200,0,0.9)" : "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {ban.ativo ? "ATIVO" : "INATIVO"}
                   </span>
-                  {b.ordem > 0 && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>#{b.ordem}</span>}
+                  {ban.ordem > 0 && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>#{ban.ordem}</span>}
                 </div>
               </div>
               <div className="flex gap-2 p-3">
-                <button onClick={() => toggleAtivo(b)} className="flex-1 rounded-xl py-2 text-xs font-black"
-                  style={{ background: b.ativo ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.1)", color: b.ativo ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {b.ativo ? "⏸ PAUSAR" : "▶ ATIVAR"}
+                <button onClick={() => toggleAtivo(ban)} className="flex-1 rounded-xl py-2 text-xs font-black"
+                  style={{ background: ban.ativo ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.1)", color: ban.ativo ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {ban.ativo ? "⏸ PAUSAR" : "▶ ATIVAR"}
                 </button>
-                <button onClick={() => abrirEditar(b)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
-                <button onClick={() => excluir(b.id)} disabled={excluindo === b.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {excluindo === b.id ? "..." : "🗑️"}
+                <button onClick={() => abrirEditar(ban)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
+                <button onClick={() => excluir(String(ban.id))} disabled={excluindo === String(ban.id)} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {excluindo === String(ban.id) ? "..." : "🗑️"}
                 </button>
               </div>
             </div>
@@ -1703,6 +1720,104 @@ function chaveEventoLocal(evento: { nome: string; cidade: string; estado: string
     normalizarTextoEvento(evento.estado).toUpperCase(),
     evento.data_evento,
   ].join("|");
+}
+
+
+function AbaMensagens(): React.JSX.Element {
+  const [titulo, setTitulo] = React.useState("");
+  const [corpo, setCorpo] = React.useState("");
+  const [destino, setDestino] = React.useState<"todos"|"cidade"|"usuario">("todos");
+  const [cidade, setCidade] = React.useState("");
+  const [userId, setUserId] = React.useState("");
+  const [link, setLink] = React.useState("");
+  const [enviando, setEnviando] = React.useState(false);
+  const [resultado, setResultado] = React.useState<{ enviadas: number } | null>(null);
+  const [erro, setErro] = React.useState("");
+
+  async function enviar() {
+    if (!titulo.trim()) { setErro("Titulo obrigatorio."); return; }
+    setEnviando(true); setErro(""); setResultado(null);
+    const res = await fetch("/api/admin/mensagem", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ titulo: titulo.trim(), corpo: corpo.trim(), destino, cidade: cidade.trim() || null, user_id: userId.trim() || null, link: link.trim() || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) setErro(data.error || "Erro ao enviar.");
+    else setResultado(data);
+    setEnviando(false);
+  }
+
+  const inp2 = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
+          <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>ENVIAR MENSAGEM AOS USUARIOS</h2>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>DESTINO</label>
+            <div className="flex gap-2">
+              {(["todos","cidade","usuario"] as const).map(d => (
+                <button key={d} onClick={() => setDestino(d)}
+                  className="flex-1 rounded-xl py-2 text-xs font-black transition-all"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif", background: destino === d ? "rgba(92,200,0,0.15)" : "#21262D", color: destino === d ? "#5CC800" : "#8B949E", border: destino === d ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.1)" }}>
+                  {d === "todos" ? "TODOS" : d === "cidade" ? "CIDADE" : "USUARIO"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {destino === "cidade" && (
+            <div>
+              <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>CIDADE</label>
+              <input value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Ex: Tucurui" style={inp2} />
+            </div>
+          )}
+
+          {destino === "usuario" && (
+            <div>
+              <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>USER ID</label>
+              <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="UUID do usuario" style={inp2} />
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TITULO *</label>
+            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Nova corrida disponivel!" style={inp2} />
+          </div>
+
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MENSAGEM</label>
+            <textarea value={corpo} onChange={e => setCorpo(e.target.value)} rows={3} placeholder="Detalhes da mensagem..." style={{ ...inp2, resize: "none" }} />
+          </div>
+
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>LINK (opcional)</label>
+            <input value={link} onChange={e => setLink(e.target.value)} placeholder="Ex: /eventos?estado=PA" style={inp2} />
+          </div>
+
+          {erro && <p className="text-xs font-black" style={{ color: "#FF6B00" }}>{erro}</p>}
+          {resultado && (
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)" }}>
+              <p className="font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Mensagem enviada para {resultado.enviadas} usuario(s)!
+              </p>
+            </div>
+          )}
+
+          <button onClick={enviar} disabled={enviando || !titulo.trim()}
+            className="w-full rounded-xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+            {enviando ? "ENVIANDO..." : "ENVIAR NOTIFICACAO"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImportar: () => Promise<void> }): React.JSX.Element {
