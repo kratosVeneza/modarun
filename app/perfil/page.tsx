@@ -78,6 +78,8 @@ export default function PerfilPage(): React.JSX.Element {
 
   // UI
   const [abaAtiva, setAbaAtiva] = useState<"publicacoes" | "treinos" | "participacoes" | "preferencias">("publicacoes");
+  const [editandoPostId, setEditandoPostId] = useState<number | null>(null);
+  const [textoEditPost, setTextoEditPost] = useState("");
   const [abaPref, setAbaPref] = useState<"cidades" | "eventos">("cidades");
   const [novaCidade, setNovaCidade] = useState("");
   const [novoEstado, setNovoEstado] = useState("PA");
@@ -154,6 +156,22 @@ export default function PerfilPage(): React.JSX.Element {
     if (!confirm("Remover foto de perfil?")) return;
     await supabase.auth.updateUser({ data: { avatar_url: null } });
     setAvatarUrl(null);
+  }
+
+  async function editarPost(id: number) {
+    if (!textoEditPost.trim()) return;
+    await fetch("/api/feed/posts", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ id, texto: textoEditPost }),
+    });
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, texto: textoEditPost } : p));
+    setEditandoPostId(null);
+  }
+
+  async function excluirPost(id: number) {
+    if (!confirm("Excluir esta publicação?")) return;
+    await fetch(`/api/feed/posts?id=${id}`, { method: "DELETE", credentials: "include" });
+    setPosts(prev => prev.filter(p => p.id !== id));
   }
 
   async function adicionarCidade() {
@@ -402,7 +420,22 @@ export default function PerfilPage(): React.JSX.Element {
                         </div>
                       )}
 
-                      {post.texto && <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>}
+                      {editandoPostId === post.id ? (
+                        <div className="mb-3 space-y-2">
+                          <textarea value={textoEditPost} onChange={e => setTextoEditPost(e.target.value)} rows={3}
+                            className="w-full rounded-xl px-3 py-2 text-sm outline-none resize-none"
+                            style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.3)", color: "#E6EDF3" }} />
+                          <div className="flex gap-2">
+                            <button onClick={() => editarPost(post.id)}
+                              className="rounded-xl px-4 py-1.5 text-xs font-black"
+                              style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>SALVAR</button>
+                            <button onClick={() => setEditandoPostId(null)}
+                              className="rounded-xl px-4 py-1.5 text-xs font-black" style={{ color: "#8B949E" }}>CANCELAR</button>
+                          </div>
+                        </div>
+                      ) : post.texto ? (
+                        <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>
+                      ) : null}
                       {post.fotos?.length > 0 && (
                         <img src={post.fotos[0]} alt="" className="w-full object-cover rounded-xl mb-3" style={{ maxHeight: 280 }} />
                       )}
