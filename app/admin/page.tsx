@@ -1255,6 +1255,13 @@ function AbaBanners(): React.JSX.Element {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [aberto, setAberto] = useState(false);
+  const [editando, setEditando] = useState<Banner | null>(null);
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[] });
+  const [loading, setLoading] = useState(false);
+  const [uploadando, setUploadando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [excluindo, setExcluindo] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function carregar() {
@@ -1265,16 +1272,9 @@ function AbaBanners(): React.JSX.Element {
     }
     carregar();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [editando, setEditando] = useState<Banner | null>(null);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[] });
-  const [loading, setLoading] = useState(false);
-  const [uploadando, setUploadando] = useState(false);
-  const [erro, setErro] = useState("");
-  const [excluindo, setExcluindo] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50,paginas:[] }); setErro(""); setAberto(true); }
-  function abrirEditar(b: Banner) { setEditando(b); setForm({ titulo:b.titulo||"",subtitulo:b.subtitulo||"",imagem_url:b.imagem_url,link_url:b.link_url||"",link_texto:b.link_texto||"Ver mais",ativo:b.ativo,ordem:b.ordem,position_x:b.position_x??50,position_y:b.position_y??50,paginas:b.paginas||[] }); setErro(""); setAberto(true); }
+  function abrirEditar(ban: Banner) { setEditando(ban); setForm({ titulo:ban.titulo||"",subtitulo:ban.subtitulo||"",imagem_url:ban.imagem_url,link_url:ban.link_url||"",link_texto:ban.link_texto||"Ver mais",ativo:ban.ativo,ordem:ban.ordem,position_x:ban.position_x??50,position_y:ban.position_y??50,paginas:ban.paginas||[] }); setErro(""); setAberto(true); }
 
   async function uploadImagem(file: File) {
     setUploadando(true);
@@ -1295,8 +1295,8 @@ function AbaBanners(): React.JSX.Element {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
-    const formComPosicao = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [] };
-    const body = editando ? { id: editando.id, ...formComPosicao } : formComPosicao;
+    const formFinal = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [] };
+    const body = editando ? { id: editando.id, ...formFinal } : formFinal;
     try {
       const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
@@ -1304,7 +1304,7 @@ function AbaBanners(): React.JSX.Element {
       if (!res.ok) { setErro(result.error || "Erro ao salvar."); return; }
       await recarregarBanners();
       setAberto(false);
-    } catch { setLoading(false); setErro("Erro de conexão."); }
+    } catch { setLoading(false); setErro("Erro de conexao."); }
   }
 
   async function excluir(id: string) {
@@ -1314,19 +1314,24 @@ function AbaBanners(): React.JSX.Element {
       const res = await fetch("/api/admin/banners", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
       if (res.ok) await recarregarBanners();
       else { const r = await res.json(); alert(r.error || "Erro ao excluir."); }
-    } catch { alert("Erro de conexão."); }
+    } catch { alert("Erro de conexao."); }
     setExcluindo(null);
   }
 
-  async function toggleAtivo(b: Banner) {
-    const res = await fetch("/api/admin/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: b.id, ativo: !b.ativo }) });
-    if (res.ok) setBanners(banners.map(x => x.id === b.id ? { ...x, ativo: !x.ativo } : x));
+  async function toggleAtivo(ban: Banner) {
+    const res = await fetch("/api/admin/banners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ban.id, ativo: !ban.ativo }) });
+    if (res.ok) setBanners(banners.map(x => x.id === ban.id ? { ...x, ativo: !x.ativo } : x));
   }
+
+  const s = {
+    lbl: { display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em", marginBottom:"6px" } as React.CSSProperties,
+    inp: { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties,
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm" style={{ color: "#8B949E" }}>Banners aparecem no topo da loja em rotação automática</p>
+        <p className="text-sm" style={{ color: "#8B949E" }}>Banners aparecem no topo da loja em rotacao automatica</p>
         <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
           style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
           + ADICIONAR BANNER
@@ -1334,90 +1339,77 @@ function AbaBanners(): React.JSX.Element {
       </div>
 
       {aberto && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8" style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)" }} onClick={e => e.target === e.currentTarget && setAberto(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8"
+          style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)" }}
+          onClick={e => e.target === e.currentTarget && setAberto(false)}>
           <div className="w-full max-w-lg rounded-2xl shadow-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid rgba(92,200,0,0.1)" }}>
               <h3 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>{editando ? "EDITAR BANNER" : "NOVO BANNER"}</h3>
-              <button onClick={() => setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>✕</button>
+              <button onClick={() => setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>x</button>
             </div>
             <div className="space-y-4 p-6">
-              {/* Preview / Upload */}
               <div>
-                <label style={s.lbl}>🖼 IMAGEM DO BANNER *</label>
-                {form.imagem_url ? (
-                  <div>
-                    <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
-                      <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover"
-                        style={{ objectPosition: (Number(form.position_x ?? 50)) + "% " + (Number(form.position_y ?? 50)) + "%" }} />
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
-                        className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                        style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
+                <label style={s.lbl}>IMAGEM DO BANNER *</label>
+                <div className="relative overflow-hidden rounded-xl" style={{ height: 160, background: "#21262D", border: "2px dashed rgba(92,200,0,0.3)" }}>
+                  {form.imagem_url ? (
+                    <img src={form.imagem_url} alt="" className="h-full w-full object-cover"
+                      style={{ objectPosition: (Number(form.position_x ?? 50)) + "% " + (Number(form.position_y ?? 50)) + "%" }} />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2">
+                      <span className="text-3xl">img</span>
+                      <p className="text-sm" style={{ color: "#8B949E" }}>Clique para fazer upload</p>
                     </div>
-                    <div className="mt-3 space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label style={{ fontSize:"11px", fontWeight:700, color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>← POSIÇÃO HORIZONTAL →</label>
-                          <span style={{ fontSize:"11px", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{Math.round(form.position_x ?? 50)}%</span>
-                        </div>
-                        <input type="range" min="0" max="100" value={form.position_x ?? 50}
-                          onChange={e => setForm(f => ({ ...f, position_x: Number(e.target.value) }))}
-                          className="w-full" style={{ accentColor: "#5CC800", cursor: "pointer" }} />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label style={{ fontSize:"11px", fontWeight:700, color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>↑ POSIÇÃO VERTICAL ↓</label>
-                          <span style={{ fontSize:"11px", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{Math.round(form.position_y ?? 50)}%</span>
-                        </div>
-                        <input type="range" min="0" max="100" value={form.position_y ?? 50}
-                          onChange={e => setForm(f => ({ ...f, position_y: Number(e.target.value) }))}
-                          className="w-full" style={{ accentColor: "#5CC800", cursor: "pointer" }} />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => fileRef.current?.click()} disabled={uploadando}
-                    className="flex w-full flex-col items-center justify-center rounded-xl py-8 transition"
-                    style={{ border: "2px dashed rgba(92,200,0,0.3)", background: "rgba(92,200,0,0.03)", color: uploadando ? "#5CC800" : "#8B949E" }}>
-                    {uploadando ? (
-                      <><span className="h-6 w-6 animate-spin rounded-full border-2" style={{ borderColor: "rgba(92,200,0,0.3)", borderTopColor: "#5CC800" }} /><span className="mt-2 text-xs font-bold" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>ENVIANDO...</span></>
-                    ) : (
-                      <><span className="text-3xl">🖼</span><span className="mt-2 text-sm font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>CLIQUE PARA CARREGAR</span><span className="text-xs mt-1">JPG, PNG · máx. 5MB</span></>
-                    )}
+                  )}
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadando}
+                    className="absolute bottom-2 right-2 rounded-xl px-3 py-1.5 text-xs font-black"
+                    style={{ background: "rgba(92,200,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    {uploadando ? "ENVIANDO..." : form.imagem_url ? "TROCAR" : "+ UPLOAD"}
                   </button>
-                )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (f) await uploadImagem(f); e.target.value = ""; }} />
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f); e.target.value = ""; }} />
               </div>
-
-              <div><label style={s.lbl}>TÍTULO <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="text" placeholder="Ex: Nova coleção Moda Run 2025" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} style={s.inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
-              <div><label style={s.lbl}>SUBTÍTULO <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="text" placeholder="Ex: Conjuntos com até 20% off" value={form.subtitulo} onChange={e => setForm({ ...form, subtitulo: e.target.value })} style={s.inp} onFocus={e => (e.target.style.borderColor = "#5CC800")} onBlur={e => (e.target.style.borderColor = "rgba(92,200,0,0.2)")} /></div>
+              {form.imagem_url && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label style={s.lbl}>POSICAO X: <span style={{ color: "#5CC800" }}>{Math.round(form.position_x ?? 50)}%</span></label>
+                    <input type="range" min="0" max="100" value={form.position_x ?? 50} onChange={e => setForm(f => ({ ...f, position_x: Number(e.target.value) }))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                  </div>
+                  <div>
+                    <label style={s.lbl}>POSICAO Y: <span style={{ color: "#5CC800" }}>{Math.round(form.position_y ?? 50)}%</span></label>
+                    <input type="range" min="0" max="100" value={form.position_y ?? 50} onChange={e => setForm(f => ({ ...f, position_y: Number(e.target.value) }))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
-                <div><label style={s.lbl}>LINK <span style={{ fontWeight: 400 }}>(opcional)</span></label><input type="url" placeholder="https://..." value={form.link_url} onChange={e => setForm({ ...form, link_url: e.target.value })} style={s.inp} /></div>
-                <div><label style={s.lbl}>TEXTO DO BOTÃO</label><input type="text" placeholder="Ver mais" value={form.link_texto} onChange={e => setForm({ ...form, link_texto: e.target.value })} style={s.inp} /></div>
+                <div><label style={s.lbl}>TITULO</label><input type="text" placeholder="Ex: Nova Colecao" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} style={s.inp} /></div>
+                <div><label style={s.lbl}>SUBTITULO</label><input type="text" placeholder="Ex: Confira agora" value={form.subtitulo} onChange={e => setForm({ ...form, subtitulo: e.target.value })} style={s.inp} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label style={s.lbl}>LINK URL</label><input type="text" placeholder="Ex: /loja" value={form.link_url} onChange={e => setForm({ ...form, link_url: e.target.value })} style={s.inp} /></div>
+                <div><label style={s.lbl}>TEXTO DO LINK</label><input type="text" placeholder="Ex: Ver mais" value={form.link_texto} onChange={e => setForm({ ...form, link_texto: e.target.value })} style={s.inp} /></div>
               </div>
               <div className="flex gap-3">
                 <div className="flex-1"><label style={s.lbl}>ORDEM</label><input type="number" min="0" value={form.ordem} onChange={e => setForm({ ...form, ordem: Number(e.target.value) })} style={s.inp} /></div>
                 <label className="flex cursor-pointer items-center gap-3 flex-1 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
                   <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
-                  <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>✅ Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visível na loja</p></div>
+                  <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visivel na loja</p></div>
                 </label>
               </div>
-              {/* Campo Paginas */}
-                <div className="rounded-xl p-4" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
-                  <p className="text-xs font-black mb-2" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MOSTRAR COMO PROPAGANDA NAS PÁGINAS</p>
-                  <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[["feed","Feed / Comunidade"],["eventos","Eventos"],["calculadora-pace","Calculadora de Pace"],["calculadora-fc","Calculadora de FC"]].map(([val, label]) => (
-                      <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2" style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: (form.paginas||[]).includes(val) ? "1px solid rgba(92,200,0,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
-                        <input type="checkbox" checked={(form.paginas||[]).includes(val)}
-                          onChange={e => setForm(f => ({ ...f, paginas: e.target.checked ? [...(f.paginas||[]), val] : (f.paginas||[]).filter(p => p !== val) }))}
-                          style={{ accentColor: "#5CC800" }} />
-                        <span className="text-xs font-black" style={{ color: (form.paginas||[]).includes(val) ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{label}</span>
-                      </label>
-                    ))}
-                  </div>
+              <div className="rounded-xl p-4" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
+                <p className="text-xs font-black mb-2" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MOSTRAR COMO PROPAGANDA NAS PAGINAS</p>
+                <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["feed","Feed / Comunidade"],["eventos","Eventos"],["calculadora-pace","Calc. Pace"],["calculadora-fc","Calc. FC"]].map(([val, label]) => (
+                    <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2"
+                      style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: (form.paginas||[]).includes(val) ? "1px solid rgba(92,200,0,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
+                      <input type="checkbox" checked={(form.paginas||[]).includes(val)}
+                        onChange={e => setForm(f => ({ ...f, paginas: e.target.checked ? [...(f.paginas||[]), val] : (f.paginas||[]).filter(p => p !== val) }))}
+                        style={{ accentColor: "#5CC800" }} />
+                      <span className="text-xs font-black" style={{ color: (form.paginas||[]).includes(val) ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{label}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
-
               {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
               <div className="flex gap-3">
                 <button type="button" onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
@@ -1437,7 +1429,7 @@ function AbaBanners(): React.JSX.Element {
         </div>
       ) : banners.length === 0 ? (
         <div className="rounded-2xl p-10 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
-          <p className="text-4xl mb-2">🖼</p>
+          <p className="text-4xl mb-2">img</p>
           <p className="font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUM BANNER CADASTRADO</p>
           <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Adicione banners para exibir no topo da loja</p>
         </div>
@@ -1447,25 +1439,35 @@ function AbaBanners(): React.JSX.Element {
             <div key={ban.id} className="overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
               <div className="relative h-32">
                 <img src={ban.imagem_url} alt={ban.titulo || "Banner"} className="h-full w-full object-cover" />
-                <div className="absolute inset-0 flex flex-col justify-end p-3" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
-                  {ban.titulo && <p className="font-black text-sm text-white" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{ban.titulo}</p>}
-                  {ban.subtitulo && <p className="text-xs text-white/80">{ban.subtitulo}</p>}
-                </div>
-                <div className="absolute top-2 right-2 flex gap-1.5">
-                  <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: ban.ativo ? "rgba(92,200,0,0.9)" : "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {ban.ativo ? "ATIVO" : "INATIVO"}
-                  </span>
-                  {ban.ordem > 0 && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>#{ban.ordem}</span>}
+                <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.6), transparent)" }} />
+                <div className="absolute bottom-2 left-3 right-3 flex items-end justify-between">
+                  <div>
+                    {ban.titulo && <p className="font-black text-sm" style={{ color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{ban.titulo}</p>}
+                    {ban.subtitulo && <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{ban.subtitulo}</p>}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: ban.ativo ? "rgba(92,200,0,0.9)" : "rgba(255,107,0,0.9)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      {ban.ativo ? "ATIVO" : "INATIVO"}
+                    </span>
+                    {ban.ordem > 0 && <span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>#{ban.ordem}</span>}
+                  </div>
                 </div>
               </div>
+              {ban.paginas && ban.paginas.length > 0 && (
+                <div className="px-3 py-2 flex gap-1 flex-wrap" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  {ban.paginas.map(p => (
+                    <span key={p} className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{p}</span>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2 p-3">
                 <button onClick={() => toggleAtivo(ban)} className="flex-1 rounded-xl py-2 text-xs font-black"
                   style={{ background: ban.ativo ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.1)", color: ban.ativo ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {ban.ativo ? "⏸ PAUSAR" : "▶ ATIVAR"}
+                  {ban.ativo ? "PAUSAR" : "ATIVAR"}
                 </button>
-                <button onClick={() => abrirEditar(ban)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
+                <button onClick={() => abrirEditar(ban)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
                 <button onClick={() => excluir(String(ban.id))} disabled={excluindo === String(ban.id)} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {excluindo === String(ban.id) ? "..." : "🗑️"}
+                  {excluindo === String(ban.id) ? "..." : "X"}
                 </button>
               </div>
             </div>
@@ -1475,7 +1477,6 @@ function AbaBanners(): React.JSX.Element {
     </div>
   );
 }
-
 // ─── AbaSugestoes ─────────────────────────────────────────────────────────────
 
 type Sugestao = {
