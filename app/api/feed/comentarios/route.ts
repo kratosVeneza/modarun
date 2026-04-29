@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+function sbAdmin() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+async function criarNotificacao(payload: Record<string, unknown>) {
+  await sbAdmin().from("notificacoes").insert(payload as never);
+}
 
 export async function POST(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
@@ -29,8 +41,28 @@ export async function POST(req: Request): Promise<NextResponse> {
     .select("*", { count: "exact", head: true })
     .eq("post_id", post_id)
     .is("resposta_para", null);
-
   await supabase.from("feed_posts").update({ total_comentarios: count ?? 0 }).eq("id", post_id);
+
+  const { data: post } = await supabase.from("feed_posts").select("user_id").eq("id", post_id).single();
+
+  if (resposta_para) {
+    const { data: pai } = await supabase.from("feed_comentarios").select("user_id").eq("id", resposta_para).single();
+    if (pai?.user_id && pai.user_id !== user.id) {
+      await criarNotificacao({
+        user_id: pai.user_id, tipo: "resposta_comentario",
+        titulo: `${autor_nome} respondeu seu comentario`,
+        corpo: texto.slice(0, 80),
+        post_id, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
+      });
+    }
+  } else if (post?.user_id && post.user_id !== user.id) {
+    await criarNotificacao({
+      user_id: post.user_id, tipo: "comentario_post",
+      titulo: `${autor_nome} comentou sua publicacao`,
+      corpo: texto.slice(0, 80),
+      post_id, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
+    });
+  }
 
   return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar } });
 }
@@ -62,8 +94,7 @@ export async function PATCH(req: Request): Promise<NextResponse> {
     const id = Number(b.id);
     const texto = String(b.texto ?? "").trim();
     if (!texto) return NextResponse.json({ error: "Texto vazio." }, { status: 400 });
-    const { error } = await supabase.from("feed_comentarios")
-      .update({ texto }).eq("id", id).eq("user_id", user.id);
+    const { error } = await supabase.from("feed_comentarios").update({ texto }).eq("id", id).eq("user_id", user.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });
   }
@@ -71,14 +102,11 @@ export async function PATCH(req: Request): Promise<NextResponse> {
   if (acao === "curtir" || acao === "descurtir") {
     const id = Number(b.id);
     if (acao === "curtir") {
-      await supabase.from("feed_comentario_curtidas")
-        .upsert({ comentario_id: id, user_id: user.id }, { onConflict: "comentario_id,user_id" });
+      await supabase.from("feed_comentario_curtidas").upsert({ comentario_id: id, user_id: user.id }, { onConflict: "comentario_id,user_id" });
     } else {
-      await supabase.from("feed_comentario_curtidas")
-        .delete().eq("comentario_id", id).eq("user_id", user.id);
+      await supabase.from("feed_comentario_curtidas").delete().eq("comentario_id", id).eq("user_id", user.id);
     }
-    const { count } = await supabase.from("feed_comentario_curtidas")
-      .select("*", { count: "exact", head: true }).eq("comentario_id", id);
+    const { count } = await supabase.from("feed_comentario_curtidas").select("*", { count: "exact", head: true }).eq("comentario_id", id);
     await supabase.from("feed_comentarios").update({ total_curtidas: count ?? 0 }).eq("id", id);
     return NextResponse.json({ success: true, total_curtidas: count ?? 0 });
   }
@@ -98,11 +126,8 @@ export async function DELETE(req: Request): Promise<NextResponse> {
   await supabase.from("feed_comentarios").delete().eq("id", id).eq("user_id", user.id);
 
   if (post_id) {
-    const { count } = await supabase.from("feed_comentarios")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", post_id).is("resposta_para", null);
+    const { count } = await supabase.from("feed_comentarios").select("*", { count: "exact", head: true }).eq("post_id", post_id).is("resposta_para", null);
     await supabase.from("feed_posts").update({ total_comentarios: count ?? 0 }).eq("id", post_id);
   }
-
   return NextResponse.json({ success: true });
 }
