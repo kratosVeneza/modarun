@@ -1407,7 +1407,7 @@ function AbaBanners(): React.JSX.Element {
                   <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[["feed","Feed / Comunidade"],["eventos","Eventos"],["calculadora-pace","Calculadora de Pace"],["calculadora-fc","Calculadora de FC"]].map(([val, label]) => (
-                      <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2" style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: `1px solid ${(form.paginas||[]).includes(val) ? "rgba(92,200,0,0.3)" : "rgba(255,255,255,0.08)"}` }}>
+                      <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2" style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: (form.paginas||[]).includes(val) ? "1px solid rgba(92,200,0,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
                         <input type="checkbox" checked={(form.paginas||[]).includes(val)}
                           onChange={e => setForm(f => ({ ...f, paginas: e.target.checked ? [...(f.paginas||[]), val] : (f.paginas||[]).filter(p => p !== val) }))}
                           style={{ accentColor: "#5CC800" }} />
