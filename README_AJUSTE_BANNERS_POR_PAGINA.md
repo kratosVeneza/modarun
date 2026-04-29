@@ -1,4 +1,4 @@
-# Ajuste de banners por página
+git add .# Ajuste de banners por página
 
 Esta versão separa duas coisas que antes estavam misturadas:
 
