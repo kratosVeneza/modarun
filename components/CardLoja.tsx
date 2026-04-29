@@ -6,8 +6,12 @@ import Link from "next/link";
 import { ShoppingBag, ArrowRight } from "lucide-react";
 
 type Produto = {
-  id: string; nome: string; preco: number; preco_promocional?: number;
-  fotos: string[]; variacoes_cor: { cor: string; fotos: string[] }[];
+  id: string;
+  nome: string;
+  preco: number;
+  preco_promocional?: number;
+  fotos: string[];
+  variacoes_cor: { cor: string; fotos: string[] }[];
 };
 
 type BannerDisplayConfig = {
@@ -44,6 +48,8 @@ const PAGINA_KEY: Record<Variante, string> = {
 
 export default function CardLoja({ variante = "inline", paginaKey }: { variante?: Variante; paginaKey?: string }) {
   const [produto, setProduto] = useState<Produto | null>(null);
+  const [produtosRotativos, setProdutosRotativos] = useState<Produto[]>([]);
+  const [indiceProduto, setIndiceProduto] = useState(0);
   const [bannerPropaganda, setBannerPropaganda] = useState<Banner | null>(null);
 
   useEffect(() => {
@@ -51,23 +57,27 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
     const supabase = createClient();
     const key = paginaKey || PAGINA_KEY[variante];
 
-    async function buscarProdutoDestaque() {
-      const { data: p } = await supabase
+    async function buscarProdutosRotativos() {
+      const { data } = await supabase
         .from("produtos")
         .select("id, nome, preco, preco_promocional, fotos, variacoes_cor")
         .eq("estoque_disponivel", true)
         .order("destaque", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
 
-      if (!cancelado && p) {
-        setProduto(p);
-      }
+      if (cancelado) return;
+
+      const lista = data ?? [];
+      setProdutosRotativos(lista);
+      setIndiceProduto(0);
+      setProduto(lista[0] ?? null);
     }
 
     async function carregarPropaganda() {
       setBannerPropaganda(null);
       setProduto(null);
+      setProdutosRotativos([]);
+      setIndiceProduto(0);
 
       const { data: banners, error } = await supabase
         .from("banners")
@@ -99,7 +109,9 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
         return;
       }
 
-      await buscarProdutoDestaque();
+      // Se não existir banner ativo para esta página, mostra produtos cadastrados
+      // em rotação automática. Assim a área de propaganda nunca fica vazia.
+      await buscarProdutosRotativos();
     }
 
     carregarPropaganda();
@@ -109,7 +121,24 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
     };
   }, [variante, paginaKey]);
 
+  useEffect(() => {
+    if (bannerPropaganda || produtosRotativos.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setIndiceProduto((atual) => (atual + 1) % produtosRotativos.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [bannerPropaganda, produtosRotativos.length]);
+
+  useEffect(() => {
+    if (bannerPropaganda || produtosRotativos.length === 0) return;
+
+    setProduto(produtosRotativos[indiceProduto % produtosRotativos.length] ?? null);
+  }, [bannerPropaganda, indiceProduto, produtosRotativos]);
+
   const usandoBanner = !!bannerPropaganda;
+  const usandoRotacaoProdutos = !usandoBanner && produtosRotativos.length > 1;
   const configPagina = usandoBanner
     ? (bannerPropaganda?.config_paginas?.[paginaKey || PAGINA_KEY[variante]] ?? null)
     : null;
@@ -122,7 +151,11 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
   const titulo = usandoBanner
     ? (bannerPropaganda!.titulo ?? produto?.nome ?? "Loja Moda Run")
     : (produto?.nome ?? "Equipamentos para corredores");
-  const subtitulo = usandoBanner ? bannerPropaganda!.subtitulo : null;
+  const subtitulo = usandoBanner
+    ? bannerPropaganda!.subtitulo
+    : usandoRotacaoProdutos
+      ? "Produto em destaque da loja"
+      : null;
   const href = usandoBanner
     ? (bannerPropaganda!.link_url ?? (produto ? "/loja/" + produto.id : "/loja"))
     : (produto ? "/loja/" + produto.id : "/loja");
@@ -133,6 +166,25 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
   const temDesconto = produto?.preco_promocional && produto.preco_promocional < produto.preco;
 
   if (!bannerPropaganda && !produto) return null;
+
+  const IndicadoresRotacao = () => {
+    if (!usandoRotacaoProdutos) return null;
+
+    return (
+      <div className="flex items-center gap-1.5 mt-2" aria-label="Produtos em rotação">
+        {produtosRotativos.slice(0, 6).map((item, index) => (
+          <span
+            key={item.id}
+            className="h-1.5 rounded-full transition-all"
+            style={{
+              width: index === indiceProduto % produtosRotativos.length ? 18 : 6,
+              background: index === indiceProduto % produtosRotativos.length ? "#5CC800" : "rgba(139,148,158,0.45)",
+            }}
+          />
+        ))}
+      </div>
+    );
+  };
 
   if (variante === "feed") {
     return (
@@ -168,6 +220,7 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
                 )}
               </div>
             )}
+            <IndicadoresRotacao />
           </div>
           <div className="shrink-0 flex items-center justify-center rounded-xl px-3 py-2"
             style={{ background: "linear-gradient(135deg, #FF6B00, #FFB800)", color: "#fff" }}>
@@ -194,8 +247,13 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
               <img src={foto} alt={titulo} className="w-full h-full" style={{ objectFit: modoImagem, objectPosition }} />
             </div>
           )}
-          <p className="font-black text-sm mb-1" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{titulo}</p>
-          {subtitulo && <p className="text-xs mb-2" style={{ color: "#8B949E" }}>{subtitulo}</p>}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-black text-sm mb-1" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{titulo}</p>
+              {subtitulo && <p className="text-xs mb-2" style={{ color: "#8B949E" }}>{subtitulo}</p>}
+            </div>
+            <IndicadoresRotacao />
+          </div>
           {preco && (
             <p className="font-black text-lg mb-3" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
               R$ {preco.toFixed(2).replace(".", ",")}
@@ -237,6 +295,7 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
             {linkTexto} &rarr;
           </p>
         )}
+        <IndicadoresRotacao />
       </div>
     </Link>
   );
