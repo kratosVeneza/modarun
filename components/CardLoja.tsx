@@ -18,14 +18,25 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
 
   useEffect(() => {
     const supabase = createClient();
-    // Tenta destaque primeiro, fallback para qualquer produto disponivel
     supabase.from("produtos")
       .select("id, nome, preco, preco_promocional, fotos, variacoes_cor, categoria")
       .eq("estoque_disponivel", true)
-      .order("destaque", { ascending: false })
+      .eq("destaque", true)
       .limit(1)
-      .maybeSingle()
-      .then(({ data }) => { if (data) setProduto(data); });
+      .single()
+      .then(({ data }) => {
+        if (!data) {
+          // Fallback: qualquer produto
+          supabase.from("produtos")
+            .select("id, nome, preco, preco_promocional, fotos, variacoes_cor, categoria")
+            .eq("estoque_disponivel", true)
+            .limit(1)
+            .single()
+            .then(({ data: d }) => setProduto(d));
+        } else {
+          setProduto(data);
+        }
+      });
   }, []);
 
   const foto = produto?.variacoes_cor?.[0]?.fotos?.[0] ?? produto?.fotos?.[0] ?? null;
