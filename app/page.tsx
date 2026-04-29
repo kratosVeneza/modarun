@@ -24,7 +24,13 @@ type Post = {
 };
 
 type Noticia = { titulo: string; url: string; fonte: string; imagem: string | null; data: string; resumo: string; };
-type Comentario = { id: number; texto: string; created_at: string; autor_nome: string; autor_avatar: string | null; };
+type Comentario = {
+  id: number; texto: string; created_at: string;
+  autor_nome: string; autor_avatar: string | null;
+  user_id: string; resposta_para: number | null; total_curtidas: number;
+};
+
+const EMOJIS = ["🏃","💪","🔥","👏","🏅","⚡","🎯","😅","🙌","❤️","👊","🚀"];
 type EventoDestaque = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string; destaque?: boolean; };
 type Treino = { id: number; titulo: string; cidade: string; estado: string; data_encontro: string; horario?: string; tipo_treino?: string; km_planejado?: number; distancia?: string; };
 
@@ -75,12 +81,16 @@ function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avata
   );
 }
 
-function CardComentarios({ postId, total, usuarioLogado }: { postId: number; total: number; usuarioLogado: boolean }) {
+function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: number; total: number; usuarioLogado: boolean; userId: string | null }) {
   const [aberto, setAberto] = useState(false);
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [mostrarEmojis, setMostrarEmojis] = useState(false);
+  const [respondendoId, setRespondendoId] = useState<number | null>(null);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [textoEdit, setTextoEdit] = useState("");
 
   async function carregar() {
     setCarregando(true);
@@ -95,11 +105,110 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
   async function enviar() {
     if (!texto.trim() || enviando) return;
     setEnviando(true);
-    await fetch("/api/feed/comentarios", {
+    const res = await fetch("/api/feed/comentarios", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ post_id: postId, texto }),
+      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId }),
     });
-    setTexto(""); await carregar(); setEnviando(false);
+    const data = await res.json();
+    if (data.success) {
+      setComentarios(prev => [...prev, data.comentario]);
+      setTexto(""); setRespondendoId(null); setMostrarEmojis(false);
+    }
+    setEnviando(false);
+  }
+
+  async function curtirComentario(id: number, curtido: boolean) {
+    const res = await fetch("/api/feed/comentarios", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ acao: curtido ? "descurtir" : "curtir", id }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setComentarios(prev => prev.map(c => c.id === id ? { ...c, total_curtidas: data.total_curtidas } : c));
+    }
+  }
+
+  async function editarComentario(id: number) {
+    if (!textoEdit.trim()) return;
+    await fetch("/api/feed/comentarios", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ acao: "editar", id, texto: textoEdit }),
+    });
+    setComentarios(prev => prev.map(c => c.id === id ? { ...c, texto: textoEdit } : c));
+    setEditandoId(null);
+  }
+
+  async function excluirComentario(id: number) {
+    if (!confirm("Excluir comentário?")) return;
+    await fetch(`/api/feed/comentarios?id=${id}&post_id=${postId}`, { method: "DELETE", credentials: "include" });
+    setComentarios(prev => prev.filter(c => c.id !== id));
+  }
+
+  const principais = comentarios.filter(c => !c.resposta_para);
+  const respostas = (id: number) => comentarios.filter(c => c.resposta_para === id);
+
+  function renderComentario(c: Comentario, isResposta = false) {
+    return (
+      <div key={c.id} className={`flex gap-2 ${isResposta ? "ml-8 mt-2" : ""}`}>
+        {c.autor_avatar ? (
+          <img src={c.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28 }} />
+        ) : (
+          <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
+            style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {c.autor_nome[0]?.toUpperCase()}
+          </div>
+        )}
+        <div className="flex-1">
+          <div className="rounded-xl px-3 py-2" style={{ background: "#21262D" }}>
+            <span className="text-xs font-black mr-2" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</span>
+            {editandoId === c.id ? (
+              <div className="mt-1 flex gap-2">
+                <input value={textoEdit} onChange={e => setTextoEdit(e.target.value)}
+                  className="flex-1 rounded-lg px-2 py-1 text-sm outline-none"
+                  style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.3)", color: "#E6EDF3" }} />
+                <button onClick={() => editarComentario(c.id)}
+                  className="text-xs font-black px-2 py-1 rounded-lg"
+                  style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>OK</button>
+                <button onClick={() => setEditandoId(null)}
+                  className="text-xs px-2 py-1 rounded-lg" style={{ color: "#8B949E" }}>✕</button>
+              </div>
+            ) : (
+              <span className="text-sm" style={{ color: "#C9D1D9" }}>{c.texto}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 px-1">
+            <span className="text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
+            {usuarioLogado && (
+              <>
+                <button onClick={() => curtirComentario(c.id, false)}
+                  className="flex items-center gap-1 text-xs font-black transition-colors hover:opacity-70"
+                  style={{ color: c.total_curtidas > 0 ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ❤️ {c.total_curtidas > 0 && c.total_curtidas}
+                </button>
+                {!isResposta && (
+                  <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
+                    className="text-xs font-black transition-colors hover:opacity-70"
+                    style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    RESPONDER
+                  </button>
+                )}
+                {c.user_id === userId && (
+                  <>
+                    <button onClick={() => { setEditandoId(c.id); setTextoEdit(c.texto); }}
+                      className="text-xs font-black transition-colors hover:opacity-70"
+                      style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
+                    <button onClick={() => excluirComentario(c.id)}
+                      className="text-xs font-black transition-colors hover:opacity-70"
+                      style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXCLUIR</button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+          {respostas(c.id).map(r => renderComentario(r, true))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -113,39 +222,45 @@ function CardComentarios({ postId, total, usuarioLogado }: { postId: number; tot
         <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {carregando ? (
             <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin" style={{ color: "#5CC800" }} /></div>
-          ) : comentarios.length === 0 ? (
+          ) : principais.length === 0 ? (
             <p className="text-xs text-center py-2" style={{ color: "#8B949E" }}>Nenhum comentário ainda. Seja o primeiro!</p>
           ) : (
-            comentarios.map(c => (
-              <div key={c.id} className="flex gap-2">
-                {c.autor_avatar ? (
-                  <img src={c.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: 28, height: 28 }} />
-                ) : (
-                  <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
-                    style={{ width: 28, height: 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    {c.autor_nome[0]?.toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 rounded-xl px-3 py-2" style={{ background: "#21262D" }}>
-                  <span className="text-xs font-black mr-2" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</span>
-                  <span className="text-sm" style={{ color: "#C9D1D9" }}>{c.texto}</span>
-                  <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</p>
-                </div>
-              </div>
-            ))
+            principais.map(c => renderComentario(c))
           )}
+
           {usuarioLogado && (
-            <div className="flex gap-2 pt-1">
-              <input value={texto} onChange={e => setTexto(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviar()}
-                placeholder="Escreva um comentário..."
-                className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
-              <button onClick={enviar} disabled={!texto.trim() || enviando}
-                className="flex items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
-                {enviando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
-              </button>
+            <div className="space-y-2 pt-1">
+              {respondendoId && (
+                <div className="flex items-center gap-2 px-2 py-1 rounded-lg" style={{ background: "rgba(92,200,0,0.08)" }}>
+                  <span className="text-xs" style={{ color: "#5CC800" }}>
+                    ↩ Respondendo a {comentarios.find(c => c.id === respondendoId)?.autor_nome}
+                  </span>
+                  <button onClick={() => setRespondendoId(null)} style={{ color: "#8B949E" }}><X size={12} /></button>
+                </div>
+              )}
+              {mostrarEmojis && (
+                <div className="flex flex-wrap gap-1 p-2 rounded-xl" style={{ background: "#21262D" }}>
+                  {EMOJIS.map(e => (
+                    <button key={e} onClick={() => setTexto(t => t + e)}
+                      className="text-lg hover:scale-125 transition-transform">{e}</button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setMostrarEmojis(v => !v)}
+                  className="rounded-xl px-2 text-lg transition-all hover:scale-110"
+                  style={{ background: mostrarEmojis ? "rgba(92,200,0,0.15)" : "#21262D" }}>😊</button>
+                <input value={texto} onChange={e => setTexto(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviar()}
+                  placeholder={respondendoId ? "Escreva uma resposta..." : "Escreva um comentário..."}
+                  className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                  style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
+                <button onClick={enviar} disabled={!texto.trim() || enviando}
+                  className="flex items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
+                  style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
+                  {enviando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -164,6 +279,9 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [seguindo, setSeguindo] = useState(false);
   const [carregandoFollow, setCarregandoFollow] = useState(false);
+  const [editandoPost, setEditandoPost] = useState(false);
+  const [textoEditPost, setTextoEditPost] = useState(post.texto || "");
+  const [mostrarEmojisPost, setMostrarEmojisPost] = useState(false);
 
   async function toggleCurtida() {
     if (!usuarioLogado || curtindo) return;
@@ -194,6 +312,16 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
     if (navigator.share) { try { await navigator.share({ title: "Post Moda Run", url }); return; } catch { /* fallback */ } }
     await navigator.clipboard.writeText(url);
     setCopiado(true); setTimeout(() => setCopiado(false), 2000);
+  }
+
+  async function editarPost() {
+    if (!textoEditPost.trim()) return;
+    await fetch("/api/feed/posts", {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ id: post.id, texto: textoEditPost }),
+    });
+    post.texto = textoEditPost;
+    setEditandoPost(false);
   }
 
   async function deletar() {
@@ -269,9 +397,15 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               </button>
             )}
             {userId === post.user_id && (
-              <button onClick={deletar} className="rounded-lg p-1.5 transition-colors hover:bg-red-500/10" style={{ color: "#8B949E" }}>
-                <X size={14} strokeWidth={2} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => { setEditandoPost(true); setTextoEditPost(post.texto || ""); }}
+                  className="rounded-lg p-1.5 transition-colors hover:bg-green-500/10" style={{ color: "#8B949E" }}>
+                  ✏️
+                </button>
+                <button onClick={deletar} className="rounded-lg p-1.5 transition-colors hover:bg-red-500/10" style={{ color: "#8B949E" }}>
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -307,7 +441,32 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
           </div>
         )}
 
-        {post.texto && <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>}
+        {editandoPost ? (
+          <div className="mb-3 space-y-2">
+            {mostrarEmojisPost && (
+              <div className="flex flex-wrap gap-1 p-2 rounded-xl" style={{ background: "#21262D" }}>
+                {EMOJIS.map(e => (
+                  <button key={e} onClick={() => setTextoEditPost(t => t + e)}
+                    className="text-lg hover:scale-125 transition-transform">{e}</button>
+                ))}
+              </div>
+            )}
+            <textarea value={textoEditPost} onChange={e => setTextoEditPost(e.target.value)} rows={3}
+              className="w-full rounded-xl px-3 py-2 text-sm outline-none resize-none"
+              style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.3)", color: "#E6EDF3" }} />
+            <div className="flex items-center gap-2">
+              <button onClick={() => setMostrarEmojisPost(v => !v)}
+                className="rounded-xl px-2 text-lg" style={{ background: "#21262D" }}>😊</button>
+              <button onClick={editarPost}
+                className="rounded-xl px-4 py-1.5 text-xs font-black"
+                style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>SALVAR</button>
+              <button onClick={() => setEditandoPost(false)}
+                className="rounded-xl px-4 py-1.5 text-xs font-black" style={{ color: "#8B949E" }}>CANCELAR</button>
+            </div>
+          </div>
+        ) : post.texto ? (
+          <p className="text-sm leading-relaxed mb-3" style={{ color: "#C9D1D9" }}>{post.texto}</p>
+        ) : null}
 
         {post.fotos?.length > 0 && (
           <div className="relative overflow-hidden rounded-xl mb-3 cursor-pointer" style={{ maxHeight: 360 }}>
@@ -332,7 +491,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
               {totalCurtidas > 0 && totalCurtidas}
             </button>
-            <CardComentarios postId={post.id} total={post.total_comentarios} usuarioLogado={usuarioLogado} />
+            <CardComentarios postId={post.id} total={post.total_comentarios} usuarioLogado={usuarioLogado} userId={userId} />
           </div>
           <button onClick={compartilhar}
             className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
@@ -380,6 +539,7 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
   const [tipoAtiv, setTipoAtiv] = useState("Corrida");
   const [publicando, setPublicando] = useState(false);
   const [erro, setErro] = useState("");
+  const [mostrarEmojisModal, setMostrarEmojisModal] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -479,10 +639,20 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
               </div>
             </div>
           )}
-          <textarea value={texto} onChange={e => setTexto(e.target.value)}
-            placeholder={tipo === "atividade" ? "Conta como foi a atividade..." : "O que você quer compartilhar com a comunidade?"}
-            rows={3} className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-            style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.15)", color: "#E6EDF3" }} />
+          <div className="space-y-2">
+            {mostrarEmojisModal && (
+              <div className="flex flex-wrap gap-1 p-2 rounded-xl" style={{ background: "#21262D" }}>
+                {EMOJIS.map(e => (
+                  <button key={e} onClick={() => setTexto(t => t + e)}
+                    className="text-lg hover:scale-125 transition-transform">{e}</button>
+                ))}
+              </div>
+            )}
+            <textarea value={texto} onChange={e => setTexto(e.target.value)}
+              placeholder={tipo === "atividade" ? "Conta como foi a atividade..." : "O que você quer compartilhar com a comunidade?"}
+              rows={3} className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+              style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.15)", color: "#E6EDF3" }} />
+          </div>
           {fotos.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {fotos.map((f, i) => (
@@ -499,11 +669,18 @@ function ModalCriarPost({ onClose, onPublicado }: { onClose: () => void; onPubli
           )}
           {erro && <p className="text-xs text-center" style={{ color: "#FF6B00" }}>{erro}</p>}
           <div className="flex items-center justify-between pt-1">
-            <button onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all hover:scale-105"
-              style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              <ImageIcon size={14} strokeWidth={2} /> FOTO
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all hover:scale-105"
+                style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <ImageIcon size={14} strokeWidth={2} /> FOTO
+              </button>
+              <button onClick={() => setMostrarEmojisModal(v => !v)}
+                className="rounded-xl px-3 py-2 text-base transition-all hover:scale-110"
+                style={{ background: mostrarEmojisModal ? "rgba(92,200,0,0.15)" : "rgba(255,255,255,0.05)" }}>
+                😊
+              </button>
+            </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={selecionarFoto} />
             <div className="flex gap-2">
               <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
