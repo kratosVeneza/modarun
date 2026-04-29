@@ -21,8 +21,7 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
   }
 
   const navLinks = [
-    { href: "/",            label: "Início",       icon: "🏠" },
-    { href: "/feed",        label: "Comunidade",   icon: "🏃" },
+    { href: "/",            label: "Comunidade",   icon: "🏃" },
     { href: "/eventos",     label: "Eventos",      icon: "🏁" },
     { href: "/encontros",   label: "Treinos",      icon: "⚡" },
     { href: "/loja",        label: "Loja",         icon: "🛒" },
