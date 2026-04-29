@@ -1,5 +1,6 @@
 "use client";
 
+import CardLoja from "@/components/CardLoja";
 import React, { useState, useCallback, useEffect } from "react";
 import Header from "@/components/Header";
 import { Heart, Timer, ClipboardList, Activity, Info } from "lucide-react";
@@ -253,6 +254,11 @@ export default function CalculadoraFCPage(): React.JSX.Element {
           </div>
 
         </div>
+        {resultado && (
+          <div className="mx-auto max-w-xl px-4 pb-8">
+            <CardLoja variante="banner" />
+          </div>
+        )}
       </main>
     </>
   );
