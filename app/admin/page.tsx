@@ -488,267 +488,258 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
-          style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          + ADICIONAR PRODUTO
+      <div className="flex flex-wrap gap-3 justify-between items-center">
+        <div className="flex gap-2 flex-wrap">
+          {eventos.length > 0 && (
+            <>
+              <button onClick={toggleTodos}
+                className="rounded-xl px-4 py-2.5 text-sm font-black transition-all"
+                style={{ background: selecionados.size === eventos.length ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {selecionados.size === eventos.length ? "✓ TODOS SELECIONADOS" : `☐ SELECIONAR TODOS`}
+              </button>
+              {selecionados.size > 0 && (
+                <button onClick={excluirLote} disabled={excluindoLote}
+                  className="rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+                  style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {excluindoLote ? "EXCLUINDO..." : `🗑️ EXCLUIR ${selecionados.size}`}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setSyncAberto(!syncAberto); setCsvAberto(false); }} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+            style={{ background: syncAberto?"rgba(92,200,0,0.2)":"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+            📊 SHEETS
+          </button>
+          <button onClick={abrirNovo} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+            style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+            + EVENTO
+          </button>
+        </div>
+      </div>
+
+      {/* Botão importar CSV */}
+      <div className="flex flex-wrap gap-3 justify-end" style={{ marginTop:"-8px" }}>
+        <button onClick={() => { setCsvAberto(!csvAberto); setSyncAberto(false); }} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
+          style={{ background: csvAberto?"rgba(255,184,0,0.2)":"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+          📥 IMPORTAR CSV
         </button>
       </div>
 
-      {/* Modal */}
+      {/* Painel de importação CSV */}
+      {csvAberto && (
+        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(255,184,0,0.2)" }}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl mt-0.5">📥</span>
+            <div>
+              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>IMPORTAR CSV</h3>
+              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Cole o conteúdo CSV ou carregue um arquivo. O sistema detecta as colunas automaticamente.</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button type="button" onClick={() => csvFileRef.current?.click()}
+              className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+              style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif" }}>
+              📂 CARREGAR ARQUIVO
+            </button>
+            <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const text = ev.target?.result as string;
+                  setCsvTexto(text); parseCsvPreview(text);
+                };
+                reader.readAsText(file, "UTF-8");
+                e.target.value = "";
+              }} />
+          </div>
+
+          <div>
+            <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>
+              OU COLE O CSV AQUI
+            </label>
+            <textarea value={csvTexto} rows={5} placeholder={"nome,cidade,estado,data,distancia\nCorrida das Flores,Belém,PA,15/06/2026,10km\n..."}
+              onChange={e => { setCsvTexto(e.target.value); if(e.target.value.includes("\n")) parseCsvPreview(e.target.value); }}
+              style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"12px 16px", fontSize:"12px", outline:"none", width:"100%", resize:"none", fontFamily:"monospace" }}
+              onFocus={e=>(e.target.style.borderColor="#FFB800")} onBlur={e=>(e.target.style.borderColor="rgba(255,184,0,0.2)")} />
+          </div>
+
+          {/* Mapeamento de colunas */}
+          {csvColunas.length > 0 && (
+            <div>
+              <p className="text-xs font-black mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                🗂 MAPEAR COLUNAS — Qual coluna corresponde a cada campo?
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {([
+                  {key:"nome",label:"NOME *"},
+                  {key:"cidade",label:"CIDADE *"},
+                  {key:"estado",label:"ESTADO"},
+                  {key:"data",label:"DATA *"},
+                  {key:"distancia",label:"DISTÂNCIA"},
+                  {key:"local",label:"LOCAL"},
+                  {key:"link",label:"LINK"},
+                  {key:"destaque",label:"DESTAQUE"},
+                ] as {key:keyof typeof csvMap,label:string}[]).map(campo => (
+                  <div key={campo.key}>
+                    <label style={{ display:"block", fontSize:"10px", fontWeight:700, color: campo.label.includes("*")?"#FFB800":"#8B949E", marginBottom:"4px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                      {campo.label}
+                    </label>
+                    <select value={csvMap[campo.key]} onChange={e => setCsvMap({...csvMap,[campo.key]:Number(e.target.value)})}
+                      style={{ background:"#21262D", border:campo.label.includes("*")?"1px solid rgba(255,184,0,0.3)":"1px solid rgba(92,200,0,0.15)", color:"#E6EDF3", borderRadius:"10px", padding:"6px 10px", fontSize:"12px", outline:"none", width:"100%" }}>
+                      <option value={-1}>— ignorar —</option>
+                      {csvColunas.map((col,i) => <option key={i} value={i}>{col || `Coluna ${i+1}`}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Estado padrão quando não mapeado */}
+          {csvColunas.length > 0 && csvMap.estado < 0 && (
+            <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.08)", border:"1px solid rgba(255,184,0,0.25)" }}>
+              <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#FFB800", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
+                ⚠️ ESTADO NÃO DETECTADO — DEFINA O ESTADO PARA TODOS OS EVENTOS
+              </label>
+              <select value={estadoPadrao} onChange={e => setEstadoPadrao(e.target.value)}
+                style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.3)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}>
+                <option value="">Usar "BR" como padrão</option>
+                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {importErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{importErro}</div>}
+
+          {importResultado && (
+            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
+              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ IMPORTAÇÃO CONCLUÍDA</p>
+              <div className="flex gap-4">
+                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
+              </div>
+              {importResultado.erros.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
+                  {importResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {csvColunas.length > 0 && (
+            <button type="button" onClick={importarCSV} disabled={importando}
+              className="w-full rounded-xl py-3.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+              style={{ background:"linear-gradient(135deg,#FFB800,#FF8C00)", color:"#0D1117", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
+              {importando ? (
+                <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"/>IMPORTANDO...</span>
+              ) : `📥 IMPORTAR ${csvTexto.trim().split("\n").length - 1} EVENTO(S)`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Painel de sincronização Google Sheets */}
+      {syncAberto && (
+        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl mt-0.5">📊</span>
+            <div className="flex-1">
+              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>SINCRONIZAR COM GOOGLE SHEETS</h3>
+              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>
+                Cole o ID da sua planilha pública. Ela deve ter as colunas nesta ordem:<br />
+                <span style={{ color:"#5CC800", fontFamily:"monospace" }}>nome | cidade | estado | data (DD/MM/AAAA) | distancia | local | link_inscricao | destaque (sim/não)</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input type="text" placeholder="ID da planilha (ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms)" value={sheetId}
+              onChange={e => setSheetId(e.target.value)}
+              style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"13px", outline:"none", flex:1 }}
+              onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
+            <button type="button" onClick={sincronizar} disabled={syncing}
+              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
+              style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", whiteSpace:"nowrap" }}>
+              {syncing ? (
+                <span className="flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/>SINCRONIZANDO...</span>
+              ) : "🔄 SINCRONIZAR"}
+            </button>
+          </div>
+
+          {syncErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{syncErro}</div>}
+
+          {syncResultado && (
+            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
+              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ SINCRONIZAÇÃO CONCLUÍDA</p>
+              <div className="flex gap-4">
+                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
+                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
+              </div>
+              {syncResultado.erros.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
+                  {syncResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
+            <p className="text-xs font-bold mb-2" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>📋 COMO CONFIGURAR A PLANILHA</p>
+            <ol className="text-xs space-y-1" style={{ color:"#8B949E" }}>
+              <li>1. Crie uma planilha no <a href="https://sheets.google.com" target="_blank" rel="noreferrer" style={{ color:"#5CC800" }}>Google Sheets</a></li>
+              <li>2. Adicione o cabeçalho na linha 1: <span style={{ color:"#E6EDF3", fontFamily:"monospace" }}>nome, cidade, estado, data, distancia, local, link_inscricao, destaque</span></li>
+              <li>3. Preencha os eventos a partir da linha 2</li>
+              <li>4. Clique em <strong style={{ color:"#E6EDF3" }}>Arquivo → Compartilhar → Qualquer pessoa com o link pode ver</strong></li>
+              <li>5. Copie o ID da URL: <span style={{ color:"#5CC800", fontFamily:"monospace" }}>docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit</span></li>
+            </ol>
+          </div>
+        </div>
+      )}
+
       {aberto && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-6" style={{ background:"rgba(0,0,0,0.8)", backdropFilter:"blur(8px)" }} onClick={e=>e.target===e.currentTarget&&setAberto(false)}>
-          <div className="w-full max-w-2xl rounded-2xl shadow-2xl my-4" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8" style={{ background:"rgba(0,0,0,0.7)", backdropFilter:"blur(8px)" }} onClick={e=>e.target===e.currentTarget&&setAberto(false)}>
+          <div className="w-full max-w-lg rounded-2xl shadow-2xl" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:"1px solid rgba(92,200,0,0.1)" }}>
-              <h3 className="font-black text-lg" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>{editando?`EDITAR: ${editando.nome}`:"NOVO PRODUTO"}</h3>
+              <h3 className="font-black text-lg" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>{editando?"EDITAR EVENTO":"NOVO EVENTO"}</h3>
               <button onClick={()=>setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E" }}>✕</button>
             </div>
-
-            <div className="space-y-6 p-6">
-              {/* Nome e categoria */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1"><label style={s.lbl}>NOME *</label><input type="text" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label style={s.lbl}>CATEGORIA *</label>
-                    <button type="button" onClick={() => setGerenciarCats(!gerenciarCats)}
-                      className="text-xs font-black transition-all"
-                      style={{ color: gerenciarCats ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                      {gerenciarCats ? "✕ FECHAR" : "⚙️ GERENCIAR"}
-                    </button>
-                  </div>
-                  <select value={form.categoria} onChange={e=>setForm({...form,categoria:e.target.value})} style={s.inp}>
-                    {categorias.map(cat=><option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-
-                  {/* Painel de gerenciamento de categorias */}
-                  {gerenciarCats && (
-                    <div className="mt-2 rounded-xl p-4 space-y-3" style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.2)" }}>
-                      <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>GERENCIAR CATEGORIAS</p>
-
-                      {/* Adicionar nova */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Nova categoria..."
-                          value={novaCategoria}
-                          onChange={e => setNovaCategoria(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && adicionarCategoria()}
-                          style={{ ...s.inp, flex: 1, padding: "8px 12px", fontSize: "13px" }}
-                        />
-                        <button type="button" onClick={adicionarCategoria} disabled={salvandoCat || !novaCategoria.trim()}
-                          className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50 transition-all hover:brightness-110"
-                          style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", whiteSpace: "nowrap" }}>
-                          {salvandoCat ? "..." : "+ ADD"}
-                        </button>
-                      </div>
-
-                      {/* Lista de categorias */}
-                      <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                        {categorias.map(cat => (
-                          <div key={cat} className="flex items-center gap-1 rounded-lg px-2.5 py-1"
-                            style={{ background: form.categoria === cat ? "rgba(92,200,0,0.2)" : "#21262D", border: form.categoria === cat ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.06)" }}>
-                            <button type="button" onClick={() => setForm({...form, categoria: cat})}
-                              className="text-xs font-black"
-                              style={{ color: form.categoria === cat ? "#5CC800" : "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                              {cat}
-                            </button>
-                            <button type="button" onClick={() => removerCategoria(cat)} disabled={removendoCat === cat}
-                              className="ml-0.5 rounded text-xs transition-all hover:text-red-400"
-                              style={{ color: "#8B949E", background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>
-                              {removendoCat === cat ? "..." : "×"}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs" style={{ color: "#8B949E" }}>Clique na categoria para selecioná-la. × para remover.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div><label style={s.lbl}>DESCRIÇÃO</label><textarea value={form.descricao} onChange={e=>setForm({...form,descricao:e.target.value})} rows={2} style={{...s.inp, resize:"none"}} /></div>
-
-              {/* Preços */}
-              <div className="grid grid-cols-2 gap-4">
-                <div><label style={s.lbl}>PREÇO *</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color:"#8B949E" }}>R$</span><input type="number" step="0.01" min="0" value={form.preco||""} onChange={e=>setForm({...form,preco:Number(e.target.value)})} style={{...s.inp,paddingLeft:"36px"}} /></div></div>
-                <div><label style={s.lbl}>PROMO <span style={{ fontWeight:400, textTransform:"none" }}>(opcional)</span></label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color:"#8B949E" }}>R$</span><input type="number" step="0.01" min="0" value={form.preco_promocional||""} onChange={e=>setForm({...form,preco_promocional:e.target.value?Number(e.target.value):undefined})} style={{...s.inp,paddingLeft:"36px"}} /></div></div>
-              </div>
-
-              {/* Fotos gerais */}
-              <div>
-                <label style={s.lbl}>📸 FOTOS GERAIS <span style={{ fontWeight:400, textTransform:"none", letterSpacing:"0" }}>(aparecem quando nenhuma cor está selecionada)</span></label>
-                <div className="flex flex-wrap gap-3 mt-2">
-                  {form.fotos.map((url,i) => (
-                    <div key={i} className="group relative">
-                      <img src={url} alt="" className="h-20 w-20 rounded-xl object-cover" style={{ border:"1px solid rgba(92,200,0,0.2)" }} />
-                      <button onClick={()=>setForm(f=>({...f,fotos:f.fotos.filter(u=>u!==url)}))} className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full text-xs opacity-0 group-hover:opacity-100 transition" style={{ background:"#FF6B00", color:"#fff" }}>✕</button>
-                      {i===0&&<span className="absolute bottom-1 left-1 rounded px-1 text-xs" style={{ background:"rgba(0,0,0,0.7)", color:"#5CC800" }}>✓</span>}
-                    </div>
-                  ))}
-                  <button onClick={()=>fileGeralRef.current?.click()} disabled={uploadando==="geral"}
-                    className="flex h-20 w-20 flex-col items-center justify-center rounded-xl transition"
-                    style={{ border:"2px dashed rgba(92,200,0,0.3)", color: uploadando==="geral"?"#5CC800":"#8B949E", background:"rgba(92,200,0,0.03)" }}>
-                    {uploadando==="geral" ? <span className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor:"rgba(92,200,0,0.3)", borderTopColor:"#5CC800" }} /> : <><span className="text-2xl">+</span><span className="text-xs mt-1" style={{ fontFamily:"'Barlow Condensed', sans-serif" }}>FOTO</span></>}
-                  </button>
-                  <input ref={fileGeralRef} type="file" accept="image/*" multiple className="hidden" onChange={async e=>{for(const f of Array.from(e.target.files||[])) await uploadFotoGeral(f); e.target.value="";}} />
-                </div>
-              </div>
-
-              {/* ── VARIAÇÕES DE COR ── */}
-              <div>
-                <label style={s.lbl}>🎨 VARIAÇÕES DE COR <span style={{ fontWeight:400, textTransform:"none", letterSpacing:"0" }}>(cada cor tem fotos e tamanhos próprios)</span></label>
-
-                {/* Adicionar cor */}
-                <div className="flex gap-2 mt-2 mb-4">
-                  <div className="flex flex-wrap gap-1.5">
-                    {coresPadrao.filter(c => !form.variacoes_cor.find(v=>v.cor===c)).map(cor => (
-                      <button key={cor} type="button" onClick={()=>{ setForm(f=>({...f,variacoes_cor:[...f.variacoes_cor,{cor,fotos:[],tamanhos:[]}]})); }}
-                        className="rounded-lg px-3 py-1.5 text-xs font-bold transition"
-                        style={{ background:"#21262D", color:"#8B949E", border:"1px solid rgba(92,200,0,0.15)", fontFamily:"'Barlow Condensed', sans-serif" }}>
-                        + {cor}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2 mb-4">
-                  <input type="text" placeholder="Outra cor..." value={novaCorNome} onChange={e=>setNovaCorNome(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),adicionarCor())}
-                    style={{...s.inp, flex:1}} />
-                  <button onClick={adicionarCor} className="rounded-xl px-4 py-2 text-sm font-black"
-                    style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", whiteSpace:"nowrap" }}>
-                    + ADICIONAR
-                  </button>
-                </div>
-
-                {/* Cards de cada cor */}
-                {form.variacoes_cor.length === 0 && (
-                  <div className="rounded-xl p-4 text-center text-sm" style={{ background:"rgba(92,200,0,0.03)", border:"1px dashed rgba(92,200,0,0.15)", color:"#8B949E" }}>
-                    Adicione cores acima para configurar fotos e tamanhos por variação
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {form.variacoes_cor.map(variacao => (
-                    <div key={variacao.cor} className="rounded-xl p-4" style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.15)" }}>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="font-black text-sm" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", letterSpacing:"0.05em" }}>🎨 {variacao.cor.toUpperCase()}</span>
-                        <button onClick={()=>removerCor(variacao.cor)} className="text-xs font-bold px-2 py-1 rounded-lg" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00" }}>REMOVER</button>
-                      </div>
-
-                      {/* Fotos da cor */}
-                      <div className="mb-3">
-                        <p className="text-xs font-bold mb-2" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>FOTOS</p>
-                        <div className="flex flex-wrap gap-2">
-                          {variacao.fotos.map((url,i) => (
-                            <div key={i} className="group relative">
-                              <img src={url} alt={variacao.cor} className="h-16 w-16 rounded-xl object-cover" style={{ border:"1px solid rgba(92,200,0,0.2)" }} />
-                              <button onClick={()=>setForm(f=>({...f,variacoes_cor:f.variacoes_cor.map(v=>v.cor===variacao.cor?{...v,fotos:v.fotos.filter(u=>u!==url)}:v)}))}
-                                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs opacity-0 group-hover:opacity-100 transition" style={{ background:"#FF6B00", color:"#fff" }}>✕</button>
-                              {i===0&&<span className="absolute bottom-0.5 left-0.5 rounded px-1 text-xs" style={{ background:"rgba(0,0,0,0.7)", color:"#5CC800" }}>✓</span>}
-                            </div>
-                          ))}
-                          <button onClick={()=>fileCorRefs.current[variacao.cor]?.click()} disabled={uploadando===`cor:${variacao.cor}`}
-                            className="flex h-16 w-16 flex-col items-center justify-center rounded-xl transition"
-                            style={{ border:"2px dashed rgba(92,200,0,0.3)", color:"#8B949E", background:"rgba(92,200,0,0.03)" }}>
-                            {uploadando===`cor:${variacao.cor}` ? <span className="h-4 w-4 animate-spin rounded-full border-2" style={{ borderColor:"rgba(92,200,0,0.3)", borderTopColor:"#5CC800" }} /> : <span className="text-xl">+</span>}
-                          </button>
-                          <input ref={el=>{ fileCorRefs.current[variacao.cor]=el; }} type="file" accept="image/*" multiple className="hidden"
-                            onChange={async e=>{for(const f of Array.from(e.target.files||[])) await uploadFotoCor(f, variacao.cor); e.target.value="";}} />
-                        </div>
-                      </div>
-
-                      {/* Tamanhos da cor */}
-                      <div>
-                        <p className="text-xs font-bold mb-2" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>TAMANHOS DISPONÍVEIS NESSA COR</p>
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-xs mb-1" style={{ color:"#8B949E" }}>Roupas</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {tamanhosRoupa.map(t=>(
-                                <button key={t} type="button" onClick={()=>toggleTamanhoCor(variacao.cor, t)}
-                                  style={s.btn(variacao.tamanhos.includes(t))}>{t}</button>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs mb-1" style={{ color:"#8B949E" }}>Calçados</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {tamanhosTenis.map(t=>(
-                                <button key={t} type="button" onClick={()=>toggleTamanhoCor(variacao.cor, t)}
-                                  style={s.btn(variacao.tamanhos.includes(t))}>{t}</button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Toggle ESGOTADO para esta cor */}
-                        <div className="mt-3 flex items-center gap-2">
-                          <label className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-black"
-                            style={{ background: variacao.esgotado ? "rgba(255,107,0,0.15)" : "rgba(92,200,0,0.08)", border: "1px solid " + (variacao.esgotado ? "rgba(255,107,0,0.4)" : "rgba(92,200,0,0.2)"), color: variacao.esgotado ? "#FF6B00" : "#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>
-                            <input type="checkbox" checked={!!variacao.esgotado}
-                              onChange={e => setForm(f => ({ ...f, variacoes_cor: f.variacoes_cor.map(v => v.cor === variacao.cor ? { ...v, esgotado: e.target.checked } : v) }))}
-                              style={{ accentColor: "#FF6B00" }} />
-                            {variacao.esgotado ? "🚫 ESGOTADO" : "✅ DISPONÍVEL"}
-                          </label>
-                        </div>
-                        {/* Tamanhos esgotados individualmente */}
-                        {variacao.tamanhos.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-xs font-black mb-1.5" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.06em" }}>TAMANHOS ESGOTADOS:</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {variacao.tamanhos.map(t => {
-                                const esgotado = variacao.tamanhos_esgotados?.includes(t);
-                                return (
-                                  <button key={t} type="button"
-                                    onClick={() => setForm(f => ({ ...f, variacoes_cor: f.variacoes_cor.map(v => {
-                                      if (v.cor !== variacao.cor) return v;
-                                      const lista = v.tamanhos_esgotados || [];
-                                      return { ...v, tamanhos_esgotados: esgotado ? lista.filter(x => x !== t) : [...lista, t] };
-                                    })}))}
-                                    className="rounded-lg px-2.5 py-1 text-xs font-black transition-all"
-                                    style={{ background: esgotado ? "rgba(255,107,0,0.2)" : "#21262D", color: esgotado ? "#FF6B00" : "#8B949E", border: "1px solid " + (esgotado ? "rgba(255,107,0,0.4)" : "transparent"), fontFamily:"'Barlow Condensed', sans-serif", textDecoration: esgotado ? "line-through" : "none" }}>
-                                    {t}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Clique para marcar/desmarcar como esgotado</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Destaque */}
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
-                <input type="checkbox" checked={form.destaque} onChange={e=>setForm({...form,destaque:e.target.checked})} style={{ accentColor:"#FFB800" }} />
-                <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Primeiro na loja</p></div>
-              </label>
-
-              {/* Quantidade e estoque */}
+            <div className="space-y-4 p-6">
+              <div><label style={s.lbl}>NOME *</label><input type="text" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label style={s.lbl}>📦 QUANTIDADE EM ESTOQUE</label>
-                  <input type="number" min="0" placeholder="Ex: 10 (opcional)" value={form.quantidade ?? ""} onChange={e=>setForm({...form,quantidade:e.target.value?Number(e.target.value):null})} style={s.inp} />
-                  <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Visível só para você (admin)</p>
-                </div>
-                <div className="flex items-center">
-                  <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3 w-full" style={{ background:"rgba(92,200,0,0.05)", border:"1px solid rgba(92,200,0,0.15)" }}>
-                    <input type="checkbox" checked={form.estoque_disponivel} onChange={e=>setForm({...form,estoque_disponivel:e.target.checked})} style={{ accentColor:"#5CC800" }} />
-                    <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>✅ Em estoque</p><p className="text-xs" style={{ color:"#8B949E" }}>Visível na loja</p></div>
-                  </label>
+                <div><label style={s.lbl}>CIDADE *</label><input type="text" value={form.cidade} onChange={e=>setForm({...form,cidade:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
+                <div><label style={s.lbl}>ESTADO *</label>
+                  <select value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})} style={s.inp}>
+                    <option value="">Selecione</option>
+                    {estadosBR.map(uf=><option key={uf} value={uf}>{uf}</option>)}
+                  </select>
                 </div>
               </div>
-
-              <div><label style={s.lbl}>MSG WHATSAPP <span style={{ fontWeight:400 }}>(opcional)</span></label><input type="text" placeholder="Gerada automaticamente se vazio" value={form.whatsapp_msg} onChange={e=>setForm({...form,whatsapp_msg:e.target.value})} style={s.inp} /></div>
-
+              <div className="grid grid-cols-2 gap-3">
+                <div><label style={s.lbl}>DATA *</label><input type="date" value={form.data_evento} onChange={e=>setForm({...form,data_evento:e.target.value})} style={s.inp} /></div>
+                <div><label style={s.lbl}>DISTÂNCIA</label><input type="text" placeholder="5km, 10km..." value={form.distancia} onChange={e=>setForm({...form,distancia:e.target.value})} style={s.inp} /></div>
+              </div>
+              <div><label style={s.lbl}>LOCAL</label><input type="text" value={form.local} onChange={e=>setForm({...form,local:e.target.value})} style={s.inp} /></div>
+              <div><label style={s.lbl}>LINK DE INSCRIÇÃO</label><input type="url" placeholder="https://..." value={form.link_inscricao} onChange={e=>setForm({...form,link_inscricao:e.target.value})} style={s.inp} /></div>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(92,200,0,0.05)", border:"1px solid rgba(92,200,0,0.15)" }}>
+                <input type="checkbox" checked={form.destaque} onChange={e=>setForm({...form,destaque:e.target.checked})} style={{ accentColor:"#5CC800" }} />
+                <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Badge especial na listagem</p></div>
+              </label>
               {erro&&<div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
-
               <div className="flex gap-3">
-                <button onClick={()=>setAberto(false)} className="flex-1 rounded-xl py-3.5 text-sm font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", border:"1px solid rgba(255,255,255,0.1)", fontFamily:"'Barlow Condensed', sans-serif" }}>CANCELAR</button>
-                <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3.5 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60"
-                  style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
-                  {loading?"SALVANDO...":editando?"SALVAR ALTERAÇÕES":"ADICIONAR PRODUTO"}
+                <button onClick={()=>setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", border:"1px solid rgba(255,255,255,0.1)", fontFamily:"'Barlow Condensed', sans-serif" }}>CANCELAR</button>
+                <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60" style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
+                  {loading?"SALVANDO...":editando?"SALVAR":"ADICIONAR"}
                 </button>
               </div>
             </div>
@@ -756,57 +747,41 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
         </div>
       )}
 
-      {/* Lista de produtos */}
-      {produtos.length === 0 ? (
+      {eventos.length === 0 ? (
         <div className="rounded-2xl p-10 text-center" style={{ background:"#161B22", border:"1px dashed rgba(92,200,0,0.2)" }}>
-          <p className="text-4xl mb-2">🛒</p>
-          <p className="font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>NENHUM PRODUTO CADASTRADO</p>
+          <p className="text-4xl mb-2">🏁</p>
+          <p className="font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>NENHUM EVENTO CADASTRADO</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {produtos.map(p => {
-            const fotoExibir = p.variacoes_cor?.[0]?.fotos?.[0] || p.fotos?.[0];
+        <div className="space-y-3">
+          {eventos.map(ev => {
+            const selecionado = selecionados.has(ev.id);
             return (
-              <div key={p.id} className="rounded-2xl overflow-hidden" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.15)" }}>
-                <div className="relative h-56" style={{ background:"#21262D" }}>
-                  {fotoExibir ? <img src={fotoExibir} alt={p.nome} className="h-full w-full" style={{ objectFit:"contain", padding:"8px" }} /> : <div className="flex h-full items-center justify-center text-4xl" style={{ color:"#30363D" }}>📷</div>}
-                  <div className="absolute top-3 left-3 flex gap-1.5">
-                    {p.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.2)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐</span>}
-                    {!p.estoque_disponivel&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,107,0,0.2)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>SEM ESTOQUE</span>}
-                    {p.variacoes_cor?.length>0&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(92,200,0,0.2)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{p.variacoes_cor.length} COR{p.variacoes_cor.length>1?"ES":""}</span>}
-                    {p.quantidade!=null&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>📦 {p.quantidade}</span>}
-                  </div>
+            <div key={ev.id} className="rounded-2xl p-4 transition-all cursor-pointer"
+              style={{ background: selecionado ? "rgba(92,200,0,0.08)" : "#161B22", border: selecionado ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}
+              onClick={() => toggleSelecionado(ev.id)}>
+              <div className="flex gap-3 items-start">
+                {/* Checkbox */}
+                <div className="shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded border-2 transition-all"
+                  style={{ background: selecionado ? "#5CC800" : "transparent", borderColor: selecionado ? "#5CC800" : "rgba(92,200,0,0.3)" }}>
+                  {selecionado && <span className="text-xs font-black" style={{ color: "#0D1117" }}>✓</span>}
                 </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-black truncate" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", fontSize:"16px" }}>{p.nome}</p>
-                      <p className="text-xs" style={{ color:"#8B949E" }}>{p.categoria}</p>
+                <div className="flex-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div onClick={e => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-black" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", fontSize:"17px" }}>{ev.nome}</h3>
+                      {ev.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
                     </div>
-                    <div className="text-right shrink-0">
-                      {p.preco_promocional?(<><p className="text-xs line-through" style={{ color:"#8B949E" }}>{fmtPreco(p.preco)}</p><p className="font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{fmtPreco(p.preco_promocional)}</p></>):<p className="font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{fmtPreco(p.preco)}</p>}
-                    </div>
+                    <p className="mt-0.5 text-sm" style={{ color:"#8B949E" }}>📍 {ev.cidade} — {ev.estado} · 📅 {fmtData(String(ev.data_evento))}{ev.distancia&&` · ${ev.distancia}`}</p>
+                    {ev.link_inscricao&&<a href={ev.link_inscricao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="text-xs font-bold hover:underline" style={{ color:"#5CC800" }}>🔗 Inscrição</a>}
                   </div>
-                  {/* Mini preview das cores */}
-                  {p.variacoes_cor?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {p.variacoes_cor.map(v => (
-                        <div key={v.cor} className="flex items-center gap-1 rounded-lg px-2 py-0.5"
-                          style={{ background: v.esgotado ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.08)", border: "1px solid " + (v.esgotado ? "rgba(255,107,0,0.3)" : "rgba(92,200,0,0.15)") }}>
-                          {v.fotos[0] && <img src={v.fotos[0]} alt={v.cor} className="h-4 w-4 rounded object-cover" style={{ opacity: v.esgotado ? 0.4 : 1 }} />}
-                          <span className="text-xs" style={{ color: v.esgotado ? "#FF6B00" : "#8B949E", textDecoration: v.esgotado ? "line-through" : "none" }}>{v.cor}</span>
-                          {v.esgotado && <span className="text-xs" style={{ color:"#FF6B00" }}>🚫</span>}
-                          {v.tamanhos.length>0&&<span className="text-xs" style={{ color:"#5CC800" }}>({v.tamanhos.length}tam)</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={()=>abrirEditar(p)} className="flex-1 rounded-xl py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
-                    <button onClick={()=>excluir(p.id)} disabled={excluindo===p.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>{excluindo===p.id?"...":"🗑️"}</button>
+                  <div className="flex shrink-0 gap-2" onClick={e => e.stopPropagation()}>
+                    <button onClick={()=>abrirEditar(ev)} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
+                    <button onClick={()=>excluir(ev.id)} disabled={excluindo===ev.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>{excluindo===ev.id?"...":"🗑️"}</button>
                   </div>
                 </div>
               </div>
+            </div>
             );
           })}
         </div>
@@ -814,6 +789,8 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
     </div>
   );
 }
+
+// ─── AbaProdutos ──────────────────────────────────────────────────────────────
 
 function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdutos: (p: Produto[]) => void }): React.JSX.Element {
   const supabase = React.useRef(createClient()).current;
