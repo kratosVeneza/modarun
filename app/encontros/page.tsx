@@ -4,6 +4,7 @@ import EncontroForm from "@/components/EncontroForm";
 import FiltroEncontros from "@/components/FiltroEncontros";
 import ParticiparEncontro from "@/components/ParticiparEncontro";
 import Header from "@/components/Header";
+import CardLoja from "@/components/CardLoja";
 
 type SearchParams = Promise<{ cidade?: string }>;
 
@@ -48,6 +49,8 @@ export default async function EncontrosPage({ searchParams }: { searchParams: Se
               </p>
             </div>
           </section>
+          {/* Banner de propaganda da loja - Criar treino */}
+          <CardLoja variante="banner" paginaKey="criar-treino" />
 
           {/* Formulário criar treino */}
           <EncontroForm />
