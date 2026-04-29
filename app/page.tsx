@@ -368,7 +368,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
       <div className="h-0.5 w-full" style={{ background: post.tipo === "atividade" ? "linear-gradient(90deg, #FF6B00, #5CC800)" : "linear-gradient(90deg, #5CC800, #4aaa00)" }} />
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5">
+          <a href={`/perfil/${post.user_id}`} className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
             <Avatar nome={post.autor_nome} avatar={post.autor_avatar} email={post.autor_email} size={38} />
             <div>
               <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -376,7 +376,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               </p>
               <p className="text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(post.created_at)}</p>
             </div>
-          </div>
+          </a>
           <div className="flex items-center gap-2">
             {post.tipo === "atividade" && (
               <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black"
@@ -526,6 +526,82 @@ function CardNoticia({ noticia }: { noticia: Noticia }) {
         {noticia.resumo && <p className="text-xs mt-1 line-clamp-2" style={{ color: "#8B949E" }}>{noticia.resumo}</p>}
       </div>
     </a>
+  );
+}
+
+
+// ─── Busca de usuários ────────────────────────────────────────────────────────
+
+function BuscaUsuarios() {
+  const [q, setQ] = useState("");
+  const [resultados, setResultados] = useState<{ user_id: string; autor_nome: string | null; autor_avatar: string | null; autor_email: string | null }[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function buscar(termo: string) {
+    setQ(termo);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (termo.length < 2) { setResultados([]); setAberto(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true);
+      const res = await fetch(`/api/usuarios?q=${encodeURIComponent(termo)}`);
+      const data = await res.json();
+      setResultados(data.usuarios || []);
+      setAberto(true);
+      setBuscando(false);
+    }, 400);
+  }
+
+  function fechar() { setTimeout(() => setAberto(false), 150); }
+
+  return (
+    <div className="relative mb-4">
+      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+        style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
+        <span style={{ color: "#8B949E" }}>🔍</span>
+        <input value={q} onChange={e => buscar(e.target.value)} onBlur={fechar}
+          placeholder="Buscar corredores por nome..."
+          className="flex-1 text-sm outline-none bg-transparent"
+          style={{ color: "#E6EDF3" }} />
+        {buscando && <Loader2 size={14} className="animate-spin shrink-0" style={{ color: "#5CC800" }} />}
+        {q && !buscando && (
+          <button onClick={() => { setQ(""); setResultados([]); setAberto(false); }} style={{ color: "#8B949E" }}>
+            <X size={14} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+      {aberto && resultados.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl overflow-hidden shadow-2xl"
+          style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
+          {resultados.map(u => (
+            <a key={u.user_id} href={`/perfil/${u.user_id}`}
+              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-green-500/5">
+              {u.autor_avatar ? (
+                <img src={u.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: 36, height: 36 }} />
+              ) : (
+                <div className="rounded-full flex items-center justify-center shrink-0 font-black text-sm"
+                  style={{ width: 36, height: 36, background: "linear-gradient(135deg, #5CC800, #FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {(u.autor_nome || u.autor_email || "?")[0]?.toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  {u.autor_nome || u.autor_email?.split("@")[0] || "Corredor"}
+                </p>
+                {u.autor_email && <p className="text-xs" style={{ color: "#8B949E" }}>{u.autor_email}</p>}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+      {aberto && resultados.length === 0 && q.length >= 2 && !buscando && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl px-4 py-3 text-sm"
+          style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)", color: "#8B949E" }}>
+          Nenhum corredor encontrado para "{q}"
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -851,6 +927,7 @@ export default function HomePage(): React.JSX.Element {
         {/* ── FEED + PUBLICAR ── */}
         <div className="px-4 pt-5 pb-2">
           <div className="mx-auto max-w-2xl">
+            <BuscaUsuarios />
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>
                 🏃 COMUNIDADE
