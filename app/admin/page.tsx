@@ -175,7 +175,7 @@ export default function AdminPage(): React.JSX.Element {
             {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
-                style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: `1px solid ${aba===id ? "rgba(92,200,0,0.4)" : "rgba(92,200,0,0.1)"}` }}>
+                style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: aba===id ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}>
                 <p className="font-black text-sm" style={{ fontFamily:"'Barlow Condensed', sans-serif", color: aba===id ? "#5CC800" : "#8B949E", letterSpacing:"0.05em" }}>{icon} {label}</p>
                 <p className="text-xs mt-0.5" style={{ color:"#8B949E" }}>{desc}</p>
               </button>
@@ -587,7 +587,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
                       {campo.label}
                     </label>
                     <select value={csvMap[campo.key]} onChange={e => setCsvMap({...csvMap,[campo.key]:Number(e.target.value)})}
-                      style={{ background:"#21262D", border:`1px solid ${campo.label.includes("*")?"rgba(255,184,0,0.3)":"rgba(92,200,0,0.15)"}`, color:"#E6EDF3", borderRadius:"10px", padding:"6px 10px", fontSize:"12px", outline:"none", width:"100%" }}>
+                      style={{ background:"#21262D", border:campo.label.includes("*")?"1px solid rgba(255,184,0,0.3)":"1px solid rgba(92,200,0,0.15)", color:"#E6EDF3", borderRadius:"10px", padding:"6px 10px", fontSize:"12px", outline:"none", width:"100%" }}>
                       <option value={-1}>— ignorar —</option>
                       {csvColunas.map((col,i) => <option key={i} value={i}>{col || `Coluna ${i+1}`}</option>)}
                     </select>
@@ -980,7 +980,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
                       <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
                         {categorias.map(cat => (
                           <div key={cat} className="flex items-center gap-1 rounded-lg px-2.5 py-1"
-                            style={{ background: form.categoria === cat ? "rgba(92,200,0,0.2)" : "#21262D", border: `1px solid ${form.categoria === cat ? "rgba(92,200,0,0.4)" : "rgba(255,255,255,0.06)"}` }}>
+                            style={{ background: form.categoria === cat ? "rgba(92,200,0,0.2)" : "#21262D", border: form.categoria === cat ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.06)" }}>
                             <button type="button" onClick={() => setForm({...form, categoria: cat})}
                               className="text-xs font-black"
                               style={{ color: form.categoria === cat ? "#5CC800" : "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -1348,7 +1348,7 @@ function AbaBanners(): React.JSX.Element {
                   <div>
                     <div className="relative rounded-xl overflow-hidden" style={{ height: "160px" }}>
                       <img src={form.imagem_url} alt="Preview" className="h-full w-full object-cover"
-                        style={{ objectPosition: `${Number(form.position_x ?? 50)}% ${Number(form.position_y ?? 50)}%` }} />
+                        style={{ objectPosition: (Number(form.position_x ?? 50)) + "% " + (Number(form.position_y ?? 50)) + "%" }} />
                       <button type="button" onClick={(e) => { e.stopPropagation(); setForm(f => ({ ...f, imagem_url: "" })); }}
                         className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
                         style={{ background: "rgba(255,107,0,0.9)", color: "#fff" }}>✕</button>
@@ -1983,7 +1983,7 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
         <label style={lbl}>📍 SELECIONAR ESTADOS</label>
         <div className="flex flex-wrap gap-2 mb-4">
           {estadosBR.map((uf) => (
-            <button key={uf} type="button" onClick={() => toggleEstado(uf)} className="rounded-lg px-3 py-1.5 text-xs font-black transition-all" style={{ background: estadosSel.includes(uf) ? "rgba(92,200,0,0.2)" : "#21262D", color: estadosSel.includes(uf) ? "#5CC800" : "#8B949E", border: `1px solid ${estadosSel.includes(uf) ? "rgba(92,200,0,0.4)" : "transparent"}`, fontFamily:"'Barlow Condensed', sans-serif" }}>{uf}</button>
+            <button key={uf} type="button" onClick={() => toggleEstado(uf)} className="rounded-lg px-3 py-1.5 text-xs font-black transition-all" style={{ background: estadosSel.includes(uf) ? "rgba(92,200,0,0.2)" : "#21262D", color: estadosSel.includes(uf) ? "#5CC800" : "#8B949E", border: estadosSel.includes(uf) ? "1px solid rgba(92,200,0,0.4)" : "1px solid transparent", fontFamily:"'Barlow Condensed', sans-serif" }}>{uf}</button>
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2040,7 +2040,7 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
       )}
 
       {resultado && (
-        <div className="rounded-2xl p-5 animate-slide-up" style={{ background: resultado.erros ? "rgba(255,107,0,0.08)" : "rgba(92,200,0,0.08)", border: `1px solid ${resultado.erros ? "rgba(255,107,0,0.2)" : "rgba(92,200,0,0.2)"}` }}>
+        <div className="rounded-2xl p-5 animate-slide-up" style={{ background: resultado.erros ? "rgba(255,107,0,0.08)" : "rgba(92,200,0,0.08)", border: resultado.erros ? "1px solid rgba(255,107,0,0.2)" : "1px solid rgba(92,200,0,0.2)" }}>
           <p className="font-black text-lg mb-3" style={{ color: resultado.importados > 0 ? "#5CC800" : "#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados > 0 ? `✅ ${resultado.importados} EVENTOS IMPORTADOS!` : "ℹ️ BUSCA REALIZADA"}</p>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="rounded-xl p-3 text-center" style={{ background:"rgba(92,200,0,0.1)" }}><p className="text-2xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{resultado.importados}</p><p className="text-xs" style={{ color:"#8B949E" }}>IMPORTADOS</p></div>
