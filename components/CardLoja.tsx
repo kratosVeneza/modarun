@@ -11,9 +11,16 @@ type Produto = {
 };
 
 type Banner = {
-  id: string; titulo?: string; subtitulo?: string;
-  imagem_url: string; link_url?: string; link_texto?: string;
-  paginas?: string[]; produto_id?: string;
+  id: string;
+  titulo?: string;
+  subtitulo?: string;
+  imagem_url: string;
+  link_url?: string;
+  link_texto?: string;
+  paginas?: string[];
+  produto_id?: string;
+  ativo?: boolean;
+  ordem?: number;
 };
 
 type Variante = "feed" | "banner" | "inline";
@@ -29,37 +36,66 @@ export default function CardLoja({ variante = "inline", paginaKey }: { variante?
   const [bannerPropaganda, setBannerPropaganda] = useState<Banner | null>(null);
 
   useEffect(() => {
+    let cancelado = false;
     const supabase = createClient();
     const key = paginaKey || PAGINA_KEY[variante];
 
-    // Buscar banner configurado para esta pagina (independente do campo ativo da loja)
-    supabase.from("banners")
-      .select("id, titulo, subtitulo, imagem_url, link_url, link_texto, paginas, produto_id")
-      .contains("paginas", [key])
-      .limit(1)
-      .maybeSingle()
-      .then(async ({ data: b }) => {
-        if (b) {
-          setBannerPropaganda(b);
-          // Se tem produto_id, buscar o produto
-          if (b.produto_id) {
-            const { data: p } = await supabase.from("produtos")
-              .select("id, nome, preco, preco_promocional, fotos, variacoes_cor")
-              .eq("id", b.produto_id)
-              .single();
-            if (p) setProduto(p);
-          }
-        } else {
-          // Fallback: produto em destaque
-          supabase.from("produtos")
+    async function buscarProdutoDestaque() {
+      const { data: p } = await supabase
+        .from("produtos")
+        .select("id, nome, preco, preco_promocional, fotos, variacoes_cor")
+        .eq("estoque_disponivel", true)
+        .order("destaque", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!cancelado && p) {
+        setProduto(p);
+      }
+    }
+
+    async function carregarPropaganda() {
+      setBannerPropaganda(null);
+      setProduto(null);
+
+      const { data: banners, error } = await supabase
+        .from("banners")
+        .select("id, titulo, subtitulo, imagem_url, link_url, link_texto, paginas, produto_id, ativo, ordem")
+        .eq("ativo", true)
+        .contains("paginas", [key])
+        .order("ordem", { ascending: true })
+        .limit(1);
+
+      const banner = banners?.[0] ?? null;
+
+      if (!error && banner) {
+        if (cancelado) return;
+
+        setBannerPropaganda(banner);
+
+        if (banner.produto_id) {
+          const { data: p } = await supabase
+            .from("produtos")
             .select("id, nome, preco, preco_promocional, fotos, variacoes_cor")
-            .eq("estoque_disponivel", true)
-            .order("destaque", { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data: p }) => { if (p) setProduto(p); });
+            .eq("id", banner.produto_id)
+            .maybeSingle();
+
+          if (!cancelado && p) {
+            setProduto(p);
+          }
         }
-      });
+
+        return;
+      }
+
+      await buscarProdutoDestaque();
+    }
+
+    carregarPropaganda();
+
+    return () => {
+      cancelado = true;
+    };
   }, [variante, paginaKey]);
 
   const usandoBanner = !!bannerPropaganda;

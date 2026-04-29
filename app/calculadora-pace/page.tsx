@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import Header from "@/components/Header";
+import CardLoja from "@/components/CardLoja";
 import { Timer, Ruler, Flag, Zap, Heart, ClipboardList, ArrowRight } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useEffect } from "react";
@@ -181,6 +182,9 @@ export default function CalculadoraPacePage(): React.JSX.Element {
         </section>
 
         <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+
+          {/* Banner de propaganda da loja */}
+          <CardLoja variante="banner" paginaKey="calculadora-pace" />
 
           {/* Seletor de modo */}
           <div className="grid grid-cols-3 gap-2 rounded-2xl p-1.5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>

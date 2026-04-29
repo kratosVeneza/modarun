@@ -13,15 +13,34 @@ export async function POST(request: Request): Promise<NextResponse> {
   const user = await verificarAdmin(supabase);
   if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
   const body = await request.json() as Record<string, unknown>;
-  const { titulo, subtitulo, imagem_url, link_url, link_texto, ativo, ordem, position_x, position_y } = body;
+  const {
+    titulo,
+    subtitulo,
+    imagem_url,
+    link_url,
+    link_texto,
+    ativo,
+    ordem,
+    position_x,
+    position_y,
+    paginas,
+    produto_id,
+  } = body;
   if (!imagem_url) return NextResponse.json({ error: "Imagem é obrigatória." }, { status: 400 });
 
   // Tenta inserir com position_x/y, se falhar tenta sem
   let insertData: Record<string, unknown> = {
-    titulo: titulo || null, subtitulo: subtitulo || null, imagem_url,
-    link_url: link_url || null, link_texto: link_texto || "Ver mais",
-    ativo: ativo ?? true, ordem: ordem || 0,
-    position_x: position_x ?? 50, position_y: position_y ?? 50,
+    titulo: titulo || null,
+    subtitulo: subtitulo || null,
+    imagem_url,
+    link_url: link_url || null,
+    link_texto: link_texto || "Ver mais",
+    ativo: ativo ?? true,
+    ordem: ordem || 0,
+    position_x: position_x ?? 50,
+    position_y: position_y ?? 50,
+    paginas: Array.isArray(paginas) ? paginas : [],
+    produto_id: produto_id || null,
   };
 
   let { data, error } = await supabase.from("banners").insert([insertData]).select().single();

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
+import CardLoja from "@/components/CardLoja";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
 import {
@@ -986,6 +987,7 @@ export default function HomePage(): React.JSX.Element {
           <div className="mx-auto max-w-2xl space-y-4">
             {abaAtiva === "feed" && (
               <>
+                <CardLoja variante="feed" paginaKey="feed" />
                 {carregando ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="rounded-2xl p-4 animate-pulse" style={{ background: "#161B22", height: 160 }} />
