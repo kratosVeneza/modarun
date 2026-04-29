@@ -15,12 +15,15 @@ type VariacaoCor = {
   tamanhos_esgotados?: string[];
 };
 
+type BannerDisplayConfig = { modo?: "cover" | "contain"; altura?: number; position_x?: number; position_y?: number };
 type Banner = {
   id: string; titulo?: string; subtitulo?: string;
   imagem_url: string; link_url?: string; link_texto?: string;
   ativo: boolean; ordem: number;
   position_x?: number; position_y?: number;
   paginas?: string[]; produto_id?: string;
+  exibir_loja?: boolean;
+  config_paginas?: Record<string, BannerDisplayConfig> | null;
 };
 
 type Evento = {
@@ -485,442 +488,6 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 justify-between items-center">
-        <div className="flex gap-2 flex-wrap">
-          {eventos.length > 0 && (
-            <>
-              <button onClick={toggleTodos}
-                className="rounded-xl px-4 py-2.5 text-sm font-black transition-all"
-                style={{ background: selecionados.size === eventos.length ? "rgba(92,200,0,0.2)" : "rgba(255,255,255,0.05)", color: selecionados.size > 0 ? "#5CC800" : "#8B949E", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                {selecionados.size === eventos.length ? "✓ TODOS SELECIONADOS" : `☐ SELECIONAR TODOS`}
-              </button>
-              {selecionados.size > 0 && (
-                <button onClick={excluirLote} disabled={excluindoLote}
-                  className="rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
-                  style={{ background: "rgba(255,107,0,0.15)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {excluindoLote ? "EXCLUINDO..." : `🗑️ EXCLUIR ${selecionados.size}`}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => { setSyncAberto(!syncAberto); setCsvAberto(false); }} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
-            style={{ background: syncAberto?"rgba(92,200,0,0.2)":"rgba(92,200,0,0.1)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-            📊 SHEETS
-          </button>
-          <button onClick={abrirNovo} className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
-            style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-            + EVENTO
-          </button>
-        </div>
-      </div>
-
-      {/* Botão importar CSV */}
-      <div className="flex flex-wrap gap-3 justify-end" style={{ marginTop:"-8px" }}>
-        <button onClick={() => { setCsvAberto(!csvAberto); setSyncAberto(false); }} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
-          style={{ background: csvAberto?"rgba(255,184,0,0.2)":"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-          📥 IMPORTAR CSV
-        </button>
-      </div>
-
-      {/* Painel de importação CSV */}
-      {csvAberto && (
-        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(255,184,0,0.2)" }}>
-          <div className="flex items-start gap-3">
-            <span className="text-2xl mt-0.5">📥</span>
-            <div>
-              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>IMPORTAR CSV</h3>
-              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>Cole o conteúdo CSV ou carregue um arquivo. O sistema detecta as colunas automaticamente.</p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button type="button" onClick={() => csvFileRef.current?.click()}
-              className="rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
-              style={{ background:"rgba(255,184,0,0.1)", color:"#FFB800", border:"1px solid rgba(255,184,0,0.3)", fontFamily:"'Barlow Condensed', sans-serif" }}>
-              📂 CARREGAR ARQUIVO
-            </button>
-            <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden"
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = ev => {
-                  const text = ev.target?.result as string;
-                  setCsvTexto(text); parseCsvPreview(text);
-                };
-                reader.readAsText(file, "UTF-8");
-                e.target.value = "";
-              }} />
-          </div>
-
-          <div>
-            <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#8B949E", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.1em" }}>
-              OU COLE O CSV AQUI
-            </label>
-            <textarea value={csvTexto} rows={5} placeholder={"nome,cidade,estado,data,distancia\nCorrida das Flores,Belém,PA,15/06/2026,10km\n..."}
-              onChange={e => { setCsvTexto(e.target.value); if(e.target.value.includes("\n")) parseCsvPreview(e.target.value); }}
-              style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"12px 16px", fontSize:"12px", outline:"none", width:"100%", resize:"none", fontFamily:"monospace" }}
-              onFocus={e=>(e.target.style.borderColor="#FFB800")} onBlur={e=>(e.target.style.borderColor="rgba(255,184,0,0.2)")} />
-          </div>
-
-          {/* Mapeamento de colunas */}
-          {csvColunas.length > 0 && (
-            <div>
-              <p className="text-xs font-black mb-3" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
-                🗂 MAPEAR COLUNAS — Qual coluna corresponde a cada campo?
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {([
-                  {key:"nome",label:"NOME *"},
-                  {key:"cidade",label:"CIDADE *"},
-                  {key:"estado",label:"ESTADO"},
-                  {key:"data",label:"DATA *"},
-                  {key:"distancia",label:"DISTÂNCIA"},
-                  {key:"local",label:"LOCAL"},
-                  {key:"link",label:"LINK"},
-                  {key:"destaque",label:"DESTAQUE"},
-                ] as {key:keyof typeof csvMap,label:string}[]).map(campo => (
-                  <div key={campo.key}>
-                    <label style={{ display:"block", fontSize:"10px", fontWeight:700, color: campo.label.includes("*")?"#FFB800":"#8B949E", marginBottom:"4px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
-                      {campo.label}
-                    </label>
-                    <select value={csvMap[campo.key]} onChange={e => setCsvMap({...csvMap,[campo.key]:Number(e.target.value)})}
-                      style={{ background:"#21262D", border:campo.label.includes("*")?"1px solid rgba(255,184,0,0.3)":"1px solid rgba(92,200,0,0.15)", color:"#E6EDF3", borderRadius:"10px", padding:"6px 10px", fontSize:"12px", outline:"none", width:"100%" }}>
-                      <option value={-1}>— ignorar —</option>
-                      {csvColunas.map((col,i) => <option key={i} value={i}>{col || `Coluna ${i+1}`}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Estado padrão quando não mapeado */}
-          {csvColunas.length > 0 && csvMap.estado < 0 && (
-            <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.08)", border:"1px solid rgba(255,184,0,0.25)" }}>
-              <label style={{ display:"block", fontSize:"11px", fontWeight:700, color:"#FFB800", marginBottom:"6px", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>
-                ⚠️ ESTADO NÃO DETECTADO — DEFINA O ESTADO PARA TODOS OS EVENTOS
-              </label>
-              <select value={estadoPadrao} onChange={e => setEstadoPadrao(e.target.value)}
-                style={{ background:"#21262D", border:"1px solid rgba(255,184,0,0.3)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" }}>
-                <option value="">Usar "BR" como padrão</option>
-                {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
-                  <option key={uf} value={uf}>{uf}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {importErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{importErro}</div>}
-
-          {importResultado && (
-            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
-              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ IMPORTAÇÃO CONCLUÍDA</p>
-              <div className="flex gap-4">
-                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
-                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
-                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{importResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
-              </div>
-              {importResultado.erros.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
-                  {importResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
-                </div>
-              )}
-            </div>
-          )}
-
-          {csvColunas.length > 0 && (
-            <button type="button" onClick={importarCSV} disabled={importando}
-              className="w-full rounded-xl py-3.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
-              style={{ background:"linear-gradient(135deg,#FFB800,#FF8C00)", color:"#0D1117", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
-              {importando ? (
-                <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"/>IMPORTANDO...</span>
-              ) : `📥 IMPORTAR ${csvTexto.trim().split("\n").length - 1} EVENTO(S)`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Painel de sincronização Google Sheets */}
-      {syncAberto && (
-        <div className="rounded-2xl p-5 space-y-4" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
-          <div className="flex items-start gap-3">
-            <span className="text-2xl mt-0.5">📊</span>
-            <div className="flex-1">
-              <h3 className="font-black text-base" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>SINCRONIZAR COM GOOGLE SHEETS</h3>
-              <p className="text-xs mt-1" style={{ color:"#8B949E" }}>
-                Cole o ID da sua planilha pública. Ela deve ter as colunas nesta ordem:<br />
-                <span style={{ color:"#5CC800", fontFamily:"monospace" }}>nome | cidade | estado | data (DD/MM/AAAA) | distancia | local | link_inscricao | destaque (sim/não)</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <input type="text" placeholder="ID da planilha (ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms)" value={sheetId}
-              onChange={e => setSheetId(e.target.value)}
-              style={{ background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"13px", outline:"none", flex:1 }}
-              onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} />
-            <button type="button" onClick={sincronizar} disabled={syncing}
-              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-black disabled:opacity-60 transition-all hover:brightness-110"
-              style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", whiteSpace:"nowrap" }}>
-              {syncing ? (
-                <span className="flex items-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"/>SINCRONIZANDO...</span>
-              ) : "🔄 SINCRONIZAR"}
-            </button>
-          </div>
-
-          {syncErro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{syncErro}</div>}
-
-          {syncResultado && (
-            <div className="rounded-xl p-4" style={{ background:"rgba(92,200,0,0.08)", border:"1px solid rgba(92,200,0,0.2)" }}>
-              <p className="font-black text-sm mb-2" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✅ SINCRONIZAÇÃO CONCLUÍDA</p>
-              <div className="flex gap-4">
-                <div><p className="text-xl font-black" style={{ color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.inseridos}</p><p className="text-xs" style={{ color:"#8B949E" }}>novos</p></div>
-                <div><p className="text-xl font-black" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.atualizados}</p><p className="text-xs" style={{ color:"#8B949E" }}>atualizados</p></div>
-                <div><p className="text-xl font-black" style={{ color:"#E6EDF3", fontFamily:"'Barlow Condensed', sans-serif" }}>{syncResultado.total}</p><p className="text-xs" style={{ color:"#8B949E" }}>total</p></div>
-              </div>
-              {syncResultado.erros.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs font-bold mb-1" style={{ color:"#FF6B00" }}>Linhas ignoradas:</p>
-                  {syncResultado.erros.map((e,i) => <p key={i} className="text-xs" style={{ color:"#8B949E" }}>• {e}</p>)}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="rounded-xl p-3" style={{ background:"rgba(255,184,0,0.05)", border:"1px solid rgba(255,184,0,0.15)" }}>
-            <p className="text-xs font-bold mb-2" style={{ color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.08em" }}>📋 COMO CONFIGURAR A PLANILHA</p>
-            <ol className="text-xs space-y-1" style={{ color:"#8B949E" }}>
-              <li>1. Crie uma planilha no <a href="https://sheets.google.com" target="_blank" rel="noreferrer" style={{ color:"#5CC800" }}>Google Sheets</a></li>
-              <li>2. Adicione o cabeçalho na linha 1: <span style={{ color:"#E6EDF3", fontFamily:"monospace" }}>nome, cidade, estado, data, distancia, local, link_inscricao, destaque</span></li>
-              <li>3. Preencha os eventos a partir da linha 2</li>
-              <li>4. Clique em <strong style={{ color:"#E6EDF3" }}>Arquivo → Compartilhar → Qualquer pessoa com o link pode ver</strong></li>
-              <li>5. Copie o ID da URL: <span style={{ color:"#5CC800", fontFamily:"monospace" }}>docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit</span></li>
-            </ol>
-          </div>
-        </div>
-      )}
-
-      {aberto && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-8" style={{ background:"rgba(0,0,0,0.7)", backdropFilter:"blur(8px)" }} onClick={e=>e.target===e.currentTarget&&setAberto(false)}>
-          <div className="w-full max-w-lg rounded-2xl shadow-2xl" style={{ background:"#161B22", border:"1px solid rgba(92,200,0,0.2)" }}>
-            <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom:"1px solid rgba(92,200,0,0.1)" }}>
-              <h3 className="font-black text-lg" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3" }}>{editando?"EDITAR EVENTO":"NOVO EVENTO"}</h3>
-              <button onClick={()=>setAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E" }}>✕</button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div><label style={s.lbl}>NOME *</label><input type="text" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label style={s.lbl}>CIDADE *</label><input type="text" value={form.cidade} onChange={e=>setForm({...form,cidade:e.target.value})} style={s.inp} onFocus={e=>(e.target.style.borderColor="#5CC800")} onBlur={e=>(e.target.style.borderColor="rgba(92,200,0,0.2)")} /></div>
-                <div><label style={s.lbl}>ESTADO *</label>
-                  <select value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})} style={s.inp}>
-                    <option value="">Selecione</option>
-                    {estadosBR.map(uf=><option key={uf} value={uf}>{uf}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label style={s.lbl}>DATA *</label><input type="date" value={form.data_evento} onChange={e=>setForm({...form,data_evento:e.target.value})} style={s.inp} /></div>
-                <div><label style={s.lbl}>DISTÂNCIA</label><input type="text" placeholder="5km, 10km..." value={form.distancia} onChange={e=>setForm({...form,distancia:e.target.value})} style={s.inp} /></div>
-              </div>
-              <div><label style={s.lbl}>LOCAL</label><input type="text" value={form.local} onChange={e=>setForm({...form,local:e.target.value})} style={s.inp} /></div>
-              <div><label style={s.lbl}>LINK DE INSCRIÇÃO</label><input type="url" placeholder="https://..." value={form.link_inscricao} onChange={e=>setForm({...form,link_inscricao:e.target.value})} style={s.inp} /></div>
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background:"rgba(92,200,0,0.05)", border:"1px solid rgba(92,200,0,0.15)" }}>
-                <input type="checkbox" checked={form.destaque} onChange={e=>setForm({...form,destaque:e.target.checked})} style={{ accentColor:"#5CC800" }} />
-                <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Badge especial na listagem</p></div>
-              </label>
-              {erro&&<div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
-              <div className="flex gap-3">
-                <button onClick={()=>setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", border:"1px solid rgba(255,255,255,0.1)", fontFamily:"'Barlow Condensed', sans-serif" }}>CANCELAR</button>
-                <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60" style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
-                  {loading?"SALVANDO...":editando?"SALVAR":"ADICIONAR"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {eventos.length === 0 ? (
-        <div className="rounded-2xl p-10 text-center" style={{ background:"#161B22", border:"1px dashed rgba(92,200,0,0.2)" }}>
-          <p className="text-4xl mb-2">🏁</p>
-          <p className="font-black" style={{ color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>NENHUM EVENTO CADASTRADO</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {eventos.map(ev => {
-            const selecionado = selecionados.has(ev.id);
-            return (
-            <div key={ev.id} className="rounded-2xl p-4 transition-all cursor-pointer"
-              style={{ background: selecionado ? "rgba(92,200,0,0.08)" : "#161B22", border: selecionado ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}
-              onClick={() => toggleSelecionado(ev.id)}>
-              <div className="flex gap-3 items-start">
-                {/* Checkbox */}
-                <div className="shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded border-2 transition-all"
-                  style={{ background: selecionado ? "#5CC800" : "transparent", borderColor: selecionado ? "#5CC800" : "rgba(92,200,0,0.3)" }}>
-                  {selecionado && <span className="text-xs font-black" style={{ color: "#0D1117" }}>✓</span>}
-                </div>
-                <div className="flex-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div onClick={e => e.stopPropagation()}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-black" style={{ fontFamily:"'Barlow Condensed', sans-serif", color:"#E6EDF3", fontSize:"17px" }}>{ev.nome}</h3>
-                      {ev.destaque&&<span className="rounded-lg px-2 py-0.5 text-xs font-black" style={{ background:"rgba(255,184,0,0.15)", color:"#FFB800", fontFamily:"'Barlow Condensed', sans-serif" }}>⭐ DESTAQUE</span>}
-                    </div>
-                    <p className="mt-0.5 text-sm" style={{ color:"#8B949E" }}>📍 {ev.cidade} — {ev.estado} · 📅 {fmtData(String(ev.data_evento))}{ev.distancia&&` · ${ev.distancia}`}</p>
-                    {ev.link_inscricao&&<a href={ev.link_inscricao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="text-xs font-bold hover:underline" style={{ color:"#5CC800" }}>🔗 Inscrição</a>}
-                  </div>
-                  <div className="flex shrink-0 gap-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={()=>abrirEditar(ev)} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background:"rgba(92,200,0,0.1)", color:"#5CC800", fontFamily:"'Barlow Condensed', sans-serif" }}>✏️ EDITAR</button>
-                    <button onClick={()=>excluir(ev.id)} disabled={excluindo===ev.id} className="rounded-xl px-3 py-2 text-xs font-black disabled:opacity-50" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", fontFamily:"'Barlow Condensed', sans-serif" }}>{excluindo===ev.id?"...":"🗑️"}</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── AbaProdutos ──────────────────────────────────────────────────────────────
-
-function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdutos: (p: Produto[]) => void }): React.JSX.Element {
-  const supabase = React.useRef(createClient()).current;
-  const [categorias, setCategorias] = useState<string[]>(["Camiseta","Conjunto","Shorts","Calçado","Meia","Boné","Acessório","Nutrição","Hidratação","Outro"]);
-  const [novaCategoria, setNovaCategoria] = useState("");
-  const [gerenciarCats, setGerenciarCats] = useState(false);
-  const [salvandoCat, setSalvandoCat] = useState(false);
-  const [removendoCat, setRemovendoCat] = useState<string | null>(null);
-  const [aberto, setAberto] = useState(false);
-
-  // Carregar categorias do banco ao montar
-  React.useEffect(() => {
-    const sp = supabase;
-    sp.from("produto_categorias").select("nome").order("ordem").then(({ data }) => {
-      if (data && data.length > 0) setCategorias(data.map((d: { nome: string }) => d.nome));
-    });
-  }, []);
-
-  async function adicionarCategoria() {
-    const nome = novaCategoria.trim();
-    if (!nome || categorias.includes(nome)) return;
-    setSalvandoCat(true);
-    const sp = supabase;
-    const { error } = await sp.from("produto_categorias").insert({ nome, ordem: categorias.length + 1 });
-    if (!error) { setCategorias(prev => [...prev, nome]); setNovaCategoria(""); }
-    setSalvandoCat(false);
-  }
-
-  async function removerCategoria(nome: string) {
-    if (!confirm(`Remover categoria "${nome}"? Produtos com essa categoria não serão alterados.`)) return;
-    setRemovendoCat(nome);
-    const sp = supabase;
-    await sp.from("produto_categorias").delete().eq("nome", nome);
-    setCategorias(prev => prev.filter(c => c !== nome));
-    setRemovendoCat(null);
-  }
-
-  const [editando, setEditando] = useState<Produto|null>(null);
-  const [form, setForm] = useState<Omit<Produto,"id">>(produtoVazio);
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState("");
-  const [uploadando, setUploadando] = useState<string|null>(null); // "geral" | "cor:NomeDaCor"
-  const [excluindo, setExcluindo] = useState<string|null>(null);
-  const [novaCorNome, setNovaCorNome] = useState("");
-  const fileGeralRef = useRef<HTMLInputElement>(null);
-  const fileCorRefs = useRef<Record<string, HTMLInputElement|null>>({});
-
-  function abrirNovo() { setEditando(null); setForm(produtoVazio); setErro(""); setAberto(true); }
-  function abrirEditar(p: Produto) {
-    setEditando(p);
-    setForm({ ...p, variacoes_cor: p.variacoes_cor?.length ? [...p.variacoes_cor.map(v=>({...v,fotos:[...v.fotos],tamanhos:[...v.tamanhos],esgotado:v.esgotado||false,tamanhos_esgotados:[...(v.tamanhos_esgotados||[])]}))] : [] });
-    setErro(""); setAberto(true);
-  }
-
-  // Upload de foto geral
-  async function uploadFotoGeral(file: File) {
-    setUploadando("geral");
-    const fd = new FormData(); fd.append("file", file);
-    const res = await fetch("/api/admin/upload-foto", { method:"POST", body:fd });
-    const result = await res.json();
-    setUploadando(null);
-    if(!res.ok){setErro(result.error||"Erro no upload.");return;}
-    setForm(f => ({ ...f, fotos: [...f.fotos, result.url] }));
-  }
-
-  // Upload de foto por cor
-  async function uploadFotoCor(file: File, cor: string) {
-    setUploadando(`cor:${cor}`);
-    const fd = new FormData(); fd.append("file", file);
-    const res = await fetch("/api/admin/upload-foto", { method:"POST", body:fd });
-    const result = await res.json();
-    setUploadando(null);
-    if(!res.ok){setErro(result.error||"Erro no upload.");return;}
-    setForm(f => ({
-      ...f,
-      variacoes_cor: f.variacoes_cor.map(v =>
-        v.cor === cor ? { ...v, fotos: [...v.fotos, result.url] } : v
-      )
-    }));
-  }
-
-  // Adicionar nova variação de cor
-  function adicionarCor() {
-    const nome = novaCorNome.trim();
-    if (!nome) return;
-    if (form.variacoes_cor.find(v => v.cor === nome)) { setErro(`Cor "${nome}" já existe.`); return; }
-    setForm(f => ({ ...f, variacoes_cor: [...f.variacoes_cor, { cor: nome, fotos: [], tamanhos: [] }] }));
-    setNovaCorNome("");
-  }
-
-  function removerCor(cor: string) {
-    setForm(f => ({ ...f, variacoes_cor: f.variacoes_cor.filter(v => v.cor !== cor) }));
-  }
-
-  // Toggle tamanho numa variação de cor
-  function toggleTamanhoCor(cor: string, tam: string) {
-    setForm(f => ({
-      ...f,
-      variacoes_cor: f.variacoes_cor.map(v =>
-        v.cor === cor ? { ...v, tamanhos: v.tamanhos.includes(tam) ? v.tamanhos.filter(t=>t!==tam) : [...v.tamanhos, tam] } : v
-      )
-    }));
-  }
-
-  async function salvar() {
-    if(!form.nome||!form.preco||!form.categoria){setErro("Nome, preço e categoria são obrigatórios.");return;}
-    setLoading(true);setErro("");
-    // Derivar lista de cores dos variacoes_cor
-    const cores = form.variacoes_cor.map(v => v.cor);
-    const body = editando ? { id:editando.id, ...form, cores } : { ...form, cores };
-    const method = editando?"PATCH":"POST";
-    const res = await fetch("/api/admin/produtos",{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    const result = await res.json();
-    setLoading(false);
-    if(!res.ok){setErro(result.error||"Erro ao salvar.");return;}
-    const salvo = { ...body, id: editando?.id || result.data?.id, cores };
-    if(editando) setProdutos(produtos.map(p=>p.id===editando.id?salvo as Produto:p));
-    else setProdutos([result.data,...produtos]);
-    setAberto(false);
-  }
-
-  async function excluir(id: string) {
-    if(!confirm("Excluir este produto?"))return;
-    setExcluindo(id);
-    await fetch("/api/admin/produtos",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
-    setExcluindo(null);
-    setProdutos(produtos.filter(p=>p.id!==id));
-  }
-
-  const corSelecionada = form.variacoes_cor[0]?.cor || null;
-
-  return (
-    <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
           style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif", letterSpacing:"0.05em" }}>
@@ -1256,7 +823,8 @@ function AbaBanners(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<Banner | null>(null);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[], produto_id: "" });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, exibir_loja: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[], produto_id: "", config_paginas: {} as Record<string, BannerDisplayConfig> });
+  const [paginaAjuste, setPaginaAjuste] = useState("loja");
   const [loading, setLoading] = useState(false);
   const [uploadando, setUploadando] = useState(false);
   const [erro, setErro] = useState("");
@@ -1275,8 +843,8 @@ function AbaBanners(): React.JSX.Element {
     supabase.from("produtos").select("id, nome, fotos, variacoes_cor").eq("estoque_disponivel", true).order("nome").then(({ data }) => setProdutos(data || []));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50,paginas:[],produto_id:"" }); setErro(""); setAberto(true); }
-  function abrirEditar(ban: Banner) { setEditando(ban); setForm({ titulo:ban.titulo||"",subtitulo:ban.subtitulo||"",imagem_url:ban.imagem_url,link_url:ban.link_url||"",link_texto:ban.link_texto||"Ver mais",ativo:ban.ativo,ordem:ban.ordem,position_x:ban.position_x??50,position_y:ban.position_y??50,paginas:ban.paginas||[], produto_id:ban.produto_id||"" }); setErro(""); setAberto(true); }
+  function abrirNovo() { setEditando(null); setPaginaAjuste("loja"); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,exibir_loja:true,ordem:0,position_x:50,position_y:50,paginas:[],produto_id:"",config_paginas:{} }); setErro(""); setAberto(true); }
+  function abrirEditar(ban: Banner) { setEditando(ban); setPaginaAjuste("loja"); setForm({ titulo:ban.titulo||"",subtitulo:ban.subtitulo||"",imagem_url:ban.imagem_url,link_url:ban.link_url||"",link_texto:ban.link_texto||"Ver mais",ativo:ban.ativo,exibir_loja:ban.exibir_loja ?? true,ordem:ban.ordem,position_x:ban.position_x??50,position_y:ban.position_y??50,paginas:ban.paginas||[], produto_id:ban.produto_id||"",config_paginas:ban.config_paginas||{} }); setErro(""); setAberto(true); }
 
   async function uploadImagem(file: File) {
     setUploadando(true);
@@ -1297,7 +865,7 @@ function AbaBanners(): React.JSX.Element {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
-    const formFinal = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [], produto_id: form.produto_id || null };
+    const formFinal = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [], produto_id: form.produto_id || null, exibir_loja: form.exibir_loja ?? true, config_paginas: form.config_paginas || {} };
     const body = editando ? { id: editando.id, ...formFinal } : formFinal;
     try {
       const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1330,10 +898,39 @@ function AbaBanners(): React.JSX.Element {
     inp: { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties,
   };
 
+  const paginasDisponiveis = [
+    ["loja", "Loja"],
+    ["feed", "Feed / Comunidade"],
+    ["eventos", "Eventos"],
+    ["calculadora-pace", "Calc. Pace"],
+    ["calculadora-fc", "Calc. FC"],
+    ["criar-treino", "Criar treino"],
+  ] as const;
+
+  const paginasParaAjuste = paginasDisponiveis.filter(([val]) => val === "loja" || (form.paginas || []).includes(val));
+  const configAtual = form.config_paginas?.[paginaAjuste] || {};
+  const alturaAtual = Number(configAtual.altura ?? (paginaAjuste === "loja" ? 280 : paginaAjuste === "feed" ? 80 : 140));
+  const modoAtual = configAtual.modo ?? "cover";
+  const positionXAtual = Number(configAtual.position_x ?? form.position_x ?? 50);
+  const positionYAtual = Number(configAtual.position_y ?? form.position_y ?? 50);
+
+  function atualizarConfigPagina(campo: keyof BannerDisplayConfig, valor: string | number) {
+    setForm(f => ({
+      ...f,
+      config_paginas: {
+        ...(f.config_paginas || {}),
+        [paginaAjuste]: {
+          ...((f.config_paginas || {})[paginaAjuste] || {}),
+          [campo]: valor,
+        },
+      },
+    }));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm" style={{ color: "#8B949E" }}>Banners aparecem no topo da loja em rotacao automatica</p>
+        <p className="text-sm" style={{ color: "#8B949E" }}>Gerencie banners da loja e propagandas exibidas em paginas do app</p>
         <button onClick={abrirNovo} className="rounded-xl px-5 py-3 text-sm font-black transition-all hover:brightness-110"
           style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
           + ADICIONAR BANNER
@@ -1354,8 +951,8 @@ function AbaBanners(): React.JSX.Element {
                 <label style={s.lbl}>IMAGEM DO BANNER *</label>
                 <div className="relative overflow-hidden rounded-xl" style={{ height: 160, background: "#21262D", border: "2px dashed rgba(92,200,0,0.3)" }}>
                   {form.imagem_url ? (
-                    <img src={form.imagem_url} alt="" className="h-full w-full object-cover"
-                      style={{ objectPosition: (Number(form.position_x ?? 50)) + "% " + (Number(form.position_y ?? 50)) + "%" }} />
+                    <img src={form.imagem_url} alt="" className="h-full w-full"
+                      style={{ objectFit: modoAtual, objectPosition: positionXAtual + "% " + positionYAtual + "%" }} />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-2">
                       <span className="text-3xl">img</span>
@@ -1389,16 +986,45 @@ function AbaBanners(): React.JSX.Element {
                 </select>
                 <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Se selecionado, usa a foto e preco do produto automaticamente.</p>
               </div>
-
               {form.imagem_url && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label style={s.lbl}>POSICAO X: <span style={{ color: "#5CC800" }}>{Math.round(form.position_x ?? 50)}%</span></label>
-                    <input type="range" min="0" max="100" value={form.position_x ?? 50} onChange={e => setForm(f => ({ ...f, position_x: Number(e.target.value) }))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>AJUSTE VISUAL POR PAGINA</p>
+                      <p className="text-xs" style={{ color: "#8B949E" }}>Configure altura, preenchimento e posicao para cada local.</p>
+                    </div>
+                    <select value={paginaAjuste} onChange={e => setPaginaAjuste(e.target.value)} style={{ ...s.inp, width: 160, padding: "8px 10px" }}>
+                      {paginasParaAjuste.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                    </select>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => atualizarConfigPagina("modo", "cover")}
+                      className="rounded-xl py-2 text-xs font-black"
+                      style={{ background: modoAtual === "cover" ? "#5CC800" : "rgba(255,255,255,0.05)", color: modoAtual === "cover" ? "#0D1117" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      PREENCHER / CORTAR
+                    </button>
+                    <button type="button" onClick={() => atualizarConfigPagina("modo", "contain")}
+                      className="rounded-xl py-2 text-xs font-black"
+                      style={{ background: modoAtual === "contain" ? "#5CC800" : "rgba(255,255,255,0.05)", color: modoAtual === "contain" ? "#0D1117" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      INTEIRA / SEM CORTAR
+                    </button>
+                  </div>
+
                   <div>
-                    <label style={s.lbl}>POSICAO Y: <span style={{ color: "#5CC800" }}>{Math.round(form.position_y ?? 50)}%</span></label>
-                    <input type="range" min="0" max="100" value={form.position_y ?? 50} onChange={e => setForm(f => ({ ...f, position_y: Number(e.target.value) }))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                    <label style={s.lbl}>ALTURA: <span style={{ color: "#5CC800" }}>{alturaAtual}px</span></label>
+                    <input type="range" min={paginaAjuste === "feed" ? 70 : 100} max={paginaAjuste === "loja" ? 420 : 260} value={alturaAtual} onChange={e => atualizarConfigPagina("altura", Number(e.target.value))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label style={s.lbl}>POSICAO X: <span style={{ color: "#5CC800" }}>{Math.round(positionXAtual)}%</span></label>
+                      <input type="range" min="0" max="100" value={positionXAtual} onChange={e => atualizarConfigPagina("position_x", Number(e.target.value))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                    </div>
+                    <div>
+                      <label style={s.lbl}>POSICAO Y: <span style={{ color: "#5CC800" }}>{Math.round(positionYAtual)}%</span></label>
+                      <input type="range" min="0" max="100" value={positionYAtual} onChange={e => atualizarConfigPagina("position_y", Number(e.target.value))} className="w-full" style={{ accentColor: "#5CC800" }} />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1410,18 +1036,24 @@ function AbaBanners(): React.JSX.Element {
                 <div><label style={s.lbl}>LINK URL</label><input type="text" placeholder="Ex: /loja" value={form.link_url} onChange={e => setForm({ ...form, link_url: e.target.value })} style={s.inp} /></div>
                 <div><label style={s.lbl}>TEXTO DO LINK</label><input type="text" placeholder="Ex: Ver mais" value={form.link_texto} onChange={e => setForm({ ...form, link_texto: e.target.value })} style={s.inp} /></div>
               </div>
-              <div className="flex gap-3">
-                <div className="flex-1"><label style={s.lbl}>ORDEM</label><input type="number" min="0" value={form.ordem} onChange={e => setForm({ ...form, ordem: Number(e.target.value) })} style={s.inp} /></div>
-                <label className="flex cursor-pointer items-center gap-3 flex-1 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
-                  <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
-                  <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>Ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Visivel na loja</p></div>
-                </label>
+              <div className="space-y-3">
+                <div><label style={s.lbl}>ORDEM</label><input type="number" min="0" value={form.ordem} onChange={e => setForm({ ...form, ordem: Number(e.target.value) })} style={s.inp} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background: "rgba(92,200,0,0.05)", border: "1px solid rgba(92,200,0,0.15)" }}>
+                    <input type="checkbox" checked={form.ativo} onChange={e => setForm({ ...form, ativo: e.target.checked })} style={{ accentColor: "#5CC800" }} />
+                    <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>Banner ativo</p><p className="text-xs" style={{ color: "#8B949E" }}>Permite aparecer onde estiver configurado.</p></div>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl p-3" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
+                    <input type="checkbox" checked={form.exibir_loja} onChange={e => setForm({ ...form, exibir_loja: e.target.checked })} style={{ accentColor: "#FF6B00" }} />
+                    <div><p className="text-sm font-bold" style={{ color: "#E6EDF3" }}>Exibir na loja</p><p className="text-xs" style={{ color: "#8B949E" }}>Desmarque para ocultar só no topo da loja.</p></div>
+                  </label>
+                </div>
               </div>
               <div className="rounded-xl p-4" style={{ background: "rgba(255,107,0,0.05)", border: "1px solid rgba(255,107,0,0.15)" }}>
                 <p className="text-xs font-black mb-2" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MOSTRAR COMO PROPAGANDA NAS PAGINAS</p>
                 <p className="text-xs mb-3" style={{ color: "#8B949E" }}>Selecione onde este banner aparece como propaganda da loja.</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {[["feed","Feed / Comunidade"],["eventos","Eventos"],["calculadora-pace","Calc. Pace"],["calculadora-fc","Calc. FC"],["criar-treino","Criar treino"]].map(([val, label]) => (
+                  {paginasDisponiveis.filter(([val]) => val !== "loja").map(([val, label]) => (
                     <label key={val} className="flex items-center gap-2 cursor-pointer rounded-xl px-3 py-2"
                       style={{ background: (form.paginas||[]).includes(val) ? "rgba(92,200,0,0.1)" : "rgba(255,255,255,0.03)", border: (form.paginas||[]).includes(val) ? "1px solid rgba(92,200,0,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
                       <input type="checkbox" checked={(form.paginas||[]).includes(val)}

@@ -15,10 +15,13 @@ type Produto = {
   cores: string[]; tamanhos: string[];
   estoque_disponivel: boolean; destaque: boolean; whatsapp_msg?: string; quantidade?: number | null;
 };
+type BannerDisplayConfig = { modo?: "cover" | "contain"; altura?: number; position_x?: number; position_y?: number };
 type Banner = {
   id: string; titulo?: string; subtitulo?: string;
   imagem_url: string; link_url?: string; link_texto?: string; ativo: boolean; ordem: number;
   position_x?: number; position_y?: number;
+  exibir_loja?: boolean;
+  config_paginas?: Record<string, BannerDisplayConfig> | null;
 };
 
 function parseVariacoes(raw: unknown): VariacaoCor[] {
@@ -53,10 +56,14 @@ function BannerRotativo({ banners }: { banners: Banner[] }): React.JSX.Element {
   if (banners.length === 0) return <></>;
 
   const b = banners[atual];
+  const cfg = b.config_paginas?.loja ?? {};
+  const altura = cfg.altura ?? 280;
+  const modo = cfg.modo ?? "cover";
+  const objectPosition = `${Number(cfg.position_x ?? b.position_x ?? 50)}% ${Number(cfg.position_y ?? b.position_y ?? 50)}%`;
   return (
-    <div className="relative overflow-hidden rounded-2xl" style={{ height: "280px", background: "#21262D" }}>
-      <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full object-cover transition-opacity duration-700"
-        style={{ objectPosition: `${parseFloat(String(b.position_x ?? 50))}% ${parseFloat(String(b.position_y ?? 50))}%` }} />
+    <div className="relative overflow-hidden rounded-2xl" style={{ height: altura, background: "#21262D" }}>
+      <img src={b.imagem_url} alt={b.titulo || "Banner"} className="h-full w-full transition-opacity duration-700"
+        style={{ objectFit: modo, objectPosition }} />
       {(b.titulo || b.subtitulo || b.link_url) && (
         <div className="absolute inset-0 flex flex-col justify-end p-5" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 60%)" }}>
           {b.titulo && <p className="font-black text-xl leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#fff" }}>{b.titulo}</p>}
@@ -405,7 +412,7 @@ export default function LojaPage(): React.JSX.Element {
       }
       const [{ data: prods }, { data: bans }] = await Promise.all([
         authSupabase.from("produtos").select("*").eq("estoque_disponivel", true).order("destaque", { ascending: false }).order("ordem").order("criado_em", { ascending: false }),
-        authSupabase.from("banners").select("*").eq("ativo", true).order("ordem").order("criado_em", { ascending: false }),
+        authSupabase.from("banners").select("*").eq("ativo", true).or("exibir_loja.is.null,exibir_loja.eq.true").order("ordem").order("criado_em", { ascending: false }),
       ]);
       setProdutos((prods || []).map((p: Record<string, unknown>) => ({ ...p, variacoes_cor: parseVariacoes(p.variacoes_cor) })) as Produto[]);
       setBanners(bans || []);

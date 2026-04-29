@@ -25,6 +25,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     position_y,
     paginas,
     produto_id,
+    exibir_loja,
+    config_paginas,
   } = body;
   if (!imagem_url) return NextResponse.json({ error: "Imagem é obrigatória." }, { status: 400 });
 
@@ -41,6 +43,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     position_y: position_y ?? 50,
     paginas: Array.isArray(paginas) ? paginas : [],
     produto_id: produto_id || null,
+    exibir_loja: exibir_loja ?? true,
+    config_paginas: config_paginas && typeof config_paginas === "object" ? config_paginas : {},
   };
 
   let { data, error } = await supabase.from("banners").insert([insertData]).select().single();
