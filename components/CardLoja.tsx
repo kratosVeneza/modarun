@@ -55,6 +55,7 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
             <div className="shrink-0 rounded-xl overflow-hidden" style={{ width: 80, height: 80 }}>
               <img src={foto} alt={produto?.nome} className="w-full h-full object-cover" />
             </div>
+            
           ) : (
             <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 80, height: 80, background: "rgba(255,107,0,0.1)" }}>
               <ShoppingBag size={28} strokeWidth={1.5} style={{ color: "#FF6B00" }} />
