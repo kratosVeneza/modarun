@@ -20,7 +20,7 @@ type Banner = {
   imagem_url: string; link_url?: string; link_texto?: string;
   ativo: boolean; ordem: number;
   position_x?: number; position_y?: number;
-  paginas?: string[];
+  paginas?: string[]; produto_id?: string;
 };
 
 type Evento = {
@@ -1256,12 +1256,13 @@ function AbaBanners(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<Banner | null>(null);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[] });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", imagem_url: "", link_url: "", link_texto: "Ver mais", ativo: true, ordem: 0, position_x: 50, position_y: 50, paginas: [] as string[], produto_id: "" });
   const [loading, setLoading] = useState(false);
   const [uploadando, setUploadando] = useState(false);
   const [erro, setErro] = useState("");
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [produtos, setProdutos] = useState<{id:string;nome:string;fotos:string[];variacoes_cor:{fotos:string[]}[]}[]>([]);
 
   useEffect(() => {
     async function carregar() {
@@ -1271,10 +1272,11 @@ function AbaBanners(): React.JSX.Element {
       setCarregando(false);
     }
     carregar();
+    supabase.from("produtos").select("id, nome, fotos, variacoes_cor").eq("estoque_disponivel", true).order("nome").then(({ data }) => setProdutos(data || []));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50,paginas:[] }); setErro(""); setAberto(true); }
-  function abrirEditar(ban: Banner) { setEditando(ban); setForm({ titulo:ban.titulo||"",subtitulo:ban.subtitulo||"",imagem_url:ban.imagem_url,link_url:ban.link_url||"",link_texto:ban.link_texto||"Ver mais",ativo:ban.ativo,ordem:ban.ordem,position_x:ban.position_x??50,position_y:ban.position_y??50,paginas:ban.paginas||[] }); setErro(""); setAberto(true); }
+  function abrirNovo() { setEditando(null); setForm({ titulo:"",subtitulo:"",imagem_url:"",link_url:"",link_texto:"Ver mais",ativo:true,ordem:0,position_x:50,position_y:50,paginas:[],produto_id:"" }); setErro(""); setAberto(true); }
+  function abrirEditar(ban: Banner) { setEditando(ban); setForm({ titulo:ban.titulo||"",subtitulo:ban.subtitulo||"",imagem_url:ban.imagem_url,link_url:ban.link_url||"",link_texto:ban.link_texto||"Ver mais",ativo:ban.ativo,ordem:ban.ordem,position_x:ban.position_x??50,position_y:ban.position_y??50,paginas:ban.paginas||[], produto_id:ban.produto_id||"" }); setErro(""); setAberto(true); }
 
   async function uploadImagem(file: File) {
     setUploadando(true);
@@ -1295,7 +1297,7 @@ function AbaBanners(): React.JSX.Element {
     if (!form.imagem_url) { setErro("Carregue uma imagem para o banner."); return; }
     setLoading(true); setErro("");
     const method = editando ? "PATCH" : "POST";
-    const formFinal = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [] };
+    const formFinal = { ...form, position_x: form.position_x ?? 50, position_y: form.position_y ?? 50, paginas: form.paginas || [], produto_id: form.produto_id || null };
     const body = editando ? { id: editando.id, ...formFinal } : formFinal;
     try {
       const res = await fetch("/api/admin/banners", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1368,6 +1370,26 @@ function AbaBanners(): React.JSX.Element {
                 </div>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImagem(f); e.target.value = ""; }} />
               </div>
+
+              {/* Seletor de produto */}
+              <div>
+                <label style={s.lbl}>OU SELECIONAR PRODUTO CADASTRADO (opcional)</label>
+                <select value={form.produto_id || ""} onChange={e => {
+                  const pid = e.target.value;
+                  if (pid) {
+                    const prod = produtos.find(p => p.id === pid);
+                    const foto = prod?.variacoes_cor?.[0]?.fotos?.[0] ?? prod?.fotos?.[0] ?? "";
+                    setForm(f => ({ ...f, produto_id: pid, imagem_url: f.imagem_url || foto }));
+                  } else {
+                    setForm(f => ({ ...f, produto_id: "" }));
+                  }
+                }} style={s.inp}>
+                  <option value="">-- Nenhum produto selecionado --</option>
+                  {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+                <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Se selecionado, usa a foto e preco do produto automaticamente.</p>
+              </div>
+
               {form.imagem_url && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>

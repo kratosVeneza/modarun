@@ -256,7 +256,7 @@ export default function CalculadoraFCPage(): React.JSX.Element {
         </div>
         {resultado && (
           <div className="mx-auto max-w-xl px-4 pb-8">
-            <CardLoja variante="banner" />
+            <CardLoja variante="banner" paginaKey="calculadora-fc" />
           </div>
         )}
       </main>

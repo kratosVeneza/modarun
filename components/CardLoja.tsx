@@ -13,7 +13,7 @@ type Produto = {
 type Banner = {
   id: string; titulo?: string; subtitulo?: string;
   imagem_url: string; link_url?: string; link_texto?: string;
-  paginas?: string[];
+  paginas?: string[]; produto_id?: string;
 };
 
 type Variante = "feed" | "banner" | "inline";
@@ -24,24 +24,31 @@ const PAGINA_KEY: Record<Variante, string> = {
   inline: "eventos",
 };
 
-export default function CardLoja({ variante = "inline" }: { variante?: Variante }) {
+export default function CardLoja({ variante = "inline", paginaKey }: { variante?: Variante; paginaKey?: string }) {
   const [produto, setProduto] = useState<Produto | null>(null);
   const [bannerPropaganda, setBannerPropaganda] = useState<Banner | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    const paginaKey = PAGINA_KEY[variante];
+    const key = paginaKey || PAGINA_KEY[variante];
 
-    // Tentar buscar banner configurado para esta pagina
+    // Buscar banner configurado para esta pagina (independente do campo ativo da loja)
     supabase.from("banners")
-      .select("id, titulo, subtitulo, imagem_url, link_url, link_texto, paginas")
-      .eq("ativo", true)
-      .contains("paginas", [paginaKey])
+      .select("id, titulo, subtitulo, imagem_url, link_url, link_texto, paginas, produto_id")
+      .contains("paginas", [key])
       .limit(1)
       .maybeSingle()
-      .then(({ data: b }) => {
+      .then(async ({ data: b }) => {
         if (b) {
           setBannerPropaganda(b);
+          // Se tem produto_id, buscar o produto
+          if (b.produto_id) {
+            const { data: p } = await supabase.from("produtos")
+              .select("id, nome, preco, preco_promocional, fotos, variacoes_cor")
+              .eq("id", b.produto_id)
+              .single();
+            if (p) setProduto(p);
+          }
         } else {
           // Fallback: produto em destaque
           supabase.from("produtos")
@@ -53,28 +60,27 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
             .then(({ data: p }) => { if (p) setProduto(p); });
         }
       });
-  }, [variante]);
+  }, [variante, paginaKey]);
 
-  // Dados do banner ou produto
   const usandoBanner = !!bannerPropaganda;
-  const foto = usandoBanner
-    ? bannerPropaganda!.imagem_url
-    : produto?.variacoes_cor?.[0]?.fotos?.[0] ?? produto?.fotos?.[0] ?? null;
+  const fotoBanner = bannerPropaganda?.imagem_url ?? null;
+  const fotoProduto = produto?.variacoes_cor?.[0]?.fotos?.[0] ?? produto?.fotos?.[0] ?? null;
+  const foto = usandoBanner ? (fotoBanner || fotoProduto) : fotoProduto;
   const titulo = usandoBanner
-    ? (bannerPropaganda!.titulo ?? "Loja Moda Run")
+    ? (bannerPropaganda!.titulo ?? produto?.nome ?? "Loja Moda Run")
     : (produto?.nome ?? "Equipamentos para corredores");
   const subtitulo = usandoBanner ? bannerPropaganda!.subtitulo : null;
   const href = usandoBanner
-    ? (bannerPropaganda!.link_url ?? "/loja")
-    : (produto ? `/loja/${produto.id}` : "/loja");
+    ? (bannerPropaganda!.link_url ?? (produto ? "/loja/" + produto.id : "/loja"))
+    : (produto ? "/loja/" + produto.id : "/loja");
   const linkTexto = usandoBanner ? (bannerPropaganda!.link_texto ?? "VER NA LOJA") : "VER NA LOJA";
-  const preco = !usandoBanner ? (produto?.preco_promocional ?? produto?.preco) : null;
-  const temDesconto = !usandoBanner && produto?.preco_promocional && produto.preco_promocional < produto.preco;
+  const preco = !usandoBanner || bannerPropaganda?.produto_id
+    ? (produto?.preco_promocional ?? produto?.preco)
+    : null;
+  const temDesconto = produto?.preco_promocional && produto.preco_promocional < produto.preco;
 
-  // Nao renderizar se nao tiver dados
   if (!bannerPropaganda && !produto) return null;
 
-  // ── VARIANTE: FEED ──────────────────────────────────────────────────────
   if (variante === "feed") {
     return (
       <Link href={href}
@@ -95,9 +101,7 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
             <p className="text-xs font-black mb-1 flex items-center gap-1" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
               <ShoppingBag size={10} strokeWidth={2} /> LOJA MODA RUN
             </p>
-            <p className="font-black text-sm leading-tight truncate" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {titulo}
-            </p>
+            <p className="font-black text-sm leading-tight truncate" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{titulo}</p>
             {subtitulo && <p className="text-xs mt-0.5 truncate" style={{ color: "#8B949E" }}>{subtitulo}</p>}
             {preco && (
               <div className="flex items-center gap-2 mt-1">
@@ -121,7 +125,6 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
     );
   }
 
-  // ── VARIANTE: BANNER (calculadoras) ─────────────────────────────────────
   if (variante === "banner") {
     return (
       <Link href={href}
@@ -131,9 +134,7 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
         <div className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <ShoppingBag size={14} strokeWidth={2} style={{ color: "#FF6B00" }} />
-            <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
-              LOJA MODA RUN
-            </p>
+            <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>LOJA MODA RUN</p>
           </div>
           {foto && (
             <div className="rounded-xl overflow-hidden mb-3" style={{ height: 140 }}>
@@ -156,7 +157,6 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
     );
   }
 
-  // ── VARIANTE: INLINE (eventos) ───────────────────────────────────────────
   return (
     <Link href={href}
       className="flex items-center gap-4 rounded-2xl overflow-hidden transition-all hover:brightness-110"
@@ -172,17 +172,14 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
         <div className="absolute inset-0" style={{ background: "linear-gradient(to right, transparent, #1a0900)" }} />
       </div>
       <div className="flex-1 py-3 pr-4">
-        <p className="text-xs font-black mb-0.5" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
-          LOJA MODA RUN
-        </p>
+        <p className="text-xs font-black mb-0.5" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>LOJA MODA RUN</p>
         <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{titulo}</p>
         {subtitulo && <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>{subtitulo}</p>}
-        {preco && (
+        {preco ? (
           <p className="text-sm font-black mt-0.5" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-            A partir de R$ {preco.toFixed(2).replace(".", ",")} &rarr;
+            R$ {preco.toFixed(2).replace(".", ",")} &rarr;
           </p>
-        )}
-        {!preco && (
+        ) : (
           <p className="text-xs font-black mt-0.5" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
             {linkTexto} &rarr;
           </p>
