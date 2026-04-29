@@ -18,25 +18,14 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
 
   useEffect(() => {
     const supabase = createClient();
+    // Tenta destaque primeiro, fallback para qualquer produto disponivel
     supabase.from("produtos")
       .select("id, nome, preco, preco_promocional, fotos, variacoes_cor, categoria")
       .eq("estoque_disponivel", true)
-      .eq("destaque", true)
+      .order("destaque", { ascending: false })
       .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (!data) {
-          // Fallback: qualquer produto
-          supabase.from("produtos")
-            .select("id, nome, preco, preco_promocional, fotos, variacoes_cor, categoria")
-            .eq("estoque_disponivel", true)
-            .limit(1)
-            .single()
-            .then(({ data: d }) => setProduto(d));
-        } else {
-          setProduto(data);
-        }
-      });
+      .maybeSingle()
+      .then(({ data }) => { if (data) setProduto(data); });
   }, []);
 
   const foto = produto?.variacoes_cor?.[0]?.fotos?.[0] ?? produto?.fotos?.[0] ?? null;
@@ -55,7 +44,6 @@ export default function CardLoja({ variante = "inline" }: { variante?: Variante 
             <div className="shrink-0 rounded-xl overflow-hidden" style={{ width: 80, height: 80 }}>
               <img src={foto} alt={produto?.nome} className="w-full h-full object-cover" />
             </div>
-            
           ) : (
             <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 80, height: 80, background: "rgba(255,107,0,0.1)" }}>
               <ShoppingBag size={28} strokeWidth={1.5} style={{ color: "#FF6B00" }} />
