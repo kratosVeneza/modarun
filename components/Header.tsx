@@ -69,7 +69,6 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
     { href: "/loja",        label: "Loja",         icon: "🛒" },
     { href: "/ferramentas", label: "Ferramentas",  icon: "🛠" },
     { href: "/perfil",      label: "Perfil",       icon: "👤" },
-    { href: "/chat",        label: "Chat",         icon: "💬" },
   ];
 
   const adminLinks = [{ href: "/admin", label: "Admin", icon: "⚙️" }];
