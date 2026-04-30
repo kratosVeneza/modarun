@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import {
   Camera, Edit2, Check, X, LogOut, ShoppingBag, Flag, Zap, ClipboardList,
   MapPin, Star, Trash2, Calendar, Ruler, ArrowRight, Users, Heart,
   MessageCircle, Activity, Flame, Trophy, Timer
-} from "lucide-react";
+, Send } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,6 +48,136 @@ function tempoRelativo(data: string): string {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
+// ─── ChatInline ──────────────────────────────────────────────────────────────
+type MsgChat = { id: number; remetente_id: string; destinatario_id: string; texto: string; lida: boolean; created_at: string; };
+type ConvChat = { outro_id: string; outro_nome: string; outro_avatar: string | null; ultima_msg: string; created_at: string; };
+
+function ChatInline({ userId }: { userId: string | null }) {
+  const supabase = createClient();
+  const [conversas, setConversas] = React.useState<ConvChat[]>([]);
+  const [ativa, setAtiva] = React.useState<string | null>(null);
+  const [outroNome, setOutroNome] = React.useState("");
+  const [outroAvatar, setOutroAvatar] = React.useState<string | null>(null);
+  const [msgs, setMsgs] = React.useState<MsgChat[]>([]);
+  const [texto, setTexto] = React.useState("");
+  const [enviando, setEnviando] = React.useState(false);
+  const [carregando, setCarregando] = React.useState(true);
+  const fimRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    fetch("/api/mensagens", { credentials: "include" })
+      .then(r => r.json())
+      .then(async data => {
+        const convs: ConvChat[] = [];
+        for (const m of data.conversas || []) {
+          const outro_id = m.remetente_id === userId ? m.destinatario_id : m.remetente_id;
+          const { data: p } = await supabase.from("feed_posts").select("autor_nome, autor_avatar").eq("user_id", outro_id).limit(1).single();
+          convs.push({ outro_id, outro_nome: p?.autor_nome || "Corredor", outro_avatar: p?.autor_avatar || null, ultima_msg: m.texto, created_at: m.created_at });
+        }
+        setConversas(convs);
+        setCarregando(false);
+      });
+  }, [userId]); // eslint-disable-line
+
+  async function abrirConversa(outro_id: string, nome: string, avatar: string | null) {
+    setAtiva(outro_id); setOutroNome(nome); setOutroAvatar(avatar);
+    const res = await fetch(`/api/mensagens?outro_id=${outro_id}`, { credentials: "include" });
+    const data = await res.json();
+    setMsgs(data.mensagens || []);
+  }
+
+  React.useEffect(() => { fimRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  async function enviar() {
+    if (!texto.trim() || enviando || !ativa) return;
+    setEnviando(true);
+    const t = texto.trim(); setTexto("");
+    const res = await fetch("/api/mensagens", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ destinatario_id: ativa, texto: t }),
+    });
+    const data = await res.json();
+    if (data.success) setMsgs(prev => [...prev, data.mensagem]);
+    setEnviando(false);
+  }
+
+  function tempoRel(d: string) {
+    const diff = Date.now() - new Date(d).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return "agora";
+    if (min < 60) return `${min}min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h}h`;
+    return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  }
+
+  if (!userId) return <div className="p-6 text-center" style={{ color: "#8B949E" }}>Faça login para ver mensagens</div>;
+
+  if (ativa) return (
+    <div className="flex flex-col" style={{ height: 400 }}>
+      <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "#21262D" }}>
+        <button onClick={() => setAtiva(null)} className="rounded-lg p-1" style={{ color: "#8B949E" }}>←</button>
+        {outroAvatar ? <img src={outroAvatar} alt="" className="rounded-full object-cover" style={{ width: 32, height: 32 }} /> :
+          <div className="rounded-full flex items-center justify-center font-black text-xs" style={{ width: 32, height: 32, background: "linear-gradient(135deg,#5CC800,#FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{outroNome[0]?.toUpperCase()}</div>}
+        <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{outroNome}</p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {msgs.map(m => {
+          const minha = m.remetente_id === userId;
+          return (
+            <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+              <div className="max-w-xs rounded-2xl px-3 py-2" style={{ background: minha ? "linear-gradient(135deg,#5CC800,#4aaa00)" : "#21262D", borderBottomRightRadius: minha ? 4 : 16, borderBottomLeftRadius: minha ? 16 : 4 }}>
+                <p className="text-sm" style={{ color: minha ? "#fff" : "#E6EDF3" }}>{m.texto}</p>
+                <p className="text-xs mt-0.5" style={{ color: minha ? "rgba(255,255,255,0.6)" : "#8B949E" }}>{tempoRel(m.created_at)}</p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={fimRef} />
+      </div>
+      <div className="p-3 flex gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <input value={texto} onChange={e => setTexto(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && enviar()}
+          placeholder="Digite uma mensagem..." className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+          style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
+        <button onClick={enviar} disabled={!texto.trim() || enviando}
+          className="flex items-center justify-center rounded-xl px-3 disabled:opacity-40"
+          style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff" }}>
+          <Send size={16} strokeWidth={2} />
+        </button>
+      </div>
+    </div>
+  );
+
+  if (carregando) return <div className="p-8 text-center"><div className="h-6 w-6 animate-spin rounded-full border-2 mx-auto" style={{ borderColor: "rgba(92,200,0,0.2)", borderTopColor: "#5CC800" }} /></div>;
+
+  if (conversas.length === 0) return (
+    <div className="p-8 text-center">
+      <p className="text-3xl mb-2">💬</p>
+      <p className="text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUMA CONVERSA</p>
+      <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Acesse o perfil de um corredor e clique em "Mensagem"</p>
+    </div>
+  );
+
+  return (
+    <div className="divide-y" style={{ divideColor: "rgba(255,255,255,0.04)" }}>
+      {conversas.map(c => (
+        <button key={c.outro_id} onClick={() => abrirConversa(c.outro_id, c.outro_nome, c.outro_avatar)}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors">
+          {c.outro_avatar ? <img src={c.outro_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: 40, height: 40 }} /> :
+            <div className="rounded-full flex items-center justify-center shrink-0 font-black" style={{ width: 40, height: 40, background: "linear-gradient(135deg,#5CC800,#FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.outro_nome[0]?.toUpperCase()}</div>}
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.outro_nome}</p>
+            <p className="text-xs truncate mt-0.5" style={{ color: "#8B949E" }}>{c.ultima_msg}</p>
+          </div>
+          <p className="text-xs shrink-0" style={{ color: "#8B949E" }}>{tempoRel(c.created_at)}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PerfilPage(): React.JSX.Element {
   const router = useRouter();
   const supabase = createClient();
@@ -77,7 +207,14 @@ export default function PerfilPage(): React.JSX.Element {
   const [eventosSalvos, setEventosSalvos] = useState<EventoSalvo[]>([]);
 
   // UI
-  const [abaAtiva, setAbaAtiva] = useState<"publicacoes" | "treinos" | "participacoes" | "preferencias">("publicacoes");
+  const [abaAtiva, setAbaAtiva] = useState<"publicacoes" | "treinos" | "participacoes" | "preferencias" | "estatisticas" | "conquistas" | "mensagens">("publicacoes");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const msgUserId = searchParams.get("mensagem");
+    if (msgUserId) setAbaAtiva("mensagens");
+  }, [searchParams]); // eslint-disable-line
+
   const [editandoPostId, setEditandoPostId] = useState<number | null>(null);
   const [textoEditPost, setTextoEditPost] = useState("");
   const [abaPref, setAbaPref] = useState<"cidades" | "eventos">("cidades");
@@ -222,6 +359,9 @@ export default function PerfilPage(): React.JSX.Element {
     { id: "treinos", label: "⚡ TREINOS", count: treinos.length },
     { id: "participacoes", label: "🏃 PARTICIPAÇÕES", count: treinosParticipados.length },
     { id: "preferencias", label: "⭐ PREFERÊNCIAS", count: cidadesInteresse.length + eventosSalvos.length },
+    { id: "estatisticas", label: "📊 STATS", count: 0 },
+    { id: "conquistas", label: "🏅 BADGES", count: 0 },
+    { id: "mensagens", label: "💬 MENSAGENS", count: 0 },
   ] as const;
 
   return (
@@ -680,6 +820,203 @@ export default function PerfilPage(): React.JSX.Element {
               </div>
             </section>
           )}
+
+          {/* ESTATÍSTICAS */}
+          {abaAtiva === "estatisticas" && (() => {
+            const atividades = posts.filter(p => p.tipo === "atividade");
+            const kmPorMes: Record<string, number> = {};
+            atividades.forEach(a => {
+              const mes = a.created_at.slice(0, 7);
+              kmPorMes[mes] = (kmPorMes[mes] || 0) + (a.atividade_distancia || 0);
+            });
+            const meses = Object.keys(kmPorMes).sort().slice(-6);
+            const maxKm = Math.max(...meses.map(m => kmPorMes[m]), 1);
+            const paces = atividades.filter(a => a.atividade_pace).map(a => {
+              const [min, seg] = (a.atividade_pace || "0:0").split(":").map(Number);
+              return min * 60 + (seg || 0);
+            }).filter(p => p > 0);
+            const melhorPace = paces.length > 0 ? Math.min(...paces) : null;
+            const mediaPace = paces.length > 0 ? paces.reduce((a, b) => a + b, 0) / paces.length : null;
+            const formatPace = (seg: number) => `${Math.floor(seg/60)}:${String(Math.round(seg%60)).padStart(2,"0")}`;
+            const maiorDist = atividades.length > 0 ? Math.max(...atividades.map(a => a.atividade_distancia || 0)) : 0;
+            const totalAtividades = atividades.length;
+            const diasAtivos = new Set(atividades.map(a => a.created_at.slice(0, 10))).size;
+
+            return (
+              <section className="space-y-4">
+                {/* Cards de resumo */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "ATIVIDADES", value: totalAtividades, unit: "total", cor: "#5CC800" },
+                    { label: "DIAS ATIVOS", value: diasAtivos, unit: "dias", cor: "#FF6B00" },
+                    { label: "MAIOR DIST.", value: maiorDist.toFixed(1), unit: "km", cor: "#FFB800" },
+                    { label: "MELHOR PACE", value: melhorPace ? formatPace(melhorPace) : "--", unit: "min/km", cor: "#5CC800" },
+                  ].map(item => (
+                    <div key={item.label} className="rounded-2xl p-4 text-center" style={{ background: "#161B22", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <p className="text-xs font-black mb-1" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>{item.label}</p>
+                      <p className="text-3xl font-black" style={{ color: item.cor, fontFamily: "'Barlow Condensed', sans-serif" }}>{item.value}</p>
+                      <p className="text-xs" style={{ color: "#8B949E" }}>{item.unit}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pace médio */}
+                {mediaPace && (
+                  <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
+                    <p className="text-xs font-black mb-2" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>PACE MÉDIO</p>
+                    <p className="text-4xl font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{formatPace(mediaPace)} <span className="text-base" style={{ color: "#8B949E" }}>min/km</span></p>
+                  </div>
+                )}
+
+                {/* Gráfico KM por mês */}
+                {meses.length > 0 && (
+                  <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.15)" }}>
+                    <p className="text-xs font-black mb-4" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>KM POR MÊS</p>
+                    <div className="flex items-end gap-2 h-32">
+                      {meses.map(mes => {
+                        const km = kmPorMes[mes];
+                        const pct = (km / maxKm) * 100;
+                        const [ano, m] = mes.split("-");
+                        const nomeMes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m)-1];
+                        return (
+                          <div key={mes} className="flex-1 flex flex-col items-center gap-1">
+                            <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{km.toFixed(0)}</p>
+                            <div className="w-full rounded-t-lg transition-all" style={{ height: `${Math.max(pct, 4)}%`, background: "linear-gradient(to top, #5CC800, #4aaa00)", minHeight: 4 }} />
+                            <p className="text-xs" style={{ color: "#8B949E" }}>{nomeMes}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tipos de atividade */}
+                {atividades.length > 0 && (() => {
+                  const tipos: Record<string, number> = {};
+                  atividades.forEach(a => { const t = a.atividade_tipo || "Corrida"; tipos[t] = (tipos[t] || 0) + 1; });
+                  return (
+                    <div className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.15)" }}>
+                      <p className="text-xs font-black mb-3" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TIPOS DE ATIVIDADE</p>
+                      <div className="space-y-2">
+                        {Object.entries(tipos).sort((a, b) => b[1] - a[1]).map(([tipo, qtd]) => (
+                          <div key={tipo} className="flex items-center gap-3">
+                            <p className="text-sm font-black w-24 shrink-0" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{tipo}</p>
+                            <div className="flex-1 rounded-full overflow-hidden" style={{ background: "#21262D", height: 8 }}>
+                              <div className="h-full rounded-full" style={{ width: `${(qtd / totalAtividades) * 100}%`, background: "linear-gradient(90deg, #FF6B00, #FFB800)" }} />
+                            </div>
+                            <p className="text-xs font-black w-6 text-right" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>{qtd}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {atividades.length === 0 && (
+                  <div className="rounded-2xl p-10 text-center" style={{ background: "#161B22", border: "1px dashed rgba(92,200,0,0.2)" }}>
+                    <p className="text-4xl mb-2">📊</p>
+                    <p className="font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUMA ATIVIDADE AINDA</p>
+                    <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Publique atividades no feed para ver suas estatísticas</p>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* CONQUISTAS */}
+          {abaAtiva === "conquistas" && (() => {
+            const atividades = posts.filter(p => p.tipo === "atividade");
+            const totalKmAtiv = atividades.reduce((acc, a) => acc + (a.atividade_distancia || 0), 0);
+            const maiorDist = atividades.length > 0 ? Math.max(...atividades.map(a => a.atividade_distancia || 0)) : 0;
+            const totalCurtidas2 = posts.reduce((acc, p) => acc + p.total_curtidas, 0);
+
+            const badges = [
+              { id: "primeira_atividade", emoji: "🏃", nome: "Primeira Passada", desc: "Publicou sua primeira atividade", conquistado: atividades.length >= 1, progresso: Math.min(atividades.length, 1), meta: 1 },
+              { id: "cinco_atividades", emoji: "⚡", nome: "Em Ritmo", desc: "5 atividades publicadas", conquistado: atividades.length >= 5, progresso: Math.min(atividades.length, 5), meta: 5 },
+              { id: "vinte_atividades", emoji: "🔥", nome: "Corredor Dedicado", desc: "20 atividades publicadas", conquistado: atividades.length >= 20, progresso: Math.min(atividades.length, 20), meta: 20 },
+              { id: "primeiro_5k", emoji: "🎯", nome: "Primeiro 5K", desc: "Correu 5km em uma atividade", conquistado: maiorDist >= 5, progresso: Math.min(maiorDist, 5), meta: 5 },
+              { id: "primeiro_10k", emoji: "🏅", nome: "10K Club", desc: "Correu 10km em uma atividade", conquistado: maiorDist >= 10, progresso: Math.min(maiorDist, 10), meta: 10 },
+              { id: "primeira_meia", emoji: "⭐", nome: "Meio Caminho", desc: "Correu uma meia maratona (21km)", conquistado: maiorDist >= 21, progresso: Math.min(maiorDist, 21), meta: 21 },
+              { id: "maratona", emoji: "👑", nome: "Maratonista", desc: "Correu uma maratona completa (42km)", conquistado: maiorDist >= 42, progresso: Math.min(maiorDist, 42), meta: 42 },
+              { id: "100km_total", emoji: "💯", nome: "100KM Club", desc: "100km acumulados em atividades", conquistado: totalKmAtiv >= 100, progresso: Math.min(totalKmAtiv, 100), meta: 100 },
+              { id: "500km_total", emoji: "🚀", nome: "Ultra Runner", desc: "500km acumulados em atividades", conquistado: totalKmAtiv >= 500, progresso: Math.min(totalKmAtiv, 500), meta: 500 },
+              { id: "primeiro_post", emoji: "📝", nome: "Voz da Comunidade", desc: "Publicou seu primeiro post", conquistado: posts.length >= 1, progresso: Math.min(posts.length, 1), meta: 1 },
+              { id: "dez_curtidas", emoji: "❤️", nome: "Querido da Comunidade", desc: "Recebeu 10 curtidas no total", conquistado: totalCurtidas2 >= 10, progresso: Math.min(totalCurtidas2, 10), meta: 10 },
+              { id: "primeiro_treino", emoji: "👥", nome: "Líder de Turma", desc: "Criou um treino em grupo", conquistado: treinos.length >= 1, progresso: Math.min(treinos.length, 1), meta: 1 },
+              { id: "cinco_treinos", emoji: "🏆", nome: "Organizador", desc: "Criou 5 treinos em grupo", conquistado: treinos.length >= 5, progresso: Math.min(treinos.length, 5), meta: 5 },
+              { id: "primeira_participacao", emoji: "🤝", nome: "Espírito de Equipe", desc: "Participou de um treino em grupo", conquistado: treinosParticipados.length >= 1, progresso: Math.min(treinosParticipados.length, 1), meta: 1 },
+            ];
+
+            const conquistados = badges.filter(b => b.conquistado).length;
+
+            return (
+              <section className="space-y-4">
+                {/* Resumo */}
+                <div className="rounded-2xl p-4 text-center" style={{ background: "linear-gradient(135deg, #1a1000, #161B22)", border: "1px solid rgba(255,184,0,0.3)" }}>
+                  <p className="text-5xl font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{conquistados}<span className="text-2xl" style={{ color: "#8B949E" }}>/{badges.length}</span></p>
+                  <p className="text-xs font-black mt-1" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>BADGES CONQUISTADOS</p>
+                  <div className="mt-3 rounded-full overflow-hidden" style={{ background: "#21262D", height: 6 }}>
+                    <div className="h-full rounded-full" style={{ width: `${(conquistados / badges.length) * 100}%`, background: "linear-gradient(90deg, #FFB800, #FF6B00)" }} />
+                  </div>
+                </div>
+
+                {/* Badges conquistados */}
+                {badges.filter(b => b.conquistado).length > 0 && (
+                  <div>
+                    <p className="text-xs font-black mb-3" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>✅ CONQUISTADOS</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {badges.filter(b => b.conquistado).map(b => (
+                        <div key={b.id} className="rounded-2xl p-4 text-center" style={{ background: "linear-gradient(135deg, rgba(255,184,0,0.1), rgba(255,107,0,0.05))", border: "1px solid rgba(255,184,0,0.3)" }}>
+                          <p className="text-4xl mb-1">{b.emoji}</p>
+                          <p className="font-black text-sm" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{b.nome}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>{b.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Badges em progresso */}
+                {badges.filter(b => !b.conquistado).length > 0 && (
+                  <div>
+                    <p className="text-xs font-black mb-3" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>🔒 EM PROGRESSO</p>
+                    <div className="space-y-2">
+                      {badges.filter(b => !b.conquistado).map(b => (
+                        <div key={b.id} className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-2xl opacity-40">{b.emoji}</span>
+                            <div className="flex-1">
+                              <p className="font-black text-sm" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{b.nome}</p>
+                              <p className="text-xs" style={{ color: "#8B949E" }}>{b.desc}</p>
+                            </div>
+                            <p className="text-xs font-black shrink-0" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{b.progresso.toFixed(0)}/{b.meta}</p>
+                          </div>
+                          <div className="rounded-full overflow-hidden" style={{ background: "#21262D", height: 4 }}>
+                            <div className="h-full rounded-full" style={{ width: `${(b.progresso / b.meta) * 100}%`, background: "rgba(255,184,0,0.4)" }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* MENSAGENS */}
+          {abaAtiva === "mensagens" && (() => {
+            return (
+              <section className="space-y-4">
+                <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.15)" }}>
+                  <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#161B22", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>💬 MINHAS CONVERSAS</p>
+                    <a href="/chat" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TUDO →</a>
+                  </div>
+                  <ChatInline userId={user?.id ?? null} />
+                </div>
+              </section>
+            );
+          })()}
 
           {/* Links rápidos */}
           <section className="grid grid-cols-2 gap-3 pt-2">

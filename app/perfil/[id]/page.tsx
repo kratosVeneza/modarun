@@ -173,6 +173,7 @@ export default function PerfilPublicoPage(): React.JSX.Element {
 
                 {/* Botão seguir */}
                 {viewer && !isOwn && (
+                  <div className="flex items-center gap-2">
                   <button onClick={toggleFollow} disabled={loadingFollow}
                     className="flex items-center gap-2 rounded-xl px-5 py-2.5 font-black text-sm transition-all hover:scale-105 disabled:opacity-60"
                     style={{
@@ -185,6 +186,12 @@ export default function PerfilPublicoPage(): React.JSX.Element {
                     {loadingFollow ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} strokeWidth={2} />}
                     {seguindo ? "SEGUINDO" : "SEGUIR"}
                   </button>
+                  <button onClick={() => { if (usuario?.id) window.location.href = "/perfil?mensagem=" + usuario.id; }}
+                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110"
+                    style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    💬 MENSAGEM
+                  </button>
+                  </div>
                 )}
 
                 {!viewer && (
