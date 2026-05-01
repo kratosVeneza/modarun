@@ -6,21 +6,51 @@ export async function POST(req: Request): Promise<NextResponse> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const b = await req.json();
-  const pid = Number(b.post_id);
-  const a = String(b.acao);
+  const body = await req.json();
+  const postId = Number(body.post_id);
+  const acao = String(body.acao ?? "");
 
-  if (a === "curtir") {
-    await supabase.rpc("incrementar_curtida", { p_post_id: pid, p_user_id: user.id });
-  } else {
-    await supabase.rpc("decrementar_curtida", { p_post_id: pid, p_user_id: user.id });
+  if (!Number.isFinite(postId) || postId <= 0) {
+    return NextResponse.json({ error: "post_id inválido." }, { status: 400 });
   }
 
-  const { data } = await supabase
-    .from("feed_posts")
-    .select("total_curtidas")
-    .eq("id", pid)
-    .single();
+  if (!["curtir", "descurtir"].includes(acao)) {
+    return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
+  }
 
-  return NextResponse.json({ success: true, total_curtidas: data?.total_curtidas ?? 0 });
+  if (acao === "curtir") {
+    const { error } = await supabase
+      .from("feed_curtidas")
+      .upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  } else {
+    const { error } = await supabase
+      .from("feed_curtidas")
+      .delete()
+      .eq("post_id", postId)
+      .eq("user_id", user.id);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const { count, error: countError } = await supabase
+    .from("feed_curtidas")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", postId);
+
+  if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
+
+  const totalCurtidas = count ?? 0;
+
+  await supabase
+    .from("feed_posts")
+    .update({ total_curtidas: totalCurtidas } as never)
+    .eq("id", postId);
+
+  return NextResponse.json({
+    success: true,
+    curtido: acao === "curtir",
+    total_curtidas: totalCurtidas,
+  });
 }

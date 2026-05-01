@@ -21,6 +21,7 @@ type Post = {
   noticia_titulo: string | null; noticia_url: string | null;
   noticia_fonte: string | null; noticia_imagem: string | null;
   total_curtidas: number; total_comentarios: number; created_at: string;
+  curtido_por_mim?: boolean; seguindo_autor?: boolean;
   autor_nome: string | null; autor_avatar: string | null; autor_email: string | null;
 };
 
@@ -85,6 +86,7 @@ function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avata
 function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: number; total: number; usuarioLogado: boolean; userId: string | null }) {
   const [aberto, setAberto] = useState(false);
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
+  const [totalAtual, setTotalAtual] = useState(total ?? 0);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [carregando, setCarregando] = useState(false);
@@ -98,6 +100,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
     const res = await fetch(`/api/feed/comentarios?post_id=${postId}`);
     const data = await res.json();
     setComentarios(data.comentarios || []);
+    setTotalAtual((data.comentarios || []).filter((c: Comentario) => !c.resposta_para).length);
     setCarregando(false);
   }
 
@@ -113,6 +116,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
     const data = await res.json();
     if (data.success) {
       setComentarios(prev => [...prev, data.comentario]);
+      setTotalAtual(prev => prev + (respondendoId ? 0 : 1));
       setTexto(""); setRespondendoId(null); setMostrarEmojis(false);
     }
     setEnviando(false);
@@ -142,7 +146,11 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
   async function excluirComentario(id: number) {
     if (!confirm("Excluir comentário?")) return;
     await fetch(`/api/feed/comentarios?id=${id}&post_id=${postId}`, { method: "DELETE", credentials: "include" });
-    setComentarios(prev => prev.filter(c => c.id !== id));
+    setComentarios(prev => {
+      const removido = prev.find(c => c.id === id);
+      if (removido && !removido.resposta_para) setTotalAtual(t => Math.max(0, t - 1));
+      return prev.filter(c => c.id !== id && c.resposta_para !== id);
+    });
   }
 
   const principais = comentarios.filter(c => !c.resposta_para);
@@ -217,7 +225,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
       <button onClick={toggle} className="flex items-center gap-1.5 text-sm transition-colors hover:text-green-400"
         style={{ color: aberto ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700 }}>
         <MessageCircle size={16} strokeWidth={2} />
-        {total > 0 ? total : ""} {total === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
+        {totalAtual > 0 ? totalAtual : ""} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
       </button>
       {aberto && (
         <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -273,12 +281,12 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
 function CardPost({ post, usuarioLogado, userId, onDelete }: {
   post: Post; usuarioLogado: boolean; userId: string | null; onDelete: (id: number) => void;
 }) {
-  const [curtido, setCurtido] = useState(false);
-  const [totalCurtidas, setTotalCurtidas] = useState(post.total_curtidas);
+  const [curtido, setCurtido] = useState(!!post.curtido_por_mim);
+  const [totalCurtidas, setTotalCurtidas] = useState(post.total_curtidas ?? 0);
   const [curtindo, setCurtindo] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [fotoAtiva, setFotoAtiva] = useState(0);
-  const [seguindo, setSeguindo] = useState(false);
+  const [seguindo, setSeguindo] = useState(!!post.seguindo_autor);
   const [carregandoFollow, setCarregandoFollow] = useState(false);
   const [editandoPost, setEditandoPost] = useState(false);
   const [textoEditPost, setTextoEditPost] = useState(post.texto || "");
@@ -288,11 +296,25 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
     if (!usuarioLogado || curtindo) return;
     setCurtindo(true);
     const acao = curtido ? "descurtir" : "curtir";
-    setCurtido(v => !v); setTotalCurtidas(v => v + (curtido ? -1 : 1));
-    await fetch("/api/feed/curtir", {
+    const curtidoAnterior = curtido;
+    const totalAnterior = totalCurtidas;
+    setCurtido(!curtidoAnterior);
+    setTotalCurtidas(Math.max(0, totalAnterior + (curtidoAnterior ? -1 : 1)));
+
+    const res = await fetch("/api/feed/curtir", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ post_id: post.id, acao }),
     });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      setCurtido(!!data.curtido);
+      setTotalCurtidas(data.total_curtidas ?? 0);
+    } else {
+      setCurtido(curtidoAnterior);
+      setTotalCurtidas(totalAnterior);
+    }
+
     setCurtindo(false);
   }
 
@@ -300,11 +322,21 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
     if (!usuarioLogado || carregandoFollow || userId === post.user_id) return;
     setCarregandoFollow(true);
     const acao = seguindo ? "desseguir" : "seguir";
-    setSeguindo(v => !v);
-    await fetch("/api/feed/follows", {
+    const seguindoAnterior = seguindo;
+    setSeguindo(!seguindoAnterior);
+
+    const res = await fetch("/api/feed/follows", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ following_id: post.user_id, acao }),
     });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      setSeguindo(!!data.viewer_segue);
+    } else {
+      setSeguindo(seguindoAnterior);
+    }
+
     setCarregandoFollow(false);
   }
 

@@ -80,6 +80,10 @@ export default function ChatPage(): React.JSX.Element {
   const [resultados, setResultados] = useState<UsuarioBusca[]>([]);
   const [buscando, setBuscando] = useState(false);
 
+  const conversaAtivaRef = useRef<Conversa | null>(null);
+  const abriuParametroInicialRef = useRef(false);
+  const recarregarConversasTimerRef = useRef<number | null>(null);
+
   const userIdInicial = searchParams.get("user") || searchParams.get("mensagem") || "";
 
   const carregarConversas = useCallback(async () => {
@@ -148,7 +152,12 @@ export default function ChatPage(): React.JSX.Element {
   }, [carregarConversas, router, supabase]);
 
   useEffect(() => {
-    if (!user || !userIdInicial) return;
+    conversaAtivaRef.current = conversaAtiva;
+  }, [conversaAtiva]);
+
+  useEffect(() => {
+    if (!user || !userIdInicial || abriuParametroInicialRef.current) return;
+    abriuParametroInicialRef.current = true;
     abrirConversa(userIdInicial);
   }, [abrirConversa, user, userIdInicial]);
 
@@ -159,6 +168,16 @@ export default function ChatPage(): React.JSX.Element {
   useEffect(() => {
     if (!user) return;
 
+    function atualizarListaConversasComDebounce() {
+      if (recarregarConversasTimerRef.current) {
+        window.clearTimeout(recarregarConversasTimerRef.current);
+      }
+
+      recarregarConversasTimerRef.current = window.setTimeout(() => {
+        carregarConversas();
+      }, 300);
+    }
+
     const canal = supabase
       .channel(`mensagens-usuario-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensagens" }, (payload) => {
@@ -167,26 +186,42 @@ export default function ChatPage(): React.JSX.Element {
         if (!pertence) return;
 
         const outroId = nova.remetente_id === user.id ? nova.destinatario_id : nova.remetente_id;
-        if (conversaAtiva?.outro_id === outroId) {
+        const conversaAberta = conversaAtivaRef.current?.outro_id === outroId;
+
+        if (conversaAberta) {
           setMensagens((prev) => prev.some((m) => m.id === nova.id) ? prev : [...prev, nova]);
-          fetch(`/api/mensagens?outro_id=${outroId}`, { credentials: "include" }).catch(() => undefined);
+
+          if (nova.destinatario_id === user.id) {
+            fetch("/api/mensagens", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ acao: "marcar_lidas", outro_id: outroId }),
+            }).catch(() => undefined);
+          }
         }
 
-        carregarConversas();
+        atualizarListaConversasComDebounce();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "mensagens" }, (payload) => {
         const atualizada = payload.new as Mensagem;
         const pertence = atualizada.remetente_id === user.id || atualizada.destinatario_id === user.id;
         if (!pertence) return;
-        setMensagens((prev) => prev.map((m) => m.id === atualizada.id ? { ...m, ...atualizada } : m));
-        carregarConversas();
+
+        const outroId = atualizada.remetente_id === user.id ? atualizada.destinatario_id : atualizada.remetente_id;
+        if (conversaAtivaRef.current?.outro_id === outroId) {
+          setMensagens((prev) => prev.map((m) => m.id === atualizada.id ? { ...m, ...atualizada } : m));
+        }
+
+        atualizarListaConversasComDebounce();
       })
       .subscribe();
 
     return () => {
+      if (recarregarConversasTimerRef.current) window.clearTimeout(recarregarConversasTimerRef.current);
       supabase.removeChannel(canal);
     };
-  }, [carregarConversas, conversaAtiva?.outro_id, supabase, user]);
+  }, [carregarConversas, supabase, user]);
 
   useEffect(() => {
     const termo = busca.trim();

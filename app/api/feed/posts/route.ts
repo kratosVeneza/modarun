@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
+type FeedPost = {
+  id: number;
+  user_id: string;
+  [key: string]: unknown;
+};
+
 export async function POST(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -19,7 +25,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const meta = user.user_metadata as Record<string, unknown>;
-  const autor_nome = String(meta?.full_name ?? user.email?.split("@")[0] ?? "Corredor");
+  const autor_nome = String(meta?.full_name ?? meta?.nome ?? user.email?.split("@")[0] ?? "Corredor");
   const autor_avatar = (meta?.avatar_url as string | undefined) ?? null;
   const autor_email = user.email ?? null;
 
@@ -31,6 +37,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     autor_nome,
     autor_avatar,
     autor_email,
+    total_curtidas: 0,
+    total_comentarios: 0,
   };
 
   if (tipo === "atividade") {
@@ -47,11 +55,12 @@ export async function POST(req: Request): Promise<NextResponse> {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, post: data });
+  return NextResponse.json({ success: true, post: { ...data, curtido_por_mim: false, seguindo_autor: false } });
 }
 
 export async function GET(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const page = parseInt(new URL(req.url).searchParams.get("page") ?? "0");
   const limite = 15;
 
@@ -62,7 +71,37 @@ export async function GET(req: Request): Promise<NextResponse> {
     .range(page * limite, (page + 1) * limite - 1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ posts: data ?? [], pagina: page, tem_mais: (data?.length ?? 0) === limite });
+
+  let posts = (data ?? []) as FeedPost[];
+
+  if (user && posts.length > 0) {
+    const postIds = posts.map((p) => p.id);
+    const autores = [...new Set(posts.map((p) => p.user_id).filter(Boolean))];
+
+    const [{ data: curtidas }, { data: follows }] = await Promise.all([
+      supabase
+        .from("feed_curtidas")
+        .select("post_id")
+        .eq("user_id", user.id)
+        .in("post_id", postIds),
+      supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id)
+        .in("following_id", autores),
+    ]);
+
+    const curtidasSet = new Set((curtidas || []).map((c: { post_id: number }) => c.post_id));
+    const followsSet = new Set((follows || []).map((f: { following_id: string }) => f.following_id));
+
+    posts = posts.map((p) => ({
+      ...p,
+      curtido_por_mim: curtidasSet.has(p.id),
+      seguindo_autor: followsSet.has(p.user_id),
+    }));
+  }
+
+  return NextResponse.json({ posts, pagina: page, tem_mais: posts.length === limite });
 }
 
 export async function DELETE(req: Request): Promise<NextResponse> {

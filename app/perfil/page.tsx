@@ -161,7 +161,7 @@ function ChatInline({ userId }: { userId: string | null }) {
   );
 
   return (
-    <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+    <div className="divide-y" style={{ divideColor: "rgba(255,255,255,0.04)" }}>
       {conversas.map(c => (
         <button key={c.outro_id} onClick={() => abrirConversa(c.outro_id, c.outro_nome, c.outro_avatar)}
           className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors">
@@ -1012,7 +1012,7 @@ export default function PerfilPage(): React.JSX.Element {
                     <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>💬 MINHAS CONVERSAS</p>
                     <a href="/chat" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TUDO →</a>
                   </div>
-                  <ChatInline userId={userId || null} />
+                  <ChatInline userId={user?.id ?? null} />
                 </div>
               </section>
             );

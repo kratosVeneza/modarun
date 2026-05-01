@@ -83,6 +83,19 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const url = new URL(req.url);
   const outroId = url.searchParams.get("outro_id") || url.searchParams.get("user") || "";
+  const resumo = url.searchParams.get("resumo") === "1" || url.searchParams.get("summary") === "1";
+
+  if (resumo) {
+    const { count, error } = await supabase
+      .from("mensagens")
+      .select("*", { count: "exact", head: true })
+      .eq("destinatario_id", user.id)
+      .eq("lida", false)
+      .eq("apagada_para_todos", false);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ total_nao_lidas: count ?? 0 });
+  }
 
   if (outroId) {
     if (!isUuid(outroId) || outroId === user.id) {
@@ -230,6 +243,32 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   return NextResponse.json({ success: true, mensagem: data });
+}
+
+export async function PATCH(req: Request): Promise<NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const acao = String(body.acao ?? "");
+
+  if (acao === "marcar_lidas") {
+    const outroId = String(body.outro_id ?? "").trim();
+    if (!isUuid(outroId)) return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
+
+    const { error } = await supabase
+      .from("mensagens")
+      .update({ lida: true, lida_em: new Date().toISOString() } as never)
+      .eq("destinatario_id", user.id)
+      .eq("remetente_id", outroId)
+      .eq("lida", false);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
 }
 
 export async function DELETE(req: Request): Promise<NextResponse> {
