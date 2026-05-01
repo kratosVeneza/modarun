@@ -1012,7 +1012,7 @@ export default function PerfilPage(): React.JSX.Element {
                     <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>💬 MINHAS CONVERSAS</p>
                     <a href="/chat" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TUDO →</a>
                   </div>
-                  <ChatInline userId={user?.id ?? null} />
+                  <ChatInline userId={userId || null} />
                 </div>
               </section>
             );
