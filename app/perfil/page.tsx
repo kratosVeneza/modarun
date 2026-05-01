@@ -207,13 +207,13 @@ export default function PerfilPage(): React.JSX.Element {
   const [eventosSalvos, setEventosSalvos] = useState<EventoSalvo[]>([]);
 
   // UI
-  const [abaAtiva, setAbaAtiva] = useState<"publicacoes" | "treinos" | "participacoes" | "preferencias" | "estatisticas" | "conquistas" | "mensagens">("publicacoes");
+  const [abaAtiva, setAbaAtiva] = useState<"publicacoes" | "treinos" | "participacoes" | "preferencias" | "estatisticas" | "conquistas">("publicacoes");
   const searchParams = useSearchParams();
 
   useEffect(() => {
     const msgUserId = searchParams.get("mensagem");
-    if (msgUserId) setAbaAtiva("mensagens");
-  }, [searchParams]); // eslint-disable-line
+    if (msgUserId) router.push(`/chat?user=${encodeURIComponent(msgUserId)}`);
+  }, [router, searchParams]);
 
   const [editandoPostId, setEditandoPostId] = useState<number | null>(null);
   const [textoEditPost, setTextoEditPost] = useState("");
@@ -361,7 +361,6 @@ export default function PerfilPage(): React.JSX.Element {
     { id: "preferencias", label: "⭐ PREFERÊNCIAS", count: cidadesInteresse.length + eventosSalvos.length },
     { id: "estatisticas", label: "📊 STATS", count: 0 },
     { id: "conquistas", label: "🏅 BADGES", count: 0 },
-    { id: "mensagens", label: "💬 MENSAGENS", count: 0 },
   ] as const;
 
   return (
@@ -999,21 +998,6 @@ export default function PerfilPage(): React.JSX.Element {
                     </div>
                   </div>
                 )}
-              </section>
-            );
-          })()}
-
-          {/* MENSAGENS */}
-          {abaAtiva === "mensagens" && (() => {
-            return (
-              <section className="space-y-4">
-                <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.15)" }}>
-                  <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#161B22", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                    <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>💬 MINHAS CONVERSAS</p>
-                    <a href="/chat" className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TUDO →</a>
-                  </div>
-                  <ChatInline userId={userId || null} />
-                </div>
               </section>
             );
           })()}

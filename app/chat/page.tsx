@@ -322,18 +322,41 @@ export default function ChatPage(): React.JSX.Element {
       <Header userEmail={user?.email || undefined} isAdmin={isAdmin} />
       <main className="min-h-screen px-4 py-6" style={{ background: "linear-gradient(180deg,#0D1117 0%,#101820 100%)" }}>
         <section className="mx-auto max-w-6xl overflow-hidden rounded-3xl" style={{ border: "1px solid rgba(92,200,0,0.18)", background: "rgba(13,17,23,0.92)", boxShadow: "0 20px 80px rgba(0,0,0,0.35)" }}>
-          <div className="grid min-h-[calc(100vh-150px)] lg:grid-cols-[360px_1fr]">
+          <div className="p-4 lg:p-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "linear-gradient(135deg, rgba(92,200,0,0.08), rgba(255,107,0,0.04))" }}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="text-2xl font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>MENSAGENS PRIVADAS</h1>
+                <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>Pesquise usuários cadastrados no app, chame para conversar e continue suas conversas privadas.</p>
+              </div>
+              <div className="relative w-full lg:max-w-md">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#5CC800" }} />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Pesquisar usuários por nome ou e-mail..."
+                  className="w-full rounded-2xl py-3 pl-10 pr-10 text-sm font-semibold outline-none"
+                  style={{ background: "#0D1117", color: "#E6EDF3", border: "1px solid rgba(92,200,0,0.28)" }}
+                />
+                {busca && (
+                  <button onClick={() => setBusca("")} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#8B949E" }}>
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="grid min-h-[calc(100vh-240px)] lg:grid-cols-[360px_1fr]">
             <aside className={`${conversaAtiva ? "hidden lg:block" : "block"}`} style={{ borderRight: "1px solid rgba(255,255,255,0.06)", background: "#10161D" }}>
               <div className="p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                 <h1 className="text-2xl font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.04em" }}>MENSAGENS</h1>
-                <p className="text-sm mt-1" style={{ color: "#8B949E" }}>Converse em privado com outros corredores.</p>
+                <p className="text-sm mt-1" style={{ color: "#8B949E" }}>Conversas recentes e busca de usuários.</p>
 
                 <div className="relative mt-4">
                   <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#8B949E" }} />
                   <input
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
-                    placeholder="Buscar corredor..."
+                    placeholder="Pesquisar usuários..."
                     className="w-full rounded-2xl py-3 pl-10 pr-10 text-sm outline-none"
                     style={{ background: "#21262D", color: "#E6EDF3", border: "1px solid rgba(92,200,0,0.16)" }}
                   />
@@ -366,7 +389,7 @@ export default function ChatPage(): React.JSX.Element {
                     <div className="p-8 text-center">
                       <p className="text-4xl">💬</p>
                       <p className="mt-2 text-sm font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>NENHUMA CONVERSA</p>
-                      <p className="mt-1 text-xs" style={{ color: "#8B949E" }}>Busque um corredor acima ou abra um perfil e clique em Mensagem.</p>
+                      <p className="mt-1 text-xs" style={{ color: "#8B949E" }}>Use a barra de pesquisa acima para encontrar usuários cadastrados.</p>
                     </div>
                   )}
                   {conversas.map((c) => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { Bell, X, Check, MessageCircle, UserPlus } from "lucide-react";
+import { Bell, X, Check, UserPlus } from "lucide-react";
 
 type Notif = {
   id: number;
@@ -251,14 +251,6 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
                 style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)" }}>
                 {userEmail}
               </span>
-              <Link href="/chat" className="relative flex items-center justify-center rounded-xl p-2 transition-all hover:scale-105"
-                style={{ background: mensagensNaoLidas > 0 ? "rgba(255,107,0,0.15)" : "rgba(255,255,255,0.05)", border: mensagensNaoLidas > 0 ? "1px solid rgba(255,107,0,0.35)" : "1px solid transparent" }}>
-                <MessageCircle size={18} style={{ color: mensagensNaoLidas > 0 ? "#FF6B00" : "#8B949E" }} />
-                {mensagensNaoLidas > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-black"
-                    style={{ background: "#FF6B00", color: "#fff" }}>{mensagensNaoLidas > 9 ? "9+" : mensagensNaoLidas}</span>
-                )}
-              </Link>
               <button onClick={handleLogout}
                 className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all hover:scale-105"
                 style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>

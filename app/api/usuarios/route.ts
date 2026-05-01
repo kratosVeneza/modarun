@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 type UsuarioFeed = {
   user_id: string;
@@ -8,6 +9,27 @@ type UsuarioFeed = {
   autor_email: string | null;
   created_at?: string;
 };
+
+function criarAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createAdminClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function usuarioAuthParaBusca(u: any): UsuarioFeed {
+  const nomeMeta = u.user_metadata?.name || u.user_metadata?.full_name || u.user_metadata?.nome || u.user_metadata?.autor_nome;
+  const avatarMeta = u.user_metadata?.avatar_url || u.user_metadata?.picture || null;
+  return {
+    user_id: u.id,
+    autor_nome: nomeMeta || u.email?.split("@")[0] || "Corredor",
+    autor_avatar: avatarMeta,
+    autor_email: u.email || null,
+    created_at: u.created_at,
+  };
+}
 
 function deduplicarUsuarios(rows: UsuarioFeed[], limite = 10) {
   const vistos = new Set<string>();
@@ -89,15 +111,33 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   if (q && q.trim().length >= 2) {
-    const termo = q.trim();
+    const termoOriginal = q.trim();
+    const termo = termoOriginal.toLowerCase();
     const { data } = await supabase
       .from("feed_posts")
       .select("user_id, autor_nome, autor_avatar, autor_email, created_at")
-      .or(`autor_nome.ilike.%${termo}%,autor_email.ilike.%${termo}%`)
+      .or(`autor_nome.ilike.%${termoOriginal}%,autor_email.ilike.%${termoOriginal}%`)
       .order("created_at", { ascending: false })
       .limit(80);
 
-    return NextResponse.json({ usuarios: deduplicarUsuarios((data || []) as UsuarioFeed[], 10) });
+    let usuarios = deduplicarUsuarios((data || []) as UsuarioFeed[], 20);
+
+    if (usuarios.length < 10) {
+      const admin = criarAdminClient();
+      if (admin) {
+        const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const extras = (authUsers?.users || [])
+          .map(usuarioAuthParaBusca)
+          .filter((u) => {
+            const nome = (u.autor_nome || "").toLowerCase();
+            const email = (u.autor_email || "").toLowerCase();
+            return nome.includes(termo) || email.includes(termo);
+          });
+        usuarios = deduplicarUsuarios([...usuarios, ...extras], 20);
+      }
+    }
+
+    return NextResponse.json({ usuarios: usuarios.filter(u => u.user_id !== user?.id).slice(0, 20) });
   }
 
   return NextResponse.json({ usuarios: [] });
