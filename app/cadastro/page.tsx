@@ -39,7 +39,7 @@ export default function CadastroPage() {
           </div>
           <AuthForm mode="signup" />
         </div>
-        <p className="mt-4 text-center text-xs" style={{ color: "#8B949E" }}>Cadastro gratuito. Sem spam.</p>
+        <p className="mt-4 text-center text-xs leading-relaxed" style={{ color: "#8B949E" }}>Ao criar sua conta, você concorda com os <a href="/termos-de-uso" style={{ color: "#5CC800" }}>Termos de Uso</a> e com a <a href="/politica-de-privacidade" style={{ color: "#5CC800" }}>Política de Privacidade</a>.</p>
       </div>
     </main>
   );

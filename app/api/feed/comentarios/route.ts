@@ -52,7 +52,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         user_id: pai.user_id, tipo: "resposta_comentario",
         titulo: `${autor_nome} respondeu seu comentario`,
         corpo: texto.slice(0, 80),
-        post_id, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
+        post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
       });
     }
   } else if (post?.user_id && post.user_id !== user.id) {
@@ -60,7 +60,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       user_id: post.user_id, tipo: "comentario_post",
       titulo: `${autor_nome} comentou sua publicacao`,
       corpo: texto.slice(0, 80),
-      post_id, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
+      post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar,
     });
   }
 

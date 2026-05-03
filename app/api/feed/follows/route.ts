@@ -122,91 +122,17 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 }
 
-async function perfilBasico(client: any, id: string) {
-  let authUser: any = null;
-  const admin = sbAdmin();
-
-  if (admin) {
-    const { data } = await admin.auth.admin.getUserById(id);
-    authUser = data?.user || null;
-  }
-
-  const { data: postAutor } = await client
-    .from("feed_posts")
-    .select("user_id, autor_nome, autor_avatar, autor_email, created_at")
-    .eq("user_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const meta = authUser?.user_metadata || {};
-  const email = authUser?.email || postAutor?.autor_email || null;
-  const nome =
-    meta?.nome_exibicao ||
-    meta?.display_name ||
-    meta?.full_name ||
-    meta?.name ||
-    meta?.nome ||
-    postAutor?.autor_nome ||
-    email?.split("@")[0] ||
-    "Corredor";
-
-  return {
-    id,
-    nome,
-    avatar: meta?.avatar_url || meta?.picture || meta?.foto || postAutor?.autor_avatar || null,
-    email,
-  };
-}
-
-async function listarFollows(client: any, userId: string, tipo: "seguidores" | "seguindo", viewerId?: string) {
-  const colunaFiltro = tipo === "seguidores" ? "following_id" : "follower_id";
-  const colunaPessoa = tipo === "seguidores" ? "follower_id" : "following_id";
-
-  const { data: rows, error } = await client
-    .from("follows")
-    .select(`id, follower_id, following_id, created_at`)
-    .eq(colunaFiltro, userId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (error) throw new Error(error.message);
-
-  const ids: string[] = Array.from(
-    new Set<string>((rows || []).map((r: any) => String(r[colunaPessoa])).filter(isUuid))
-  );
-  const usuarios = await Promise.all(ids.map((id) => perfilBasico(client, id)));
-
-  let seguindoSet = new Set<string>();
-  if (viewerId && isUuid(viewerId) && ids.length > 0) {
-    const { data: rels } = await client
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", viewerId)
-      .in("following_id", ids);
-    seguindoSet = new Set((rels || []).map((r: any) => String(r.following_id)));
-  }
-
-  return usuarios.map((u) => ({ ...u, viewer_segue: seguindoSet.has(u.id) }));
-}
-
 export async function GET(req: Request): Promise<NextResponse> {
   const { supabase, user } = await getCurrentUser();
   const url = new URL(req.url);
   const userId = String(url.searchParams.get("user_id") || url.searchParams.get("following_id") || "").trim();
   const viewerId = String(url.searchParams.get("viewer_id") || user?.id || "").trim();
-  const lista = String(url.searchParams.get("lista") || "").trim();
 
   if (!isUuid(userId)) return json({ error: "user_id inválido." }, { status: 400 });
 
   const readClient = sbAdmin() || supabase;
 
   try {
-    if (lista === "seguidores" || lista === "seguindo") {
-      const usuarios = await listarFollows(readClient, userId, lista, viewerId);
-      return json({ success: true, tipo: lista, total: usuarios.length, usuarios });
-    }
-
     const [contagens, segue] = await Promise.all([
       contar(readClient, userId),
       viewerId && isUuid(viewerId) ? viewerSegue(readClient, viewerId, userId) : Promise.resolve(false),

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import SeguidoresModal from "@/components/SeguidoresModal";
 import {
   Camera, Edit2, Check, X, LogOut, ShoppingBag, Flag, Zap, ClipboardList,
   MapPin, Star, Trash2, Calendar, Ruler, ArrowRight, Users, Heart,
@@ -199,7 +198,6 @@ export default function PerfilPage(): React.JSX.Element {
   // Social
   const [seguidores, setSeguidores] = useState(0);
   const [seguindo, setSeguindo] = useState(0);
-  const [listaSocial, setListaSocial] = useState<"seguidores" | "seguindo" | null>(null);
 
   // Dados
   const [treinos, setTreinos] = useState<Treino[]>([]);
@@ -436,20 +434,19 @@ export default function PerfilPage(): React.JSX.Element {
 
                 {/* Seguidores */}
                 <div className="flex items-center gap-4 mb-3">
-                  <button type="button" onClick={() => setListaSocial("seguidores")} className="text-center transition hover:scale-105" title="Ver seguidores">
-                    <p className="text-lg font-black leading-none" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{seguidores}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUIDORES</p>
-                  </button>
-                  <div className="w-px h-6" style={{ background: "rgba(255,255,255,0.1)" }} />
-                  <button type="button" onClick={() => setListaSocial("seguindo")} className="text-center transition hover:scale-105" title="Ver quem você segue">
-                    <p className="text-lg font-black leading-none" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{seguindo}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUINDO</p>
-                  </button>
-                  <div className="w-px h-6" style={{ background: "rgba(255,255,255,0.1)" }} />
-                  <div className="text-center">
-                    <p className="text-lg font-black leading-none" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{posts.length}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>POSTS</p>
-                  </div>
+                  {[
+                    { v: seguidores, l: "SEGUIDORES", cor: "#5CC800" },
+                    { v: seguindo, l: "SEGUINDO", cor: "#FFB800" },
+                    { v: posts.length, l: "POSTS", cor: "#5CC800" },
+                  ].map((s, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <div className="w-px h-6" style={{ background: "rgba(255,255,255,0.1)" }} />}
+                      <div className="text-center">
+                        <p className="text-lg font-black leading-none" style={{ color: s.cor, fontFamily: "'Barlow Condensed', sans-serif" }}>{s.v}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>{s.l}</p>
+                      </div>
+                    </React.Fragment>
+                  ))}
                   <div className="w-px h-6" style={{ background: "rgba(255,255,255,0.1)" }} />
                   <Link href="/" className="flex items-center gap-1.5 text-xs font-black"
                     style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -1023,12 +1020,6 @@ export default function PerfilPage(): React.JSX.Element {
           </section>
         </div>
       </main>
-      <SeguidoresModal
-        aberto={!!listaSocial}
-        tipo={listaSocial || "seguidores"}
-        userId={userId || null}
-        onClose={() => setListaSocial(null)}
-      />
     </>
   );
 }

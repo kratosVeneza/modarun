@@ -118,6 +118,33 @@ export async function POST(req: Request): Promise<NextResponse> {
     .update({ total_curtidas: totalCurtidas } as never)
     .eq("id", postId);
 
+  if (acao === "curtir") {
+    const { data: post } = await supabase
+      .from("feed_posts")
+      .select("user_id")
+      .eq("id", postId)
+      .maybeSingle();
+
+    if (post?.user_id && post.user_id !== user.id) {
+      const nome = nomeDoUsuario(user);
+      const avatar = avatarDoUsuario(user);
+      const admin = adminClient();
+      const db: any = admin ?? supabase;
+      await db.from("notificacoes").insert({
+        user_id: post.user_id,
+        tipo: "curtida_post",
+        titulo: `${nome} curtiu sua publicação`,
+        corpo: "Toque para ver a publicação.",
+        post_id: postId,
+        link: `/#post-${postId}`,
+        ator_id: user.id,
+        ator_nome: nome,
+        ator_avatar: avatar,
+        lida: false,
+      } as never).then(() => undefined);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     curtido: acao === "curtir",

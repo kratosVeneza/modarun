@@ -246,13 +246,13 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
 
         <div className="flex items-center gap-2">
           {userEmail ? (
-            <div className="hidden items-center gap-2 sm:flex">
-              <span className="rounded-lg px-3 py-1.5 text-xs truncate max-w-[140px]"
+            <div className="flex items-center gap-2">
+              <span className="hidden rounded-lg px-3 py-1.5 text-xs truncate max-w-[140px] sm:inline-block"
                 style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)" }}>
                 {userEmail}
               </span>
               <button onClick={handleLogout}
-                className="rounded-lg px-3 py-1.5 text-xs font-bold transition-all hover:scale-105"
+                className="hidden rounded-lg px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 sm:inline-flex"
                 style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
                 SAIR
               </button>
@@ -271,7 +271,7 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
                 </button>
 
                 {painelAberto && (
-                  <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl overflow-hidden shadow-2xl z-50"
+                  <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl overflow-hidden shadow-2xl z-50"
                     style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
                     <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       <span className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>NOTIFICAÇÕES</span>

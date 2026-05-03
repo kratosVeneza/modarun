@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import SeguidoresModal from "@/components/SeguidoresModal";
 import { ArrowLeft, Heart, MessageCircle, Share2, Users, Loader2 } from "lucide-react";
 
 type Usuario = {
@@ -52,7 +51,6 @@ export default function PerfilPublicoPage(): React.JSX.Element {
   const [viewer, setViewer] = useState<{ id: string; email?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOwn, setIsOwn] = useState(false);
-  const [listaSocial, setListaSocial] = useState<"seguidores" | "seguindo" | null>(null);
 
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -197,15 +195,15 @@ export default function PerfilPublicoPage(): React.JSX.Element {
                     <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>POSTS</p>
                   </div>
                   <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.1)" }} />
-                  <button type="button" onClick={() => setListaSocial("seguidores")} className="text-center transition hover:scale-105" title="Ver seguidores">
+                  <div className="text-center">
                     <p className="text-xl font-black leading-none" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{usuario.seguidores}</p>
                     <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUIDORES</p>
-                  </button>
+                  </div>
                   <div className="w-px h-8" style={{ background: "rgba(255,255,255,0.1)" }} />
-                  <button type="button" onClick={() => setListaSocial("seguindo")} className="text-center transition hover:scale-105" title="Ver quem este perfil segue">
+                  <div className="text-center">
                     <p className="text-xl font-black leading-none" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>{usuario.seguindo}</p>
                     <p className="text-xs mt-0.5" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>SEGUINDO</p>
-                  </button>
+                  </div>
                 </div>
 
                 {/* Botão seguir */}
@@ -323,12 +321,6 @@ export default function PerfilPublicoPage(): React.JSX.Element {
           )}
         </div>
       </main>
-      <SeguidoresModal
-        aberto={!!listaSocial}
-        tipo={listaSocial || "seguidores"}
-        userId={usuario?.id || null}
-        onClose={() => setListaSocial(null)}
-      />
     </>
   );
 }
