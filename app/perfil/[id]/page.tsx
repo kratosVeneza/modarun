@@ -61,7 +61,7 @@ export default function PerfilPublicoPage(): React.JSX.Element {
       setIsAdmin(!!adm);
     }
 
-    const res = await fetch(`/api/usuarios?id=${id}${user ? `&viewer_id=${user.id}` : ""}`);
+    const res = await fetch(`/api/usuarios?id=${id}${user ? `&viewer_id=${user.id}` : ""}`, { cache: "no-store", credentials: "include" });
     if (!res.ok) { setLoading(false); return; }
     const data = await res.json();
     setUsuario(data.usuario);
@@ -84,13 +84,48 @@ export default function PerfilPublicoPage(): React.JSX.Element {
     if (!viewer || loadingFollow) return;
     setLoadingFollow(true);
     const acao = seguindo ? "desseguir" : "seguir";
-    setSeguindo(v => !v);
-    setUsuario(u => u ? { ...u, seguidores: u.seguidores + (seguindo ? -1 : 1) } : u);
-    await fetch("/api/feed/follows", {
-      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ following_id: id, acao }),
-    });
-    setLoadingFollow(false);
+
+    try {
+      const res = await fetch("/api/feed/follows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ following_id: id, acao }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Não foi possível atualizar o seguimento.");
+        return;
+      }
+
+      // A API já devolve o estado persistido no banco. Em seguida fazemos
+      // uma leitura de confirmação para evitar que o botão fique apenas “visual”.
+      let viewerSeguePersistido = !!data.viewer_segue;
+      let seguidoresPersistidos = typeof data.seguidores === "number" ? data.seguidores : usuario?.seguidores ?? 0;
+      let seguindoPersistido = typeof data.seguindo === "number" ? data.seguindo : usuario?.seguindo ?? 0;
+
+      const conferir = await fetch(`/api/feed/follows?user_id=${id}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const conf = await conferir.json().catch(() => ({}));
+      if (conferir.ok) {
+        viewerSeguePersistido = !!conf.viewer_segue;
+        seguidoresPersistidos = typeof conf.seguidores === "number" ? conf.seguidores : seguidoresPersistidos;
+        seguindoPersistido = typeof conf.seguindo === "number" ? conf.seguindo : seguindoPersistido;
+      }
+
+      setSeguindo(viewerSeguePersistido);
+      setUsuario(u => u ? {
+        ...u,
+        seguidores: seguidoresPersistidos,
+        seguindo: seguindoPersistido,
+        viewer_segue: viewerSeguePersistido,
+      } : u);
+    } finally {
+      setLoadingFollow(false);
+    }
   }
 
   if (loading) return (

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import { ArrowLeft, CheckCheck, Loader2, Search, Send, Trash2, UserRound, X } from "lucide-react";
@@ -276,13 +277,23 @@ export default function ChatPage(): React.JSX.Element {
   }
 
   async function apagarMensagem(id: number, modo: "para_mim" | "todos") {
+    const confirmar = window.confirm(
+      modo === "todos"
+        ? "Apagar esta mensagem para todos?"
+        : "Apagar esta mensagem apenas para você?",
+    );
+    if (!confirmar) return;
+
+    setErro("");
+
     const res = await fetch(`/api/mensagens?id=${id}&modo=${modo}`, {
       method: "DELETE",
       credentials: "include",
     });
 
+    const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
-      const data = await res.json();
       setErro(data.error || "Erro ao apagar mensagem.");
       return;
     }
@@ -427,11 +438,13 @@ export default function ChatPage(): React.JSX.Element {
                     <button onClick={() => setConversaAtiva(null)} className="rounded-xl p-2 lg:hidden" style={{ color: "#8B949E", background: "#21262D" }}>
                       <ArrowLeft size={18} />
                     </button>
-                    {conversaAtiva.outro_avatar ? <img src={conversaAtiva.outro_avatar} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-full font-black" style={{ background: "linear-gradient(135deg,#5CC800,#FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{conversaAtiva.outro_nome[0]?.toUpperCase() || "C"}</div>}
-                    <div className="min-w-0 flex-1">
+                    <Link href={`/perfil/${conversaAtiva.outro_id}`} className="shrink-0 transition-transform hover:scale-105" title="Abrir perfil">
+                      {conversaAtiva.outro_avatar ? <img src={conversaAtiva.outro_avatar} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="flex h-11 w-11 items-center justify-center rounded-full font-black" style={{ background: "linear-gradient(135deg,#5CC800,#FF6B00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{conversaAtiva.outro_nome[0]?.toUpperCase() || "C"}</div>}
+                    </Link>
+                    <Link href={`/perfil/${conversaAtiva.outro_id}`} className="min-w-0 flex-1 transition-opacity hover:opacity-80" title="Abrir perfil">
                       <p className="truncate text-sm font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{conversaAtiva.outro_nome}</p>
                       <p className="truncate text-xs" style={{ color: "#8B949E" }}>{conversaAtiva.outro_email || "Conversa privada"}</p>
-                    </div>
+                    </Link>
                   </div>
 
                   {erro && <div className="mx-4 mt-4 rounded-2xl p-3 text-sm" style={{ background: "rgba(255,107,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,107,0,0.25)" }}>{erro}</div>}
@@ -451,13 +464,13 @@ export default function ChatPage(): React.JSX.Element {
                         <div key={m.id} className={`group flex ${minha ? "justify-end" : "justify-start"}`}>
                           <div className="flex max-w-[82%] items-end gap-2">
                             {minha && !apagada && (
-                              <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
+                              <div className="flex opacity-100 transition-opacity">
                                 <button title="Apagar só para mim" onClick={() => apagarMensagem(m.id, "para_mim")} className="rounded-lg p-1" style={{ color: "#8B949E" }}><X size={14} /></button>
                                 <button title="Apagar para todos" onClick={() => apagarMensagem(m.id, "todos")} className="rounded-lg p-1" style={{ color: "#FF6B00" }}><Trash2 size={14} /></button>
                               </div>
                             )}
                             {!minha && !apagada && (
-                              <button title="Apagar só para mim" onClick={() => apagarMensagem(m.id, "para_mim")} className="rounded-lg p-1 opacity-0 transition-opacity group-hover:opacity-100" style={{ color: "#8B949E" }}><X size={14} /></button>
+                              <button title="Apagar só para mim" onClick={() => apagarMensagem(m.id, "para_mim")} className="rounded-lg p-1 opacity-100 transition-opacity" style={{ color: "#8B949E" }}><X size={14} /></button>
                             )}
                             <div className="rounded-2xl px-4 py-2" style={{ background: minha ? "linear-gradient(135deg,#5CC800,#4aaa00)" : "#21262D", borderBottomRightRadius: minha ? 5 : 18, borderBottomLeftRadius: minha ? 18 : 5, opacity: apagada ? 0.7 : 1 }}>
                               <p className="whitespace-pre-wrap break-words text-sm italic" style={{ color: minha ? "#fff" : "#E6EDF3", fontStyle: apagada ? "italic" : "normal" }}>{m.texto || ""}</p>

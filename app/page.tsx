@@ -332,7 +332,14 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data.success) {
-      setSeguindo(!!data.viewer_segue);
+      let seguePersistido = !!data.viewer_segue;
+      const conferir = await fetch(`/api/feed/follows?user_id=${post.user_id}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const conf = await conferir.json().catch(() => ({}));
+      if (conferir.ok) seguePersistido = !!conf.viewer_segue;
+      setSeguindo(seguePersistido);
     } else {
       setSeguindo(seguindoAnterior);
     }

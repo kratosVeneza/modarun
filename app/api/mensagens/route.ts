@@ -282,7 +282,9 @@ export async function DELETE(req: Request): Promise<NextResponse> {
 
   if (!id) return NextResponse.json({ error: "id obrigatorio" }, { status: 400 });
 
-  const { data: msg, error: readError } = await supabase
+  const writeClient = sbAdmin() || supabase;
+
+  const { data: msg, error: readError } = await writeClient
     .from("mensagens")
     .select("id, remetente_id, destinatario_id, oculta_para")
     .eq("id", id)
@@ -300,7 +302,7 @@ export async function DELETE(req: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Somente quem enviou pode apagar para todos." }, { status: 403 });
     }
 
-    const { error } = await supabase
+    const { error } = await writeClient
       .from("mensagens")
       .update({
         apagada_para_todos: true,
@@ -318,7 +320,7 @@ export async function DELETE(req: Request): Promise<NextResponse> {
   const ocultos = Array.isArray(mensagem.oculta_para) ? mensagem.oculta_para : [];
   const novaLista = Array.from(new Set([...ocultos, user.id]));
 
-  const { error } = await supabase
+  const { error } = await writeClient
     .from("mensagens")
     .update({ oculta_para: novaLista } as never)
     .eq("id", id);
