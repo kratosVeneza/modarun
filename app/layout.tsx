@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import FooterLegal from "@/components/FooterLegal";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://modarun.com.br";
 
@@ -55,7 +56,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        <FooterLegal />
+      </body>
     </html>
   );
 }
