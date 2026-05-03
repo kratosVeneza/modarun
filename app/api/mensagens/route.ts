@@ -53,24 +53,62 @@ function sanitizarMensagem(m: MensagemRow) {
   return m;
 }
 
+function nomeDoAuth(user: any) {
+  const meta = user?.user_metadata || {};
+  return (
+    meta.nome_exibicao ||
+    meta.display_name ||
+    meta.full_name ||
+    meta.name ||
+    meta.nome ||
+    user?.email?.split("@")[0] ||
+    "Corredor"
+  );
+}
+
+function avatarDoAuth(user: any) {
+  const meta = user?.user_metadata || {};
+  return meta.avatar_url || meta.picture || meta.foto || null;
+}
+
 async function buscarPerfis(userIds: string[]) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (ids.length === 0) return new Map<string, PerfilUsuario>();
 
   const admin = sbAdmin();
-  const client = admin;
-  if (!client) return new Map<string, PerfilUsuario>();
+  if (!admin) return new Map<string, PerfilUsuario>();
 
-  const { data } = await client
+  const mapa = new Map<string, PerfilUsuario>();
+
+  // 1) Fonte principal: Auth, porque contém o nome atualizado do perfil.
+  await Promise.all(ids.map(async (id) => {
+    const { data } = await admin.auth.admin.getUserById(id);
+    if (data?.user) {
+      mapa.set(id, {
+        user_id: id,
+        autor_nome: nomeDoAuth(data.user),
+        autor_avatar: avatarDoAuth(data.user),
+        autor_email: data.user.email || null,
+      });
+    }
+  }));
+
+  // 2) Complemento/fallback: último post do feed.
+  const { data } = await admin
     .from("feed_posts")
     .select("user_id, autor_nome, autor_avatar, autor_email, created_at")
     .in("user_id", ids)
     .order("created_at", { ascending: false });
 
-  const mapa = new Map<string, PerfilUsuario>();
   for (const row of data || []) {
     const p = row as PerfilUsuario;
-    if (!mapa.has(p.user_id)) mapa.set(p.user_id, p);
+    const atual = mapa.get(p.user_id);
+    mapa.set(p.user_id, {
+      user_id: p.user_id,
+      autor_nome: atual?.autor_nome && atual.autor_nome !== "Corredor" ? atual.autor_nome : (p.autor_nome || atual?.autor_nome || "Corredor"),
+      autor_avatar: atual?.autor_avatar || p.autor_avatar || null,
+      autor_email: atual?.autor_email || p.autor_email || null,
+    });
   }
 
   return mapa;
@@ -230,7 +268,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const admin = sbAdmin();
   if (admin) {
-    const nome = user.user_metadata?.nome || user.user_metadata?.name || user.email?.split("@")[0] || "Corredor";
+    const nome = nomeDoAuth(user);
+    const avatar = avatarDoAuth(user);
     await admin.from("notificacoes").insert({
       user_id: destinatarioId,
       tipo: "mensagem_privada",
@@ -238,7 +277,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       corpo: texto.length > 90 ? `${texto.slice(0, 90)}...` : texto,
       link: `/chat?user=${user.id}`,
       ator_nome: nome,
-      ator_avatar: user.user_metadata?.avatar_url || null,
+      ator_avatar: avatar,
     } as never);
   }
 

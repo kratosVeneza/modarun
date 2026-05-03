@@ -18,13 +18,46 @@ function criarAdminClient() {
 }
 
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function escolherNomeMeta(meta: Record<string, any> | null | undefined, email?: string | null) {
+  return (
+    meta?.nome_exibicao ||
+    meta?.display_name ||
+    meta?.full_name ||
+    meta?.name ||
+    meta?.nome ||
+    meta?.autor_nome ||
+    email?.split("@")[0] ||
+    "Corredor"
+  );
+}
+
+function escolherAvatarMeta(meta: Record<string, any> | null | undefined) {
+  return meta?.avatar_url || meta?.picture || meta?.foto || meta?.autor_avatar || null;
 }
 
 function usuarioAuthParaBusca(u: any): UsuarioFeed {
-  const nomeMeta = u.user_metadata?.name || u.user_metadata?.full_name || u.user_metadata?.nome || u.user_metadata?.autor_nome;
-  const avatarMeta = u.user_metadata?.avatar_url || u.user_metadata?.picture || null;
-  return { user_id: u.id, autor_nome: nomeMeta || u.email?.split("@")[0] || "Corredor", autor_avatar: avatarMeta, autor_email: u.email || null, created_at: u.created_at };
+  const meta = u.user_metadata || {};
+  return {
+    user_id: u.id,
+    autor_nome: escolherNomeMeta(meta, u.email),
+    autor_avatar: escolherAvatarMeta(meta),
+    autor_email: u.email || null,
+    created_at: u.created_at,
+  };
+}
+
+function mesclarUsuario(base: UsuarioFeed | null, extra: Partial<UsuarioFeed> | null): UsuarioFeed | null {
+  if (!base && !extra?.user_id) return null;
+  return {
+    user_id: base?.user_id || extra?.user_id || "",
+    autor_nome: base?.autor_nome && base.autor_nome !== "Corredor" ? base.autor_nome : (extra?.autor_nome || base?.autor_nome || "Corredor"),
+    autor_avatar: base?.autor_avatar || extra?.autor_avatar || null,
+    autor_email: base?.autor_email || extra?.autor_email || null,
+    created_at: base?.created_at || extra?.created_at,
+  };
 }
 
 function deduplicarUsuarios(rows: UsuarioFeed[], limite = 10) {
@@ -37,6 +70,14 @@ function deduplicarUsuarios(rows: UsuarioFeed[], limite = 10) {
 }
 
 async function buscarUsuarioPorId(client: any, id: string): Promise<UsuarioFeed | null> {
+  let authUser: UsuarioFeed | null = null;
+  const admin = criarAdminClient();
+
+  if (admin) {
+    const { data } = await admin.auth.admin.getUserById(id);
+    if (data?.user) authUser = usuarioAuthParaBusca(data.user);
+  }
+
   const { data: postAutor } = await client
     .from("feed_posts")
     .select("user_id, autor_nome, autor_avatar, autor_email, created_at")
@@ -45,13 +86,8 @@ async function buscarUsuarioPorId(client: any, id: string): Promise<UsuarioFeed 
     .limit(1)
     .maybeSingle();
 
-  if (postAutor) return postAutor as UsuarioFeed;
-
-  const admin = criarAdminClient();
-  if (!admin) return null;
-  const { data, error } = await admin.auth.admin.getUserById(id);
-  if (error || !data?.user) return null;
-  return usuarioAuthParaBusca(data.user);
+  if (postAutor) return mesclarUsuario(authUser, postAutor as UsuarioFeed);
+  return authUser;
 }
 
 async function contarSeguidores(client: any, id: string) {
@@ -100,10 +136,10 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   if (sugestoes) {
-    const { data } = await supabase.from("feed_posts").select("user_id, autor_nome, autor_avatar, autor_email, created_at").order("created_at", { ascending: false }).limit(120);
+    const { data } = await readClient.from("feed_posts").select("user_id, autor_nome, autor_avatar, autor_email, created_at").order("created_at", { ascending: false }).limit(120);
     let usuarios = deduplicarUsuarios((data || []) as UsuarioFeed[], 30);
 
-    if (admin && usuarios.length < 10) {
+    if (admin && usuarios.length < 30) {
       const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
       usuarios = deduplicarUsuarios([...usuarios, ...(authUsers?.users || []).map(usuarioAuthParaBusca)], 30);
     }
@@ -124,7 +160,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   if (q && q.trim().length >= 2) {
     const termoOriginal = q.trim();
     const termo = termoOriginal.toLowerCase();
-    const { data } = await supabase
+    const { data } = await readClient
       .from("feed_posts")
       .select("user_id, autor_nome, autor_avatar, autor_email, created_at")
       .or(`autor_nome.ilike.%${termoOriginal}%,autor_email.ilike.%${termoOriginal}%`)

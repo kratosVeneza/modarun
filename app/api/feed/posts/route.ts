@@ -25,8 +25,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 
   const meta = user.user_metadata as Record<string, unknown>;
-  const autor_nome = String(meta?.full_name ?? meta?.nome ?? user.email?.split("@")[0] ?? "Corredor");
-  const autor_avatar = (meta?.avatar_url as string | undefined) ?? null;
+  const autor_nome = String(meta?.nome_exibicao ?? meta?.display_name ?? meta?.full_name ?? meta?.name ?? meta?.nome ?? user.email?.split("@")[0] ?? "Corredor");
+  const autor_avatar = ((meta?.avatar_url || meta?.picture) as string | undefined) ?? null;
   const autor_email = user.email ?? null;
 
   const payload: Record<string, unknown> = {
