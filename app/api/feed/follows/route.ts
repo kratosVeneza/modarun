@@ -172,7 +172,9 @@ async function listarFollows(client: any, userId: string, tipo: "seguidores" | "
 
   if (error) throw new Error(error.message);
 
-  const ids = Array.from(new Set((rows || []).map((r: any) => String(r[colunaPessoa])).filter(isUuid)));
+  const ids: string[] = Array.from(
+    new Set<string>((rows || []).map((r: any) => String(r[colunaPessoa])).filter(isUuid))
+  );
   const usuarios = await Promise.all(ids.map((id) => perfilBasico(client, id)));
 
   let seguindoSet = new Set<string>();
