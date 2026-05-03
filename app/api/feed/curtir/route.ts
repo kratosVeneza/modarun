@@ -45,7 +45,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const ids = [...new Set((curtidas || []).map((c: any) => String(c.user_id)).filter(Boolean))];
+  const ids: string[] = Array.from(new Set<string>((curtidas || []).map((c: any) => String(c.user_id)).filter(Boolean)));
   const usuarios: Record<string, { id: string; nome: string; avatar: string | null }> = {};
 
   if (admin && ids.length > 0) {
