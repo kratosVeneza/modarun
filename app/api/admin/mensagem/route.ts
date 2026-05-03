@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { createClient as createServiceClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
-type Destino = "todos" | "cidade" | "usuario";
-type AuthUserResumo = { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
+type UsuarioDestino = {
+  id: string;
+  nome: string;
+  email?: string | null;
+  avatar?: string | null;
+  cidade?: string | null;
+};
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function json(data: unknown, init?: ResponseInit) {
   const res = NextResponse.json(data, init);
@@ -18,23 +25,90 @@ function criarAdminClient() {
   return createServiceClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function normalizarTexto(v: string) {
-  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+function texto(value: unknown) {
+  return String(value ?? "").trim();
 }
 
-function extrairCidadeMeta(meta: Record<string, unknown> | null | undefined) {
-  const cidade = meta?.cidade || meta?.city || meta?.cidade_interesse || meta?.localidade || meta?.municipio;
-  return typeof cidade === "string" ? cidade : "";
+function normalizar(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+function nomeDoUsuario(user: any) {
+  const meta = user?.user_metadata || {};
+  return String(
+    meta.nome_exibicao ||
+    meta.display_name ||
+    meta.full_name ||
+    meta.name ||
+    meta.nome ||
+    user?.email?.split("@")[0] ||
+    "Corredor"
+  );
 }
 
-async function verificarAdmin(): Promise<{ error?: NextResponse }> {
+function avatarDoUsuario(user: any) {
+  const meta = user?.user_metadata || {};
+  return meta.avatar_url || meta.picture || meta.foto || null;
+}
+
+function cidadeDoUsuario(user: any) {
+  const meta = user?.user_metadata || {};
+  return meta.cidade || meta.city || meta.localidade || null;
+}
+
+function authParaUsuario(user: any): UsuarioDestino {
+  return {
+    id: user.id,
+    nome: nomeDoUsuario(user),
+    email: user.email || null,
+    avatar: avatarDoUsuario(user),
+    cidade: cidadeDoUsuario(user),
+  };
+}
+
+async function listarTodosUsuariosAuth(admin: any): Promise<UsuarioDestino[]> {
+  const usuarios: UsuarioDestino[] = [];
+  let page = 1;
+  const perPage = 1000;
+
+  while (page <= 20) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error(error.message);
+
+    const lote = data?.users || [];
+    usuarios.push(...lote.map(authParaUsuario));
+
+    if (lote.length < perPage) break;
+    page += 1;
+  }
+
+  return usuarios;
+}
+
+function deduplicar(usuarios: UsuarioDestino[]) {
+  const mapa = new Map<string, UsuarioDestino>();
+  for (const u of usuarios) {
+    if (!u.id) continue;
+    const atual = mapa.get(u.id);
+    mapa.set(u.id, {
+      id: u.id,
+      nome: atual?.nome && atual.nome !== "Corredor" ? atual.nome : u.nome,
+      email: atual?.email || u.email || null,
+      avatar: atual?.avatar || u.avatar || null,
+      cidade: atual?.cidade || u.cidade || null,
+    });
+  }
+  return Array.from(mapa.values());
+}
+
+async function verificarAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: json({ error: "Unauthorized" }, { status: 401 }) };
+  if (!user) return { erro: json({ error: "Unauthorized" }, { status: 401 }) };
 
   const { data: adminRow } = await supabase
     .from("admins")
@@ -42,135 +116,138 @@ async function verificarAdmin(): Promise<{ error?: NextResponse }> {
     .eq("email", user.email?.toLowerCase() ?? "")
     .maybeSingle();
 
-  if (!adminRow) return { error: json({ error: "Acesso negado." }, { status: 403 }) };
-  return {};
+  if (!adminRow) return { erro: json({ error: "Acesso negado." }, { status: 403 }) };
+
+  const admin = criarAdminClient();
+  if (!admin) {
+    return {
+      erro: json({ error: "SUPABASE_SERVICE_ROLE_KEY não está configurada. Cadastre essa variável na Vercel em Production." }, { status: 500 }),
+    };
+  }
+
+  return { supabase, user, admin };
 }
 
-async function listarUsuariosAuth(admin: SupabaseClient): Promise<AuthUserResumo[]> {
-  const todos: AuthUserResumo[] = [];
-  let page = 1;
-  const perPage = 1000;
+export async function GET(req: Request): Promise<NextResponse> {
+  const auth = await verificarAdmin();
+  if (auth.erro) return auth.erro;
 
-  while (page <= 20) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error) throw error;
-    const users = (data?.users || []) as AuthUserResumo[];
-    todos.push(...users);
-    if (users.length < perPage) break;
-    page += 1;
+  try {
+    const url = new URL(req.url);
+    const q = texto(url.searchParams.get("q"));
+    if (q.length < 2) return json({ usuarios: [] });
+
+    const termo = normalizar(q);
+    const usuarios = await listarTodosUsuariosAuth(auth.admin);
+
+    const filtrados = usuarios
+      .filter((u) => {
+        const nome = normalizar(u.nome);
+        const email = normalizar(u.email);
+        return nome.includes(termo) || email.includes(termo) || u.id.toLowerCase() === q.toLowerCase();
+      })
+      .slice(0, 20);
+
+    return json({ usuarios: filtrados });
+  } catch (e: any) {
+    return json({ error: e?.message || "Erro ao buscar usuários." }, { status: 500 });
+  }
+}
+
+async function resolverDestinatarios(admin: any, destino: string, cidade: string | null, userId: string | null) {
+  if (destino === "usuario") {
+    if (!userId) throw new Error("Selecione um usuário ou informe um UUID manual.");
+    if (!uuidRegex.test(userId)) throw new Error("UUID de usuário inválido.");
+
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data?.user) throw new Error("Usuário não encontrado no Auth do Supabase.");
+    return [authParaUsuario(data.user)];
+  }
+
+  const todos = await listarTodosUsuariosAuth(admin);
+
+  if (destino === "cidade") {
+    if (!cidade) throw new Error("Informe a cidade.");
+    const cidadeNorm = normalizar(cidade);
+
+    const { data: cidadesInteresse } = await admin
+      .from("user_cidades_interesse")
+      .select("user_id, cidade")
+      .ilike("cidade", `%${cidade}%`);
+
+    const idsPorInteresse = new Set(
+      (cidadesInteresse || [])
+        .filter((row: any) => normalizar(row.cidade).includes(cidadeNorm))
+        .map((row: any) => String(row.user_id))
+    );
+
+    return todos.filter((u) => idsPorInteresse.has(u.id) || normalizar(u.cidade).includes(cidadeNorm));
   }
 
   return todos;
 }
 
-async function buscarUserIdsPorDestino(admin: SupabaseClient, destino: Destino, cidade?: string | null, userIdAlvo?: string | null) {
-  const ids = new Set<string>();
-
-  if (destino === "usuario") {
-    if (!userIdAlvo || !isUuid(userIdAlvo)) throw new Error("Selecione um usuário válido.");
-    const { data, error } = await admin.auth.admin.getUserById(userIdAlvo);
-    if (error || !data?.user) throw new Error("Usuário não encontrado.");
-    ids.add(userIdAlvo);
-    return [...ids];
-  }
-
-  if (destino === "todos") {
-    const usuarios = await listarUsuariosAuth(admin);
-    usuarios.forEach((u) => { if (u.id) ids.add(u.id); });
-    const { data: posts } = await admin.from("feed_posts").select("user_id").limit(5000);
-    (posts || []).forEach((p: { user_id?: string | null }) => { if (p.user_id) ids.add(p.user_id); });
-    return [...ids];
-  }
-
-  const termo = normalizarTexto(cidade || "");
-  if (!termo) throw new Error("Informe a cidade.");
-
-  const { data: cidadesInteresse } = await admin
-    .from("user_cidades_interesse")
-    .select("user_id, cidade")
-    .ilike("cidade", `%${cidade}%`)
-    .limit(5000);
-
-  (cidadesInteresse || []).forEach((c: { user_id?: string | null }) => {
-    if (c.user_id) ids.add(c.user_id);
-  });
-
-  const usuarios = await listarUsuariosAuth(admin);
-  usuarios.forEach((u) => {
-    const cidadeMeta = normalizarTexto(extrairCidadeMeta(u.user_metadata));
-    if (cidadeMeta && cidadeMeta.includes(termo)) ids.add(u.id);
-  });
-
-  return [...ids];
-}
-
-function prepararLink(link: string | null) {
+function limparLink(link: string | null) {
   if (!link) return null;
-  const l = link.trim();
-  if (!l) return null;
-  if (l.startsWith("/") || l.startsWith("https://") || l.startsWith("http://")) return l;
-  return `/${l}`;
-}
-
-export async function GET(req: Request): Promise<NextResponse> {
-  const auth = await verificarAdmin();
-  if (auth.error) return auth.error;
-
-  const admin = criarAdminClient();
-  if (!admin) return json({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada na Vercel." }, { status: 500 });
-
-  const url = new URL(req.url);
-  const destino = (url.searchParams.get("destino") || "todos") as Destino;
-  const cidade = url.searchParams.get("cidade");
-  const userId = url.searchParams.get("user_id");
-  if (!["todos", "cidade", "usuario"].includes(destino)) return json({ error: "Destino inválido." }, { status: 400 });
-
-  try {
-    const ids = await buscarUserIdsPorDestino(admin, destino, cidade, userId);
-    return json({ success: true, total: ids.length, destino });
-  } catch (e) {
-    return json({ error: e instanceof Error ? e.message : "Erro ao calcular destinatários." }, { status: 400 });
-  }
+  if (link.startsWith("/")) return link;
+  if (link.startsWith("http://") || link.startsWith("https://")) return link;
+  return `/${link}`;
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
   const auth = await verificarAdmin();
-  if (auth.error) return auth.error;
+  if (auth.erro) return auth.erro;
 
-  const admin = criarAdminClient();
-  if (!admin) return json({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada na Vercel." }, { status: 500 });
-
-  const b = await req.json();
-  const titulo = String(b.titulo ?? "").trim().slice(0, 90);
-  const corpo = String(b.corpo ?? "").trim().slice(0, 600);
-  const destino = String(b.destino ?? "todos") as Destino;
-  const cidade = b.cidade ? String(b.cidade).trim() : null;
-  const userIdAlvo = b.user_id ? String(b.user_id).trim() : null;
-  const link = prepararLink(b.link ? String(b.link) : null);
-
-  if (!titulo) return json({ error: "Título obrigatório." }, { status: 400 });
-  if (!["todos", "cidade", "usuario"].includes(destino)) return json({ error: "Destino inválido." }, { status: 400 });
-
-  let userIds: string[] = [];
   try {
-    userIds = await buscarUserIdsPorDestino(admin, destino, cidade, userIdAlvo);
-  } catch (e) {
-    return json({ error: e instanceof Error ? e.message : "Erro ao buscar destinatários." }, { status: 400 });
+    const body = await req.json();
+    const modo = texto(body.modo || "enviar");
+    const titulo = texto(body.titulo).slice(0, 90);
+    const corpo = texto(body.corpo).slice(0, 600);
+    const destino = texto(body.destino || "todos");
+    const cidade = body.cidade ? texto(body.cidade) : null;
+    const userIdAlvo = body.user_id ? texto(body.user_id) : null;
+    const link = limparLink(body.link ? texto(body.link) : null);
+
+    if (modo !== "preview" && !titulo) return json({ error: "Título obrigatório." }, { status: 400 });
+    if (!["todos", "cidade", "usuario"].includes(destino)) return json({ error: "Destino inválido." }, { status: 400 });
+
+    const destinatarios = deduplicar(await resolverDestinatarios(auth.admin, destino, cidade, userIdAlvo));
+
+    if (modo === "preview") {
+      return json({
+        success: true,
+        total: destinatarios.length,
+        usuarios: destinatarios.slice(0, 10),
+      });
+    }
+
+    if (destinatarios.length === 0) {
+      return json({ error: "Nenhum destinatário encontrado para esse filtro." }, { status: 400 });
+    }
+
+    const notificacoes = destinatarios.map((u) => ({
+      user_id: u.id,
+      tipo: "mensagem_admin",
+      titulo,
+      corpo: corpo || null,
+      link,
+      ator_id: auth.user?.id || null,
+      ator_nome: "Moda Run",
+      ator_avatar: null,
+      lida: false,
+    }));
+
+    const tamanhoLote = 500;
+    let enviadas = 0;
+    for (let i = 0; i < notificacoes.length; i += tamanhoLote) {
+      const lote = notificacoes.slice(i, i + tamanhoLote);
+      const { error } = await auth.admin.from("notificacoes").insert(lote as never);
+      if (error) throw new Error(error.message);
+      enviadas += lote.length;
+    }
+
+    return json({ success: true, enviadas, destino });
+  } catch (e: any) {
+    return json({ error: e?.message || "Erro ao enviar notificação." }, { status: 500 });
   }
-
-  userIds = [...new Set(userIds)].filter(Boolean);
-  if (userIds.length === 0) return json({ success: true, enviadas: 0, destino, mensagem: "Nenhum destinatário encontrado." });
-
-  const base = { tipo: "mensagem_admin", titulo, corpo: corpo || null, link, ator_nome: "Moda Run", ator_avatar: null, post_id: null, lida: false };
-  let enviadas = 0;
-  const tamanhoLote = 500;
-
-  for (let i = 0; i < userIds.length; i += tamanhoLote) {
-    const lote = userIds.slice(i, i + tamanhoLote).map((uid) => ({ ...base, user_id: uid }));
-    const { error } = await admin.from("notificacoes").insert(lote as never);
-    if (error) return json({ error: error.message, enviadas }, { status: 500 });
-    enviadas += lote.length;
-  }
-
-  return json({ success: true, enviadas, destino });
 }

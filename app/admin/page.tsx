@@ -1816,105 +1816,175 @@ function chaveEventoLocal(evento: { nome: string; cidade: string; estado: string
 
 
 function AbaMensagens(): React.JSX.Element {
-  type UsuarioBusca = { user_id: string; autor_nome: string | null; autor_email: string | null; autor_avatar: string | null };
+  type UsuarioBusca = { id: string; nome: string; email?: string | null; avatar?: string | null };
+  type PreviewDestino = { total: number; usuarios?: UsuarioBusca[] };
 
   const [titulo, setTitulo] = React.useState("");
   const [corpo, setCorpo] = React.useState("");
-  const [destino, setDestino] = React.useState<"todos"|"cidade"|"usuario">("todos");
+  const [destino, setDestino] = React.useState<"todos" | "cidade" | "usuario">("todos");
   const [cidade, setCidade] = React.useState("");
-  const [userId, setUserId] = React.useState("");
-  const [buscaUsuario, setBuscaUsuario] = React.useState("");
-  const [usuarios, setUsuarios] = React.useState<UsuarioBusca[]>([]);
-  const [usuarioSelecionado, setUsuarioSelecionado] = React.useState<UsuarioBusca | null>(null);
-  const [buscando, setBuscando] = React.useState(false);
+  const [userIdManual, setUserIdManual] = React.useState("");
   const [link, setLink] = React.useState("");
+  const [buscaUsuario, setBuscaUsuario] = React.useState("");
+  const [usuariosEncontrados, setUsuariosEncontrados] = React.useState<UsuarioBusca[]>([]);
+  const [usuarioSelecionado, setUsuarioSelecionado] = React.useState<UsuarioBusca | null>(null);
+  const [buscandoUsuario, setBuscandoUsuario] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
-  const [estimando, setEstimando] = React.useState(false);
-  const [estimativa, setEstimativa] = React.useState<number | null>(null);
-  const [resultado, setResultado] = React.useState<{ enviadas: number } | null>(null);
+  const [calculando, setCalculando] = React.useState(false);
+  const [preview, setPreview] = React.useState<PreviewDestino | null>(null);
+  const [resultado, setResultado] = React.useState<{ enviadas: number; destino?: string } | null>(null);
   const [erro, setErro] = React.useState("");
 
-  const inp2 = { background:"#21262D", border:"1px solid rgba(92,200,0,0.2)", color:"#E6EDF3", borderRadius:"12px", padding:"10px 14px", fontSize:"14px", outline:"none", width:"100%" } as React.CSSProperties;
-
-  function limparFeedback() { setErro(""); setResultado(null); setEstimativa(null); }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const usuarioAlvoId = usuarioSelecionado?.id || userIdManual.trim();
 
   React.useEffect(() => {
     if (destino !== "usuario") return;
     const termo = buscaUsuario.trim();
-    if (termo.length < 2) { setUsuarios([]); return; }
+    setResultado(null);
 
-    let cancelado = false;
-    const timer = window.setTimeout(async () => {
-      setBuscando(true);
+    if (termo.length < 2) {
+      setUsuariosEncontrados([]);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
       try {
-        const res = await fetch(`/api/usuarios?q=${encodeURIComponent(termo)}`, { credentials: "include" });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelado) setUsuarios(data.usuarios || []);
+        setBuscandoUsuario(true);
+        const res = await fetch(`/api/admin/mensagem?q=${encodeURIComponent(termo)}`, {
+          credentials: "include",
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        const data = await res.json();
+        if (res.ok) setUsuariosEncontrados(data.usuarios || []);
       } catch {
-        if (!cancelado) setUsuarios([]);
+        if (!ctrl.signal.aborted) setUsuariosEncontrados([]);
       } finally {
-        if (!cancelado) setBuscando(false);
+        if (!ctrl.signal.aborted) setBuscandoUsuario(false);
       }
     }, 350);
 
-    return () => { cancelado = true; window.clearTimeout(timer); };
+    return () => {
+      window.clearTimeout(t);
+      ctrl.abort();
+    };
   }, [buscaUsuario, destino]);
 
-  async function calcularDestinatarios() {
-    setErro(""); setResultado(null);
-    if (destino === "cidade" && !cidade.trim()) { setErro("Informe a cidade."); return; }
-    if (destino === "usuario" && !userId.trim()) { setErro("Selecione um usuário ou informe o UUID."); return; }
+  function selecionarUsuario(u: UsuarioBusca) {
+    setUsuarioSelecionado(u);
+    setUserIdManual(u.id);
+    setBuscaUsuario(u.nome || u.email || u.id);
+    setUsuariosEncontrados([]);
+    setPreview(null);
+    setErro("");
+  }
 
-    setEstimando(true);
-    try {
-      const params = new URLSearchParams({ destino });
-      if (cidade.trim()) params.set("cidade", cidade.trim());
-      if (userId.trim()) params.set("user_id", userId.trim());
-      const res = await fetch(`/api/admin/mensagem?${params.toString()}`, { credentials: "include" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setErro(data.error || "Não foi possível calcular os destinatários.");
-      else setEstimativa(data.total || 0);
-    } finally { setEstimando(false); }
+  function limparUsuario() {
+    setUsuarioSelecionado(null);
+    setUserIdManual("");
+    setBuscaUsuario("");
+    setUsuariosEncontrados([]);
+    setPreview(null);
+  }
+
+  function validarFormulario(previewMode = false) {
+    if (!previewMode && !titulo.trim()) return "Título obrigatório.";
+    if (destino === "cidade" && !cidade.trim()) return "Informe a cidade dos destinatários.";
+    if (destino === "usuario" && !usuarioAlvoId) return "Selecione um usuário na busca ou informe um UUID manual.";
+    if (destino === "usuario" && !uuidRegex.test(usuarioAlvoId)) return "O UUID do usuário selecionado é inválido.";
+    return "";
+  }
+
+  async function chamarApi(previewMode = false) {
+    const erroValidacao = validarFormulario(previewMode);
+    if (erroValidacao) {
+      setErro(erroValidacao);
+      return null;
+    }
+
+    setErro("");
+    setResultado(null);
+    const payload = {
+      modo: previewMode ? "preview" : "enviar",
+      titulo: titulo.trim(),
+      corpo: corpo.trim(),
+      destino,
+      cidade: cidade.trim() || null,
+      user_id: destino === "usuario" ? usuarioAlvoId : null,
+      link: link.trim() || null,
+    };
+
+    const res = await fetch("/api/admin/mensagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setErro(data.error || "Erro ao processar mensagem.");
+      return null;
+    }
+    return data;
+  }
+
+  async function calcularDestinatarios() {
+    setCalculando(true);
+    const data = await chamarApi(true);
+    if (data) setPreview({ total: data.total || 0, usuarios: data.usuarios || [] });
+    setCalculando(false);
   }
 
   async function enviar() {
-    if (!titulo.trim()) { setErro("Título obrigatório."); return; }
-    if (destino === "cidade" && !cidade.trim()) { setErro("Informe a cidade."); return; }
-    if (destino === "usuario" && !userId.trim()) { setErro("Selecione um usuário ou informe o UUID."); return; }
+    const dataPreview = preview || await chamarApi(true);
+    if (!dataPreview) return;
 
-    const alvo = destino === "todos" ? "todos os usuários" : destino === "cidade" ? `usuários de ${cidade.trim()}` : (usuarioSelecionado?.autor_nome || userId.trim());
-    if (!window.confirm(`Enviar esta mensagem para ${alvo}?`)) return;
+    const total = dataPreview.total ?? 0;
+    if (total <= 0) {
+      setErro("Nenhum destinatário encontrado para esse filtro.");
+      return;
+    }
 
-    setEnviando(true); setErro(""); setResultado(null);
-    const res = await fetch("/api/admin/mensagem", {
-      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ titulo: titulo.trim(), corpo: corpo.trim(), destino, cidade: cidade.trim() || null, user_id: userId.trim() || null, link: link.trim() || null }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) setErro(data.error || "Erro ao enviar.");
-    else { setResultado(data); setEstimativa(data.enviadas || 0); }
+    const ok = window.confirm(`Enviar esta notificação para ${total} usuário(s)?`);
+    if (!ok) return;
+
+    setEnviando(true);
+    const data = await chamarApi(false);
+    if (data) {
+      setResultado({ enviadas: data.enviadas || 0, destino: data.destino });
+      setPreview(null);
+      if ((data.enviadas || 0) > 0) {
+        setTitulo("");
+        setCorpo("");
+        setLink("");
+      }
+    }
     setEnviando(false);
   }
 
-  function selecionarUsuario(u: UsuarioBusca) {
-    setUsuarioSelecionado(u); setUserId(u.user_id); setBuscaUsuario(u.autor_nome || u.autor_email || u.user_id); setUsuarios([]); limparFeedback();
-  }
+  const inp2 = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "10px 14px", fontSize: "14px", outline: "none", width: "100%" } as React.CSSProperties;
 
   return (
     <div className="space-y-5">
       <div className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-4">
           <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
-          <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>ENVIAR MENSAGEM DO APP</h2>
+          <div>
+            <h2 className="font-black text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>ENVIAR MENSAGEM DO APP</h2>
+            <p className="text-xs" style={{ color: "#8B949E" }}>Use para ofertas, avisos, chamadas para corrida, novidades da loja e comunicados importantes.</p>
+          </div>
         </div>
-        <p className="text-sm mb-5" style={{ color: "#8B949E" }}>Envie ofertas, avisos e comunicados. A mensagem aparece no sino de notificações dos usuários.</p>
 
         <div className="space-y-4">
           <div>
             <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>DESTINO</label>
             <div className="grid grid-cols-3 gap-2">
-              {(["todos","cidade","usuario"] as const).map(d => (
-                <button key={d} type="button" onClick={() => { setDestino(d); limparFeedback(); }} className="rounded-xl py-2 text-xs font-black transition-all"
+              {(["todos", "cidade", "usuario"] as const).map(d => (
+                <button key={d} type="button" onClick={() => { setDestino(d); setPreview(null); setResultado(null); setErro(""); }}
+                  className="rounded-xl py-2 text-xs font-black transition-all"
                   style={{ fontFamily: "'Barlow Condensed', sans-serif", background: destino === d ? "rgba(92,200,0,0.15)" : "#21262D", color: destino === d ? "#5CC800" : "#8B949E", border: destino === d ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.1)" }}>
                   {d === "todos" ? "TODOS" : d === "cidade" ? "CIDADE" : "USUÁRIO"}
                 </button>
@@ -1925,46 +1995,97 @@ function AbaMensagens(): React.JSX.Element {
           {destino === "cidade" && (
             <div>
               <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>CIDADE</label>
-              <input value={cidade} onChange={e => { setCidade(e.target.value); limparFeedback(); }} placeholder="Ex: Tucuruí" style={inp2} />
-              <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Considera cidades de interesse e cidade salva no cadastro, quando existir.</p>
+              <input value={cidade} onChange={e => { setCidade(e.target.value); setPreview(null); }} placeholder="Ex: Tucuruí" style={inp2} />
+              <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Serão considerados usuários com interesse nessa cidade e usuários com cidade salva no cadastro.</p>
             </div>
           )}
 
           {destino === "usuario" && (
-            <div className="space-y-2">
-              <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>BUSCAR USUÁRIO</label>
-              <input value={buscaUsuario} onChange={e => { setBuscaUsuario(e.target.value); setUsuarioSelecionado(null); setUserId(""); limparFeedback(); }} placeholder="Digite nome ou e-mail" style={inp2} />
-              {buscando && <p className="text-xs" style={{ color: "#8B949E" }}>Buscando...</p>}
-              {usuarios.length > 0 && (
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.18)", background: "#0D1117" }}>
-                  {usuarios.map(u => (
-                    <button key={u.user_id} type="button" onClick={() => selecionarUsuario(u)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/5">
-                      <div className="h-9 w-9 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "rgba(92,200,0,0.16)", color: "#5CC800" }}>
-                        {u.autor_avatar ? <img src={u.autor_avatar} alt="" className="h-full w-full object-cover" /> : <span className="font-black">{(u.autor_nome || u.autor_email || "U").slice(0,1).toUpperCase()}</span>}
-                      </div>
-                      <div className="min-w-0"><p className="text-sm font-black truncate" style={{ color: "#E6EDF3" }}>{u.autor_nome || "Corredor"}</p><p className="text-xs truncate" style={{ color: "#8B949E" }}>{u.autor_email || u.user_id}</p></div>
-                    </button>
-                  ))}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>BUSCAR USUÁRIO</label>
+                <input value={buscaUsuario} onChange={e => { setBuscaUsuario(e.target.value); setUsuarioSelecionado(null); setPreview(null); }} placeholder="Digite nome ou e-mail" style={inp2} />
+                {buscandoUsuario && <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Buscando usuários...</p>}
+                {usuariosEncontrados.length > 0 && (
+                  <div className="mt-2 rounded-xl overflow-hidden" style={{ border: "1px solid rgba(92,200,0,0.2)", background: "#0D1117" }}>
+                    {usuariosEncontrados.map(u => (
+                      <button key={u.id} type="button" onClick={() => selecionarUsuario(u)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/5">
+                        <div className="h-9 w-9 rounded-full overflow-hidden flex items-center justify-center font-black" style={{ background: "rgba(92,200,0,0.18)", color: "#5CC800" }}>
+                          {u.avatar ? <img src={u.avatar} alt="" className="h-full w-full object-cover" /> : (u.nome || "U").slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-black truncate" style={{ color: "#E6EDF3" }}>{u.nome}</p>
+                          {u.email && <p className="text-xs truncate" style={{ color: "#8B949E" }}>{u.email}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>OU UUID MANUAL</label>
+                <input value={userIdManual} onChange={e => { setUserIdManual(e.target.value); setUsuarioSelecionado(null); setPreview(null); }} placeholder="UUID do usuário" style={inp2} />
+              </div>
+
+              {usuarioSelecionado && (
+                <div className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.35)", color: "#E6EDF3" }}>
+                  <span>Selecionado: <strong>{usuarioSelecionado.nome}</strong></span>
+                  <button type="button" onClick={limparUsuario} className="text-xs font-black" style={{ color: "#FF6B00" }}>TROCAR</button>
                 </div>
               )}
-              <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>OU UUID MANUAL</label>
-              <input value={userId} onChange={e => { setUserId(e.target.value); setUsuarioSelecionado(null); limparFeedback(); }} placeholder="UUID do usuário" style={inp2} />
-              {usuarioSelecionado && <div className="rounded-xl p-3" style={{ background: "rgba(92,200,0,0.08)", border: "1px solid rgba(92,200,0,0.25)", color: "#E6EDF3" }}>Selecionado: <strong>{usuarioSelecionado.autor_nome || usuarioSelecionado.autor_email}</strong></div>}
             </div>
           )}
 
-          <div><label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TÍTULO *</label><input value={titulo} onChange={e => { setTitulo(e.target.value); limparFeedback(); }} maxLength={90} placeholder="Ex: Nova promoção na loja Moda Run!" style={inp2} /><p className="text-xs mt-1" style={{ color: "#8B949E" }}>{titulo.length}/90 caracteres</p></div>
-          <div><label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MENSAGEM</label><textarea value={corpo} onChange={e => { setCorpo(e.target.value); limparFeedback(); }} maxLength={600} rows={4} placeholder="Detalhes da mensagem, oferta ou aviso..." style={{ ...inp2, resize: "none" }} /><p className="text-xs mt-1" style={{ color: "#8B949E" }}>{corpo.length}/600 caracteres</p></div>
-          <div><label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>LINK INTERNO OU URL (opcional)</label><input value={link} onChange={e => { setLink(e.target.value); limparFeedback(); }} placeholder="Ex: /loja ou /eventos" style={inp2} /></div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button type="button" onClick={calcularDestinatarios} disabled={estimando} className="rounded-xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50" style={{ background: "#21262D", color: "#E6EDF3", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>{estimando ? "CALCULANDO..." : "CALCULAR DESTINATÁRIOS"}</button>
-            <button onClick={enviar} disabled={enviando || !titulo.trim()} className="rounded-xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50" style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>{enviando ? "ENVIANDO..." : "ENVIAR NOTIFICAÇÃO"}</button>
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>TÍTULO *</label>
+            <input value={titulo} onChange={e => setTitulo(e.target.value.slice(0, 90))} placeholder="Ex: Aproveite nossas promoções!" style={inp2} />
+            <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{titulo.length}/90 caracteres</p>
           </div>
 
-          {estimativa !== null && <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}><p className="font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>Destinatários encontrados: <span style={{ color: "#5CC800" }}>{estimativa}</span></p></div>}
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>MENSAGEM</label>
+            <textarea value={corpo} onChange={e => setCorpo(e.target.value.slice(0, 600))} rows={4} placeholder="Detalhes da mensagem..." style={{ ...inp2, resize: "none" }} />
+            <p className="text-xs mt-1" style={{ color: "#8B949E" }}>{corpo.length}/600 caracteres</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-black mb-1.5 block" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>LINK INTERNO OU URL (opcional)</label>
+            <input value={link} onChange={e => setLink(e.target.value)} placeholder="Ex: /loja ou https://modarun.com.br/loja" style={inp2} />
+          </div>
+
+          {preview && (
+            <div className="rounded-xl p-3" style={{ background: "rgba(255,184,0,0.08)", border: "1px solid rgba(255,184,0,0.25)", color: "#E6EDF3" }}>
+              <p className="font-black" style={{ color: "#FFB800", fontFamily: "'Barlow Condensed', sans-serif" }}>DESTINATÁRIOS ENCONTRADOS: {preview.total}</p>
+              {preview.usuarios && preview.usuarios.length > 0 && (
+                <p className="text-xs mt-1" style={{ color: "#8B949E" }}>
+                  Prévia: {preview.usuarios.slice(0, 5).map(u => u.nome || u.email || u.id).join(", ")}{preview.total > 5 ? "..." : ""}
+                </p>
+              )}
+            </div>
+          )}
+
           {erro && <p className="text-xs font-black" style={{ color: "#FF6B00" }}>{erro}</p>}
-          {resultado && <div className="rounded-xl p-3 text-center" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)" }}><p className="font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>Mensagem enviada para {resultado.enviadas} usuário(s)!</p></div>}
+          {resultado && (
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(92,200,0,0.1)", border: "1px solid rgba(92,200,0,0.3)" }}>
+              <p className="font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Mensagem enviada para {resultado.enviadas} usuário(s)!
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-2 md:grid-cols-2">
+            <button type="button" onClick={calcularDestinatarios} disabled={calculando || enviando}
+              className="rounded-xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50"
+              style={{ background: "#21262D", color: "#E6EDF3", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+              {calculando ? "CALCULANDO..." : "CALCULAR DESTINATÁRIOS"}
+            </button>
+            <button type="button" onClick={enviar} disabled={enviando || !titulo.trim()}
+              className="rounded-xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+              {enviando ? "ENVIANDO..." : "ENVIAR NOTIFICAÇÃO"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
