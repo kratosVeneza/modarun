@@ -1,5 +1,75 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+function nomeDoUsuario(user: any): string {
+  const meta = (user?.user_metadata || {}) as Record<string, unknown>;
+  const nome = meta.nome_exibicao || meta.display_name || meta.full_name || meta.name || meta.nome;
+  if (typeof nome === "string" && nome.trim()) return nome.trim();
+  if (user?.email) return String(user.email).split("@")[0];
+  return "Corredor";
+}
+
+function avatarDoUsuario(user: any): string | null {
+  const meta = (user?.user_metadata || {}) as Record<string, unknown>;
+  const avatar = meta.avatar_url || meta.picture || meta.foto_url;
+  return typeof avatar === "string" && avatar.trim() ? avatar.trim() : null;
+}
+
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createServiceClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export async function GET(req: Request): Promise<NextResponse> {
+  const supabase = await createClient();
+  const admin = adminClient();
+  const postId = Number(new URL(req.url).searchParams.get("post_id"));
+
+  if (!Number.isFinite(postId) || postId <= 0) {
+    return NextResponse.json({ error: "post_id inválido." }, { status: 400 });
+  }
+
+  const db: any = admin ?? supabase;
+
+  const { data: curtidas, count, error } = await db
+    .from("feed_curtidas")
+    .select("user_id, created_at", { count: "exact" })
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const ids = [...new Set((curtidas || []).map((c: any) => String(c.user_id)).filter(Boolean))];
+  const usuarios: Record<string, { id: string; nome: string; avatar: string | null }> = {};
+
+  if (admin && ids.length > 0) {
+    await Promise.all(ids.map(async (id) => {
+      const { data } = await admin.auth.admin.getUserById(id);
+      if (data?.user) {
+        usuarios[id] = {
+          id,
+          nome: nomeDoUsuario(data.user),
+          avatar: avatarDoUsuario(data.user),
+        };
+      }
+    }));
+  }
+
+  const lista = (curtidas || []).map((c: any) => ({
+    user_id: String(c.user_id),
+    nome: usuarios[String(c.user_id)]?.nome || "Corredor",
+    avatar: usuarios[String(c.user_id)]?.avatar || null,
+    created_at: c.created_at,
+  }));
+
+  return NextResponse.json({ success: true, total: count ?? lista.length, curtidas: lista });
+}
 
 export async function POST(req: Request): Promise<NextResponse> {
   const supabase = await createClient();

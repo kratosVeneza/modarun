@@ -74,6 +74,35 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   let posts = (data ?? []) as FeedPost[];
 
+  if (posts.length > 0) {
+    const postIds = posts.map((p) => p.id);
+
+    // Recalcula curtidas e comentários a partir das tabelas reais.
+    // Assim o feed não fica dependente de campos antigos/desatualizados da view.
+    const [{ data: todasCurtidas }, { data: todosComentarios }] = await Promise.all([
+      supabase.from("feed_curtidas").select("post_id").in("post_id", postIds),
+      supabase.from("feed_comentarios").select("post_id").in("post_id", postIds).is("resposta_para", null),
+    ]);
+
+    const mapaCurtidas = new Map<number, number>();
+    for (const c of todasCurtidas || []) {
+      const id = Number((c as { post_id: number }).post_id);
+      mapaCurtidas.set(id, (mapaCurtidas.get(id) || 0) + 1);
+    }
+
+    const mapaComentarios = new Map<number, number>();
+    for (const c of todosComentarios || []) {
+      const id = Number((c as { post_id: number }).post_id);
+      mapaComentarios.set(id, (mapaComentarios.get(id) || 0) + 1);
+    }
+
+    posts = posts.map((p) => ({
+      ...p,
+      total_curtidas: mapaCurtidas.get(p.id) ?? Number(p.total_curtidas ?? 0),
+      total_comentarios: mapaComentarios.get(p.id) ?? Number(p.total_comentarios ?? 0),
+    }));
+  }
+
   if (user && posts.length > 0) {
     const postIds = posts.map((p) => p.id);
     const autores = [...new Set(posts.map((p) => p.user_id).filter(Boolean))];

@@ -32,6 +32,13 @@ type Comentario = {
   user_id: string; resposta_para: number | null; total_curtidas: number;
 };
 
+type CurtidaInfo = {
+  user_id: string;
+  nome: string;
+  avatar: string | null;
+  created_at?: string;
+};
+
 const EMOJIS = ["🏃","💪","🔥","👏","🏅","⚡","🎯","😅","🙌","❤️","👊","🚀"];
 type EventoDestaque = { id: number; nome: string; cidade: string; estado: string; data_evento: string; distancia?: string; link_inscricao?: string; destaque?: boolean; };
 type Treino = { id: number; titulo: string; cidade: string; estado: string; data_encontro: string; horario?: string; tipo_treino?: string; km_planejado?: number; distancia?: string; };
@@ -83,7 +90,13 @@ function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avata
   );
 }
 
-function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: number; total: number; usuarioLogado: boolean; userId: string | null }) {
+function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }: {
+  postId: number;
+  total: number;
+  usuarioLogado: boolean;
+  userId: string | null;
+  onTotalChange?: (total: number) => void;
+}) {
   const [aberto, setAberto] = useState(false);
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [totalAtual, setTotalAtual] = useState(total ?? 0);
@@ -95,12 +108,19 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [textoEdit, setTextoEdit] = useState("");
 
+  useEffect(() => {
+    setTotalAtual(total ?? 0);
+  }, [total]);
+
   async function carregar() {
     setCarregando(true);
     const res = await fetch(`/api/feed/comentarios?post_id=${postId}`);
     const data = await res.json();
-    setComentarios(data.comentarios || []);
-    setTotalAtual((data.comentarios || []).filter((c: Comentario) => !c.resposta_para).length);
+    const lista = data.comentarios || [];
+    const totalPrincipais = lista.filter((c: Comentario) => !c.resposta_para).length;
+    setComentarios(lista);
+    setTotalAtual(totalPrincipais);
+    onTotalChange?.(totalPrincipais);
     setCarregando(false);
   }
 
@@ -116,7 +136,13 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
     const data = await res.json();
     if (data.success) {
       setComentarios(prev => [...prev, data.comentario]);
-      setTotalAtual(prev => prev + (respondendoId ? 0 : 1));
+      if (!respondendoId) {
+        setTotalAtual(prev => {
+          const novoTotal = prev + 1;
+          onTotalChange?.(novoTotal);
+          return novoTotal;
+        });
+      }
       setTexto(""); setRespondendoId(null); setMostrarEmojis(false);
     }
     setEnviando(false);
@@ -148,7 +174,11 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
     await fetch(`/api/feed/comentarios?id=${id}&post_id=${postId}`, { method: "DELETE", credentials: "include" });
     setComentarios(prev => {
       const removido = prev.find(c => c.id === id);
-      if (removido && !removido.resposta_para) setTotalAtual(t => Math.max(0, t - 1));
+      if (removido && !removido.resposta_para) setTotalAtual(t => {
+        const novoTotal = Math.max(0, t - 1);
+        onTotalChange?.(novoTotal);
+        return novoTotal;
+      });
       return prev.filter(c => c.id !== id && c.resposta_para !== id);
     });
   }
@@ -225,7 +255,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
       <button onClick={toggle} className="flex items-center gap-1.5 text-sm transition-colors hover:text-green-400"
         style={{ color: aberto ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700 }}>
         <MessageCircle size={16} strokeWidth={2} />
-        {totalAtual > 0 ? totalAtual : ""} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
+{totalAtual} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
       </button>
       {aberto && (
         <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -278,11 +308,107 @@ function CardComentarios({ postId, total, usuarioLogado, userId }: { postId: num
   );
 }
 
+
+function LikesResumo({ postId, total, curtido, onTotalSync }: {
+  postId: number;
+  total: number;
+  curtido: boolean;
+  onTotalSync?: (total: number) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [curtidas, setCurtidas] = useState<CurtidaInfo[]>([]);
+  const [totalReal, setTotalReal] = useState(total);
+
+  useEffect(() => {
+    setTotalReal(total);
+  }, [total]);
+
+  useEffect(() => {
+    if (total > 0) carregarCurtidas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
+
+  async function carregarCurtidas() {
+    setCarregando(true);
+    const res = await fetch(`/api/feed/curtir?post_id=${postId}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      setCurtidas(data.curtidas || []);
+      setTotalReal(Number(data.total ?? 0));
+      onTotalSync?.(Number(data.total ?? 0));
+    }
+    setCarregando(false);
+  }
+
+  async function abrirLista() {
+    setAberto(true);
+    await carregarCurtidas();
+  }
+
+  if (totalReal <= 0) {
+    return (
+      <div className="flex items-center justify-between gap-3 px-1 pb-2 text-xs" style={{ color: "#8B949E" }}>
+        <span>Nenhuma curtida ainda</span>
+      </div>
+    );
+  }
+
+  const nomes = curtidas.slice(0, 2).map(c => c.nome).filter(Boolean);
+  const resumo = nomes.length > 0
+    ? `${nomes.join(", ")}${totalReal > nomes.length ? ` e mais ${totalReal - nomes.length}` : ""}`
+    : `${totalReal} ${totalReal === 1 ? "pessoa curtiu" : "pessoas curtiram"}`;
+
+  return (
+    <div className="px-1 pb-2">
+      <button onClick={abrirLista}
+        className="flex items-center gap-2 text-xs text-left transition-colors hover:text-orange-400"
+        style={{ color: curtido ? "#FF6B00" : "#8B949E" }}>
+        <span className="flex items-center justify-center rounded-full" style={{ width: 18, height: 18, background: "#FF6B00", color: "#fff" }}>♥</span>
+        <span>
+          {curtidas.length > 0 ? resumo : `${totalReal} ${totalReal === 1 ? "curtida" : "curtidas"}`}
+        </span>
+      </button>
+
+      {aberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.65)" }}>
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 className="font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>CURTIDAS</h3>
+              <button onClick={() => setAberto(false)} style={{ color: "#8B949E" }}><X size={18} /></button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-3 space-y-2">
+              {carregando ? (
+                <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: "#5CC800" }} /></div>
+              ) : curtidas.length === 0 ? (
+                <p className="py-6 text-center text-sm" style={{ color: "#8B949E" }}>Nenhuma curtida encontrada.</p>
+              ) : curtidas.map((c) => (
+                <Link key={c.user_id} href={`/perfil/${c.user_id}`} onClick={() => setAberto(false)}
+                  className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/5">
+                  <Avatar nome={c.nome} avatar={c.avatar} email={null} size={36} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black" style={{ color: "#E6EDF3" }}>{c.nome}</p>
+                    <p className="text-xs" style={{ color: "#8B949E" }}>Curtiu esta publicação</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CardPost({ post, usuarioLogado, userId, onDelete }: {
   post: Post; usuarioLogado: boolean; userId: string | null; onDelete: (id: number) => void;
 }) {
   const [curtido, setCurtido] = useState(!!post.curtido_por_mim);
   const [totalCurtidas, setTotalCurtidas] = useState(post.total_curtidas ?? 0);
+  const [totalComentarios, setTotalComentarios] = useState(post.total_comentarios ?? 0);
   const [curtindo, setCurtindo] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [fotoAtiva, setFotoAtiva] = useState(0);
@@ -523,22 +649,41 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 mt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="flex items-center gap-4">
-            <button onClick={toggleCurtida} disabled={!usuarioLogado}
-              className="flex items-center gap-1.5 text-sm font-black transition-all hover:scale-105 disabled:cursor-default"
-              style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
-              {totalCurtidas > 0 && totalCurtidas}
+        <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="flex items-center justify-between gap-3 pb-2 text-xs" style={{ color: "#8B949E" }}>
+            <LikesResumo postId={post.id} total={totalCurtidas} curtido={curtido} onTotalSync={setTotalCurtidas} />
+            <button onClick={() => document.getElementById(`comentarios-${post.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              className="shrink-0 transition-colors hover:text-green-400"
+              style={{ color: totalComentarios > 0 ? "#C9D1D9" : "#8B949E" }}>
+              {totalComentarios} {totalComentarios === 1 ? "comentário" : "comentários"}
             </button>
-            <CardComentarios postId={post.id} total={post.total_comentarios} usuarioLogado={usuarioLogado} userId={userId} />
           </div>
-          <button onClick={compartilhar}
-            className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
-            style={{ color: copiado ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-            <Share2 size={14} strokeWidth={2} />
-            {copiado ? "COPIADO!" : ""}
-          </button>
+
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-4">
+              <button onClick={toggleCurtida} disabled={!usuarioLogado}
+                className="flex items-center gap-1.5 text-sm font-black transition-all hover:scale-105 disabled:cursor-default"
+                style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
+                {curtido ? "CURTIDO" : "CURTIR"}
+              </button>
+              <div id={`comentarios-${post.id}`}>
+                <CardComentarios
+                  postId={post.id}
+                  total={totalComentarios}
+                  usuarioLogado={usuarioLogado}
+                  userId={userId}
+                  onTotalChange={setTotalComentarios}
+                />
+              </div>
+            </div>
+            <button onClick={compartilhar}
+              className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
+              style={{ color: copiado ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              <Share2 size={14} strokeWidth={2} />
+              {copiado ? "COPIADO!" : ""}
+            </button>
+          </div>
         </div>
       </div>
     </article>
