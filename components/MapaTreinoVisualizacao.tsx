@@ -31,26 +31,35 @@ export default function MapaTreinoVisualizacao({ pontoEncontro, rotaCoords }: Pr
 
       const map = L.default.map(containerRef.current!, {
         center: [pontoEncontro.lat, pontoEncontro.lng],
-        zoom: 14,
+        zoom: 15,
         zoomControl: false,
         scrollWheelZoom: false,
       });
 
       mapRef.current = map;
 
-      L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+      // CARTO Voyager — mostra POIs (lojas, mercados, praças) com nomes
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 20,
       }).addTo(map);
 
-      // Marcador ponto de encontro
-      L.default.marker([pontoEncontro.lat, pontoEncontro.lng]).addTo(map);
+      // Marcador ponto de encontro (com estilo Moda Run — verde)
+      const greenIcon = L.default.divIcon({
+        className: "",
+        html: `<div style="width:22px;height:22px;background:#5CC800;border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(92,200,0,0.7);"></div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      L.default.marker([pontoEncontro.lat, pontoEncontro.lng], { icon: greenIcon }).addTo(map);
 
       // Marcadores da rota
       const iconeRota = L.default.divIcon({
         className: "",
-        html: `<div style="width:12px;height:12px;background:#2563eb;border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
+        html: `<div style="width:14px;height:14px;background:#FF6B00;border:2px solid white;border-radius:50%;box-shadow:0 0 8px rgba(255,107,0,0.6);"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
       });
 
       rotaCoords.forEach((p) => {
@@ -63,7 +72,11 @@ export default function MapaTreinoVisualizacao({ pontoEncontro, rotaCoords }: Pr
           [pontoEncontro.lat, pontoEncontro.lng],
           ...rotaCoords.map((p) => [p.lat, p.lng] as [number, number]),
         ];
-        L.default.polyline(pontos, { color: "#f97316", weight: 4 }).addTo(map);
+        L.default.polyline(pontos, { color: "#5CC800", weight: 4, opacity: 0.9 }).addTo(map);
+
+        // Ajusta viewport para mostrar toda a rota
+        const bounds = L.default.latLngBounds(pontos);
+        map.fitBounds(bounds, { padding: [30, 30] });
       }
 
       // Ajusta tamanho
@@ -84,7 +97,7 @@ export default function MapaTreinoVisualizacao({ pontoEncontro, rotaCoords }: Pr
     <div
       ref={containerRef}
       style={{ height: "300px", width: "100%" }}
-      className="rounded-2xl overflow-hidden border border-slate-200"
+      className="rounded-2xl overflow-hidden"
     />
   );
 }
