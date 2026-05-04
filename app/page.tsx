@@ -29,7 +29,7 @@ type Noticia = { titulo: string; url: string; fonte: string; imagem: string | nu
 type Comentario = {
   id: number; texto: string; created_at: string;
   autor_nome: string; autor_avatar: string | null;
-  user_id: string; resposta_para: number | null; total_curtidas: number;
+  user_id: string; resposta_para: number | null; total_curtidas: number; curtido_por_mim?: boolean;
 };
 
 type CurtidaInfo = {
@@ -107,15 +107,41 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
   const [respondendoId, setRespondendoId] = useState<number | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [textoEdit, setTextoEdit] = useState("");
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionResults, setMentionResults] = useState<{ user_id: string; autor_nome: string | null; autor_avatar: string | null; autor_email: string | null }[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mencoesSelecionadas, setMencoesSelecionadas] = useState<{ user_id: string; nome: string }[]>([]);
+  const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setTotalAtual(total ?? 0);
   }, [total]);
 
+  useEffect(() => {
+    if (!mentionQuery || mentionQuery.length < 2) {
+      setMentionResults([]);
+      return;
+    }
+    if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+    mentionTimerRef.current = setTimeout(async () => {
+      setMentionLoading(true);
+      try {
+        const res = await fetch(`/api/usuarios?q=${encodeURIComponent(mentionQuery)}`, { credentials: "include", cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        setMentionResults(data.usuarios || []);
+      } finally {
+        setMentionLoading(false);
+      }
+    }, 250);
+    return () => {
+      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
+    };
+  }, [mentionQuery]);
+
   async function carregar() {
     setCarregando(true);
-    const res = await fetch(`/api/feed/comentarios?post_id=${postId}`);
-    const data = await res.json();
+    const res = await fetch(`/api/feed/comentarios?post_id=${postId}`, { credentials: "include", cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
     const lista = data.comentarios || [];
     const totalPrincipais = lista.filter((c: Comentario) => !c.resposta_para).length;
     setComentarios(lista);
@@ -126,14 +152,53 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
 
   function toggle() { if (!aberto) carregar(); setAberto(v => !v); }
 
+  function handleUsuario(u: { autor_nome: string | null; autor_email: string | null }) {
+    return String(u.autor_nome || u.autor_email?.split("@")[0] || "corredor")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]/g, ".")
+      .replace(/\.+/g, ".")
+      .replace(/^\.|\.$/g, "")
+      .slice(0, 30)
+      .toLowerCase();
+  }
+
+  function detectarMention(valor: string) {
+    const antesDoCursor = valor;
+    const match = antesDoCursor.match(/(?:^|\s)@([\p{L}\p{N}._-]{1,30})$/u);
+    setMentionQuery(match?.[1] || "");
+  }
+
+  function alterarTexto(valor: string) {
+    setTexto(valor);
+    detectarMention(valor);
+  }
+
+  function inserirMencao(u: { user_id: string; autor_nome: string | null; autor_email: string | null; autor_avatar: string | null }) {
+    const handle = handleUsuario(u);
+    const nome = u.autor_nome || u.autor_email?.split("@")[0] || handle;
+    setTexto(prev => {
+      if (/(^|\s)@[\p{L}\p{N}._-]{1,30}$/u.test(prev)) {
+        return prev.replace(/(^|\s)@[\p{L}\p{N}._-]{1,30}$/u, `$1@${handle} `);
+      }
+      return `${prev}${prev.endsWith(" ") || prev.length === 0 ? "" : " "}@${handle} `;
+    });
+    setMencoesSelecionadas(prev => {
+      if (prev.some(m => m.user_id === u.user_id)) return prev;
+      return [...prev, { user_id: u.user_id, nome }];
+    });
+    setMentionQuery("");
+    setMentionResults([]);
+  }
+
   async function enviar() {
     if (!texto.trim() || enviando) return;
     setEnviando(true);
     const res = await fetch("/api/feed/comentarios", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId }),
+      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId, mencoes: mencoesSelecionadas }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.success) {
       setComentarios(prev => [...prev, data.comentario]);
       if (!respondendoId) {
@@ -143,19 +208,35 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
           return novoTotal;
         });
       }
-      setTexto(""); setRespondendoId(null); setMostrarEmojis(false);
+      setTexto(""); setRespondendoId(null); setMostrarEmojis(false); setMentionQuery(""); setMentionResults([]); setMencoesSelecionadas([]);
     }
     setEnviando(false);
   }
 
   async function curtirComentario(id: number, curtido: boolean) {
+    setComentarios(prev => prev.map(c => c.id === id ? {
+      ...c,
+      curtido_por_mim: !curtido,
+      total_curtidas: Math.max(0, (c.total_curtidas || 0) + (curtido ? -1 : 1)),
+    } : c));
+
     const res = await fetch("/api/feed/comentarios", {
       method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ acao: curtido ? "descurtir" : "curtir", id }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.success) {
-      setComentarios(prev => prev.map(c => c.id === id ? { ...c, total_curtidas: data.total_curtidas } : c));
+      setComentarios(prev => prev.map(c => c.id === id ? {
+        ...c,
+        total_curtidas: Number(data.total_curtidas ?? 0),
+        curtido_por_mim: !!data.curtido,
+      } : c));
+    } else {
+      setComentarios(prev => prev.map(c => c.id === id ? {
+        ...c,
+        curtido_por_mim: curtido,
+        total_curtidas: Math.max(0, (c.total_curtidas || 0) + (curtido ? 1 : -1)),
+      } : c));
     }
   }
 
@@ -186,43 +267,61 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
   const principais = comentarios.filter(c => !c.resposta_para);
   const respostas = (id: number) => comentarios.filter(c => c.resposta_para === id);
 
+  function renderTextoComMencoes(valor: string) {
+    const partes = valor.split(/(@[\p{L}\p{N}._-]+)/gu);
+    return partes.map((parte, i) => {
+      if (parte.startsWith("@")) {
+        return <span key={`${parte}-${i}`} className="font-bold" style={{ color: "#5CC800" }}>{parte}</span>;
+      }
+      return <React.Fragment key={`${parte}-${i}`}>{parte}</React.Fragment>;
+    });
+  }
+
   function renderComentario(c: Comentario, isResposta = false) {
+    const listaRespostas = respostas(c.id);
+    const curtidoComentario = !!c.curtido_por_mim;
+
     return (
-      <div key={c.id} className={`flex gap-2 ${isResposta ? "ml-8 mt-2" : ""}`}>
-        {c.autor_avatar ? (
-          <img src={c.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28 }} />
-        ) : (
-          <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
-            style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-            {c.autor_nome[0]?.toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1">
-          <div className="rounded-xl px-3 py-2" style={{ background: "#21262D" }}>
-            <span className="text-xs font-black mr-2" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</span>
+      <div key={c.id} className={`flex min-w-0 gap-2 ${isResposta ? "ml-5 sm:ml-8 mt-2" : ""}`}>
+        <Link href={`/perfil/${c.user_id}`} className="shrink-0">
+          {c.autor_avatar ? (
+            <img src={c.autor_avatar} alt="" className="rounded-full object-cover" style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28 }} />
+          ) : (
+            <div className="rounded-full flex items-center justify-center font-black text-xs"
+              style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              {c.autor_nome?.[0]?.toUpperCase() || "?"}
+            </div>
+          )}
+        </Link>
+        <div className="min-w-0 flex-1">
+          <div className="inline-block max-w-full rounded-xl px-3 py-2 align-top" style={{ background: "#21262D" }}>
+            <Link href={`/perfil/${c.user_id}`} className="text-xs font-black mr-2 hover:underline" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</Link>
             {editandoId === c.id ? (
-              <div className="mt-1 flex gap-2">
+              <div className="mt-1 flex min-w-0 flex-col gap-2 sm:flex-row">
                 <input value={textoEdit} onChange={e => setTextoEdit(e.target.value)}
-                  className="flex-1 rounded-lg px-2 py-1 text-sm outline-none"
+                  className="min-w-0 flex-1 rounded-lg px-2 py-1 text-sm outline-none"
                   style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.3)", color: "#E6EDF3" }} />
-                <button onClick={() => editarComentario(c.id)}
-                  className="text-xs font-black px-2 py-1 rounded-lg"
-                  style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>OK</button>
-                <button onClick={() => setEditandoId(null)}
-                  className="text-xs px-2 py-1 rounded-lg" style={{ color: "#8B949E" }}>✕</button>
+                <div className="flex gap-2">
+                  <button onClick={() => editarComentario(c.id)}
+                    className="text-xs font-black px-3 py-1 rounded-lg"
+                    style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>OK</button>
+                  <button onClick={() => setEditandoId(null)}
+                    className="text-xs px-3 py-1 rounded-lg" style={{ color: "#8B949E" }}>✕</button>
+                </div>
               </div>
             ) : (
-              <span className="text-sm" style={{ color: "#C9D1D9" }}>{c.texto}</span>
+              <span className="break-words text-sm leading-relaxed" style={{ color: "#C9D1D9" }}>{renderTextoComMencoes(c.texto)}</span>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 px-1">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
             <span className="text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
             {usuarioLogado && (
               <>
-                <button onClick={() => curtirComentario(c.id, false)}
+                <button onClick={() => curtirComentario(c.id, curtidoComentario)}
                   className="flex items-center gap-1 text-xs font-black transition-colors hover:opacity-70"
-                  style={{ color: c.total_curtidas > 0 ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  ❤️ {c.total_curtidas > 0 && c.total_curtidas}
+                  style={{ color: curtidoComentario ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <span>{curtidoComentario ? "❤️" : "♡"}</span>
+                  {c.total_curtidas > 0 && <span>{c.total_curtidas}</span>}
                 </button>
                 {!isResposta && (
                   <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
@@ -244,21 +343,26 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
               </>
             )}
           </div>
-          {respostas(c.id).map(r => renderComentario(r, true))}
+          {!isResposta && listaRespostas.length > 0 && (
+            <div className="ml-1 mt-1 text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+              ↳ {listaRespostas.length} {listaRespostas.length === 1 ? "resposta" : "respostas"}
+            </div>
+          )}
+          {listaRespostas.map(r => renderComentario(r, true))}
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="min-w-0 w-full">
       <button onClick={toggle} className="flex items-center gap-1.5 text-sm transition-colors hover:text-green-400"
         style={{ color: aberto ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700 }}>
         <MessageCircle size={16} strokeWidth={2} />
-{totalAtual} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
+        {totalAtual} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
       </button>
       {aberto && (
-        <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+        <div className="mt-3 min-w-0 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {carregando ? (
             <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin" style={{ color: "#5CC800" }} /></div>
           ) : principais.length === 0 ? (
@@ -271,10 +375,26 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
             <div className="space-y-2 pt-1">
               {respondendoId && (
                 <div className="flex items-center gap-2 px-2 py-1 rounded-lg" style={{ background: "rgba(92,200,0,0.08)" }}>
-                  <span className="text-xs" style={{ color: "#5CC800" }}>
+                  <span className="min-w-0 flex-1 truncate text-xs" style={{ color: "#5CC800" }}>
                     ↩ Respondendo a {comentarios.find(c => c.id === respondendoId)?.autor_nome}
                   </span>
                   <button onClick={() => setRespondendoId(null)} style={{ color: "#8B949E" }}><X size={12} /></button>
+                </div>
+              )}
+              {mentionQuery && (mentionResults.length > 0 || mentionLoading) && (
+                <div className="rounded-xl p-2 shadow-xl" style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.25)" }}>
+                  {mentionLoading ? (
+                    <div className="flex items-center gap-2 px-2 py-2 text-xs" style={{ color: "#8B949E" }}><Loader2 size={12} className="animate-spin" /> Buscando usuários...</div>
+                  ) : mentionResults.slice(0, 5).map(u => (
+                    <button key={u.user_id} type="button" onClick={() => inserirMencao(u)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/5">
+                      <Avatar nome={u.autor_nome} avatar={u.autor_avatar} email={u.autor_email} size={28} />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-black" style={{ color: "#E6EDF3" }}>{u.autor_nome || u.autor_email?.split("@")[0] || "Corredor"}</p>
+                        <p className="truncate text-[11px]" style={{ color: "#5CC800" }}>@{handleUsuario(u)}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               )}
               {mostrarEmojis && (
@@ -285,21 +405,22 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex min-w-0 gap-2">
                 <button onClick={() => setMostrarEmojis(v => !v)}
-                  className="rounded-xl px-2 text-lg transition-all hover:scale-110"
+                  className="shrink-0 rounded-xl px-2 text-lg transition-all hover:scale-110"
                   style={{ background: mostrarEmojis ? "rgba(92,200,0,0.15)" : "#21262D" }}>😊</button>
-                <input value={texto} onChange={e => setTexto(e.target.value)}
+                <input value={texto} onChange={e => alterarTexto(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviar()}
-                  placeholder={respondendoId ? "Escreva uma resposta..." : "Escreva um comentário..."}
-                  className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                  placeholder={respondendoId ? "Escreva uma resposta... Use @ para marcar" : "Escreva um comentário... Use @ para marcar"}
+                  className="min-w-0 flex-1 rounded-xl px-3 py-2 text-sm outline-none"
                   style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
                 <button onClick={enviar} disabled={!texto.trim() || enviando}
-                  className="flex items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
+                  className="flex shrink-0 items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
                   style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
                   {enviando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
                 </button>
               </div>
+              <p className="px-1 text-[11px]" style={{ color: "#8B949E" }}>Digite @ e escolha um corredor para marcar no comentário.</p>
             </div>
           )}
         </div>
@@ -307,7 +428,6 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
     </div>
   );
 }
-
 
 function LikesResumo({ postId, total, curtido, onTotalSync }: {
   postId: number;
@@ -659,15 +779,15 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
             </button>
           </div>
 
-          <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
               <button onClick={toggleCurtida} disabled={!usuarioLogado}
                 className="flex items-center gap-1.5 text-sm font-black transition-all hover:scale-105 disabled:cursor-default"
                 style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                 <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
                 {curtido ? "CURTIDO" : "CURTIR"}
               </button>
-              <div id={`comentarios-${post.id}`}>
+              <div id={`comentarios-${post.id}`} className="min-w-0 flex-1 sm:flex-none">
                 <CardComentarios
                   postId={post.id}
                   total={totalComentarios}
@@ -678,7 +798,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               </div>
             </div>
             <button onClick={compartilhar}
-              className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
+              className="flex w-fit items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
               style={{ color: copiado ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
               <Share2 size={14} strokeWidth={2} />
               {copiado ? "COPIADO!" : ""}
