@@ -132,7 +132,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       link: `/#post-${post_id}`,
       ator_id: user.id,
       ator_nome: autor_nome,
-      ator_avatar,
+      ator_avatar: autor_avatar,
       lida: false,
     });
   }
@@ -144,7 +144,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         user_id: pai.user_id, tipo: "resposta_comentario",
         titulo: `${autor_nome} respondeu seu comentário`,
         corpo: texto.slice(0, 80),
-        post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar, lida: false,
+        post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
       });
     }
   } else if (post?.user_id && post.user_id !== user.id) {
@@ -152,7 +152,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       user_id: post.user_id, tipo: "comentario_post",
       titulo: `${autor_nome} comentou sua publicação`,
       corpo: texto.slice(0, 80),
-      post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar, lida: false,
+      post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
     });
   }
 
