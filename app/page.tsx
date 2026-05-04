@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Header from "@/components/Header";
 import CardLoja from "@/components/CardLoja";
 import { createClient } from "@/utils/supabase/client";
@@ -113,10 +113,98 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
   const [mentionLoading, setMentionLoading] = useState(false);
   const [mencoesSelecionadas, setMencoesSelecionadas] = useState<{ user_id: string; nome: string; handle: string; email?: string | null }[]>([]);
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     setTotalAtual(total ?? 0);
   }, [total]);
+
+  // Atualiza comentários em tempo real.
+  // Se o painel estiver aberto, recarrega a lista completa quando alguém comentar, responder, editar, excluir ou curtir comentário.
+  // Se estiver fechado, atualiza ao menos o contador de comentários principais sem precisar recarregar a página.
+  useEffect(() => {
+    let cancelado = false;
+
+    async function recarregarComentarios() {
+      try {
+        const res = await fetch(`/api/feed/comentarios?post_id=${postId}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelado || !res.ok) return;
+
+        const lista = data.comentarios || [];
+        const totalPrincipais = lista.filter((c: Comentario) => !c.resposta_para).length;
+
+        setComentarios(lista);
+        setTotalAtual(totalPrincipais);
+        onTotalChange?.(totalPrincipais);
+      } catch {
+        // mantém a interface como está se houver falha momentânea de rede
+      }
+    }
+
+    function agendarRecarregamento() {
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = setTimeout(() => {
+        if (aberto) recarregarComentarios();
+      }, 250);
+    }
+
+    const canal = supabase
+      .channel(`feed-comentarios-post-${postId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "feed_comentarios", filter: `post_id=eq.${postId}` },
+        (payload) => {
+          const row = (payload.new || payload.old) as Partial<Comentario> & { post_id?: number } | null;
+          if (row?.post_id && Number(row.post_id) !== postId) return;
+
+          if (aberto) {
+            agendarRecarregamento();
+            return;
+          }
+
+          if (payload.eventType === "INSERT") {
+            const novo = payload.new as Partial<Comentario> | null;
+            if (!novo?.resposta_para) {
+              setTotalAtual((prev) => {
+                const novoTotal = prev + 1;
+                onTotalChange?.(novoTotal);
+                return novoTotal;
+              });
+            }
+          }
+
+          if (payload.eventType === "DELETE") {
+            const removido = payload.old as Partial<Comentario> | null;
+            if (removido && !removido.resposta_para) {
+              setTotalAtual((prev) => {
+                const novoTotal = Math.max(0, prev - 1);
+                onTotalChange?.(novoTotal);
+                return novoTotal;
+              });
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "feed_comentario_curtidas" },
+        () => {
+          if (aberto) agendarRecarregamento();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      cancelado = true;
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+      supabase.removeChannel(canal);
+    };
+  }, [aberto, onTotalChange, postId, supabase]);
 
   useEffect(() => {
     if (!mentionQuery || mentionQuery.length < 2) {

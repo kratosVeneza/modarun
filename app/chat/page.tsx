@@ -86,6 +86,7 @@ export default function ChatPage(): React.JSX.Element {
   const abriuParametroInicialRef = useRef(false);
   const recarregarConversasTimerRef = useRef<number | null>(null);
   const canalDigitandoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const canalDigitandoProntoRef = useRef(false);
   const pararDigitandoTimerRef = useRef<number | null>(null);
   const ultimoAvisoDigitandoRef = useRef(0);
 
@@ -102,7 +103,7 @@ export default function ChatPage(): React.JSX.Element {
   const avisarDigitando = useCallback((digitando: boolean) => {
     const canal = canalDigitandoRef.current;
     const conversa = conversaAtivaRef.current;
-    if (!canal || !user?.id || !conversa?.outro_id) return;
+    if (!canal || !canalDigitandoProntoRef.current || !user?.id || !conversa?.outro_id) return;
 
     canal.send({
       type: "broadcast",
@@ -110,7 +111,6 @@ export default function ChatPage(): React.JSX.Element {
       payload: {
         remetente_id: user.id,
         destinatario_id: conversa.outro_id,
-        conversa_com: conversa.outro_id,
         digitando,
         sent_at: new Date().toISOString(),
       },
@@ -269,10 +269,16 @@ export default function ChatPage(): React.JSX.Element {
   }, [carregarConversas, supabase, user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id || !conversaAtiva?.outro_id) return;
+
+    const outroId = conversaAtiva.outro_id;
+    const nomeCanal = `chat-digitando-${[user.id, outroId].sort().join("-")}`;
+
+    setEstaDigitando(false);
+    canalDigitandoProntoRef.current = false;
 
     const canal = supabase
-      .channel("chat-digitando-global")
+      .channel(nomeCanal, { config: { broadcast: { self: false } } })
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         const remetenteId = String(payload?.remetente_id || "");
         const destinatarioId = String(payload?.destinatario_id || "");
@@ -294,16 +300,34 @@ export default function ChatPage(): React.JSX.Element {
           }, 3500);
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          canalDigitandoRef.current = canal;
+          canalDigitandoProntoRef.current = true;
+        }
+      });
 
     canalDigitandoRef.current = canal;
 
     return () => {
+      canal.send({
+        type: "broadcast",
+        event: "typing",
+        payload: {
+          remetente_id: user.id,
+          destinatario_id: outroId,
+          digitando: false,
+          sent_at: new Date().toISOString(),
+        },
+      }).catch(() => undefined);
+
       canalDigitandoRef.current = null;
+      canalDigitandoProntoRef.current = false;
+      setEstaDigitando(false);
       if (pararDigitandoTimerRef.current) window.clearTimeout(pararDigitandoTimerRef.current);
       supabase.removeChannel(canal);
     };
-  }, [supabase, user]);
+  }, [conversaAtiva?.outro_id, supabase, user?.id]);
 
   useEffect(() => {
     const termo = busca.trim();
