@@ -57,9 +57,12 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
   function iconeNotif(tipo: string) {
     if (tipo === "novo_seguidor") return "🏃";
     if (tipo === "curtida_post") return "❤️";
+    if (tipo === "curtida_comentario") return "💚";
     if (tipo === "comentario_post") return "💬";
     if (tipo === "resposta_comentario") return "↩️";
     if (tipo === "mencao_comentario") return "@";
+    if (tipo === "mencao_post") return "@";
+    if (tipo === "novo_post") return "✨";
     if (tipo === "mensagem_privada") return "✉️";
     return "🔔";
   }
@@ -273,7 +276,7 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
                 </button>
 
                 {painelAberto && (
-                  <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] rounded-2xl overflow-hidden shadow-2xl z-50"
+                  <div className="absolute right-0 top-full mt-2 w-[min(92vw,22rem)] sm:w-80 max-w-[calc(100vw-24px)] rounded-2xl overflow-hidden shadow-2xl z-50"
                     style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.2)" }}>
                     <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       <span className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>NOTIFICAÇÕES</span>

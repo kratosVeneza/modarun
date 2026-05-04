@@ -82,16 +82,34 @@ async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: str
 
   // 1) Melhor caminho: usuário escolhido na lista de sugestões do frontend.
   // Isso evita depender do texto do @, que pode variar conforme nome, e-mail ou handle.
+  // Validamos contra o texto: só consideramos a menção se o handle (ou email/nome
+  // normalizado) aparece de fato no texto, evitando notificar alguém que foi
+  // digitado e depois apagado pelo autor.
+  const handlesNoTexto = new Set(extrairHandles(texto));
   if (Array.isArray(mencoesBody)) {
-    for (const item of mencoesBody as Array<{ user_id?: unknown; nome?: unknown }>) {
+    for (const item of mencoesBody as Array<{ user_id?: unknown; nome?: unknown; handle?: unknown; email?: unknown }>) {
       const id = String(item?.user_id || "");
-      if (isUuid(id) && id !== autorId) {
+      if (!isUuid(id) || id === autorId) continue;
+
+      const handleEsperado = String(item?.handle || "").toLowerCase();
+      const nomeNormalizado = normalizarHandle(String(item?.nome || ""));
+      const emailNormalizado = normalizarHandle(String(item?.email || "").split("@")[0] || "");
+
+      const aparece =
+        (handleEsperado && handlesNoTexto.has(handleEsperado)) ||
+        (nomeNormalizado && handlesNoTexto.has(nomeNormalizado)) ||
+        (emailNormalizado && handlesNoTexto.has(emailNormalizado)) ||
+        // Se o frontend ainda não enviar handle/email (compatibilidade), aceita
+        // apenas com base no user_id confirmado pela seleção da lista.
+        (!handleEsperado && !item?.email);
+
+      if (aparece) {
         resolvidas.set(id, { user_id: id, nome: String(item?.nome || "Corredor") });
       }
     }
   }
 
-  const handles = extrairHandles(texto);
+  const handles = Array.from(handlesNoTexto);
   if (handles.length === 0) return Array.from(resolvidas.values());
 
   const admin = sbAdmin();
@@ -309,6 +327,36 @@ export async function PATCH(req: Request): Promise<NextResponse> {
       .eq("comentario_id", id);
 
     await writeClient.from("feed_comentarios").update({ total_curtidas: count ?? 0 }).eq("id", id);
+
+    // Notifica o autor do comentário quando alguém curte (somente ao curtir,
+    // não ao descurtir, e nunca quando o próprio autor curte o seu comentário).
+    if (acao === "curtir") {
+      const { data: comentarioAlvo } = await writeClient
+        .from("feed_comentarios")
+        .select("user_id, post_id, texto")
+        .eq("id", id)
+        .maybeSingle();
+
+      const donoId = (comentarioAlvo as { user_id?: string } | null)?.user_id;
+      if (donoId && donoId !== user.id) {
+        const autor_nome = nomeUsuario(user);
+        const autor_avatar = avatarUsuario(user);
+        const postId = Number((comentarioAlvo as { post_id?: number } | null)?.post_id ?? 0);
+        const corpoBase = String((comentarioAlvo as { texto?: string } | null)?.texto || "").slice(0, 80);
+        await criarNotificacao({
+          user_id: donoId,
+          tipo: "curtida_comentario",
+          titulo: `${autor_nome} curtiu seu comentário`,
+          corpo: corpoBase || "Toque para ver o comentário.",
+          post_id: postId || null,
+          link: postId ? `/#post-${postId}` : null,
+          ator_id: user.id,
+          ator_nome: autor_nome,
+          ator_avatar: autor_avatar,
+          lida: false,
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, total_curtidas: count ?? 0, curtido: acao === "curtir" });
   }
