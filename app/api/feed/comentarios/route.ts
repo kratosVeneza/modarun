@@ -18,28 +18,45 @@ async function criarNotificacao(payload: Record<string, unknown>, fallbackClient
     return { ok: false, error: "no_client" };
   }
 
-  const { error } = await cliente.from("notificacoes").insert(payload as never);
-  if (!error) return { ok: true, fallback: !admin };
+  async function tentarInsert(dados: Record<string, unknown>, etiqueta: string) {
+    const { error } = await cliente.from("notificacoes").insert(dados as never);
+    if (!error) return { ok: true, tentativa: etiqueta, fallback: !admin };
+    console.error(`Falha ao criar notificação (${etiqueta}):`, error.message, "tipo:", dados.tipo);
+    return { ok: false, error: error.message, code: (error as any)?.code, tentativa: etiqueta };
+  }
 
-  console.error("Falha ao criar notificação completa:", error.message, "tipo:", payload.tipo);
+  const completo = await tentarInsert(payload, "completa");
+  if (completo.ok) return completo;
+
+  // Alguns bancos antigos ficam com CHECK/enum permitindo apenas tipos já usados
+  // como comentario_post, resposta_comentario, curtida_post etc. Quando isso
+  // acontece, os tipos novos mencao_comentario e curtida_comentario não entram.
+  // Para não perder a notificação no sininho, gravamos com um tipo compatível,
+  // mantendo título/corpo/link dizendo exatamente o que aconteceu.
+  const tipoOriginal = String(payload.tipo || "");
+  let tipoCompat = tipoOriginal;
+  if (tipoOriginal === "mencao_comentario") tipoCompat = "comentario_post";
+  if (tipoOriginal === "curtida_comentario") tipoCompat = "curtida_post";
+
+  if (tipoCompat !== tipoOriginal) {
+    const compat = await tentarInsert({ ...payload, tipo: tipoCompat }, "tipo_compativel");
+    if (compat.ok) return { ...compat, tipo_original: tipoOriginal, tipo_usado: tipoCompat };
+  }
 
   // Fallback para bancos onde algumas colunas opcionais ainda não existem.
   const colunasMinimas = {
     user_id: payload.user_id,
-    tipo: payload.tipo,
+    tipo: tipoCompat,
     titulo: payload.titulo,
     corpo: payload.corpo ?? null,
     link: payload.link ?? null,
     lida: false,
   };
 
-  const { error: fallbackError } = await cliente.from("notificacoes").insert(colunasMinimas as never);
-  if (fallbackError) {
-    console.error("Falha ao criar notificação (mínima):", fallbackError.message);
-    return { ok: false, error: fallbackError.message, detalhe_completo: error.message };
-  }
+  const minimo = await tentarInsert(colunasMinimas, "minima");
+  if (minimo.ok) return { ...minimo, fallback_colunas: true, tipo_original: tipoOriginal, tipo_usado: tipoCompat };
 
-  return { ok: true, fallback_colunas: true };
+  return { ok: false, error: minimo.error, detalhe_completo: completo.error, tipo_original: tipoOriginal, tipo_tentado: tipoCompat };
 }
 
 function nomeUsuario(user: any) {
@@ -93,10 +110,12 @@ async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: str
       const id = String(item?.user_id || "");
       if (!isUuid(id) || id === autorId) continue;
 
-      // Se o usuário veio da lista de sugestões, o ponto mais confiável é o ID real.
-      // O frontend já filtra as menções válidas antes de enviar. Revalidar aqui pelo
-      // texto exato do @ quebrava em casos com acento, ponto, espaço, sobrenome ou
-      // diferenças entre nome público/e-mail/handle.
+      // Quando o usuário foi escolhido na lista de sugestões, o frontend envia
+      // o ID real. Esse é o mesmo comportamento esperado de Instagram/Facebook:
+      // a menção deixa de depender do texto bater exatamente com nome/e-mail.
+      // O frontend já filtra menções apagadas antes de enviar. Aqui aceitamos o
+      // ID selecionado para não perder notificação por causa de acento, ponto,
+      // espaço, sobrenome ou handle diferente.
       resolvidas.set(id, { user_id: id, nome: String(item?.nome || "Corredor") });
     }
   }
@@ -310,36 +329,34 @@ export async function PATCH(req: Request): Promise<NextResponse> {
 
     const writeClient = sbAdmin() || supabase;
 
-    const { data: comentarioAlvo } = await writeClient
-      .from("feed_comentarios")
-      .select("id, user_id, post_id, texto")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (!comentarioAlvo) {
-      return NextResponse.json({ error: "Comentário não encontrado." }, { status: 404 });
-    }
-
     let jaCurtia = false;
-    const { data: curtidaExistente } = await writeClient
-      .from("feed_comentario_curtidas")
-      .select("id")
-      .eq("comentario_id", id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    jaCurtia = !!curtidaExistente;
-
     if (acao === "curtir") {
-      await writeClient
+      const { data: curtidaExistente } = await writeClient
+        .from("feed_comentario_curtidas")
+        .select("comentario_id")
+        .eq("comentario_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      jaCurtia = !!curtidaExistente;
+
+      const { error: likeError } = await writeClient
         .from("feed_comentario_curtidas")
         .upsert({ comentario_id: id, user_id: user.id }, { onConflict: "comentario_id,user_id" });
+
+      if (likeError) {
+        return NextResponse.json({ error: likeError.message }, { status: 500 });
+      }
     } else {
-      await writeClient
+      const { error: unlikeError } = await writeClient
         .from("feed_comentario_curtidas")
         .delete()
         .eq("comentario_id", id)
         .eq("user_id", user.id);
+
+      if (unlikeError) {
+        return NextResponse.json({ error: unlikeError.message }, { status: 500 });
+      }
     }
 
     const { count } = await writeClient
@@ -349,19 +366,23 @@ export async function PATCH(req: Request): Promise<NextResponse> {
 
     await writeClient.from("feed_comentarios").update({ total_curtidas: count ?? 0 }).eq("id", id);
 
+    // Notifica o autor do comentário quando alguém curte (somente ao curtir,
+    // não ao descurtir, e nunca quando o próprio autor curte o seu comentário).
     let notificacaoCurtida: Record<string, unknown> | null = null;
-
-    // Notifica o autor do comentário apenas quando a curtida é nova,
-    // nunca quando o próprio autor curte o próprio comentário.
     if (acao === "curtir" && !jaCurtia) {
-      const donoId = String((comentarioAlvo as { user_id?: string }).user_id || "");
-      if (isUuid(donoId) && donoId !== user.id) {
+      const { data: comentarioAlvo } = await writeClient
+        .from("feed_comentarios")
+        .select("user_id, post_id, texto")
+        .eq("id", id)
+        .maybeSingle();
+
+      const donoId = (comentarioAlvo as { user_id?: string } | null)?.user_id;
+      if (donoId && donoId !== user.id) {
         const autor_nome = nomeUsuario(user);
         const autor_avatar = avatarUsuario(user);
-        const postId = Number((comentarioAlvo as { post_id?: number }).post_id ?? 0);
-        const corpoBase = String((comentarioAlvo as { texto?: string }).texto || "").slice(0, 80);
-
-        const resultado = await criarNotificacao({
+        const postId = Number((comentarioAlvo as { post_id?: number } | null)?.post_id ?? 0);
+        const corpoBase = String((comentarioAlvo as { texto?: string } | null)?.texto || "").slice(0, 80);
+        notificacaoCurtida = await criarNotificacao({
           user_id: donoId,
           tipo: "curtida_comentario",
           titulo: `${autor_nome} curtiu seu comentário`,
@@ -372,22 +393,11 @@ export async function PATCH(req: Request): Promise<NextResponse> {
           ator_nome: autor_nome,
           ator_avatar: autor_avatar,
           lida: false,
-        }, writeClient);
-
-        notificacaoCurtida = {
-          destinatario: donoId,
-          ...resultado,
-        };
+        }, supabase);
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      total_curtidas: count ?? 0,
-      curtido: acao === "curtir",
-      notificacao_curtida: notificacaoCurtida,
-      admin_disponivel: !!sbAdmin(),
-    });
+    return NextResponse.json({ success: true, total_curtidas: count ?? 0, curtido: acao === "curtir", notificacao_curtida: notificacaoCurtida });
   }
 
   return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
