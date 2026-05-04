@@ -233,13 +233,19 @@ export default function PerfilPage(): React.JSX.Element {
     const meta = (user.user_metadata || {}) as Record<string, unknown>;
     const nome = (meta.nome_exibicao as string) || (meta.full_name as string) || (meta.name as string) || (meta.nome as string) || user.email?.split("@")[0] || "Corredor";
     setNomeExibicao(nome); setNomeTemp(nome);
-    // Aceita avatar gravado em qualquer um dos campos conhecidos (avatar_url do
-    // upload manual, picture do Google, foto/foto_url legados). Isso evita que
-    // a foto desapareça quando o Supabase mexe na metadata após login.
-    const avatarBruto = (meta.avatar_url as string) || (meta.picture as string) || (meta.foto as string) || (meta.foto_url as string) || null;
-    setAvatarUrl(avatarBruto);
+    // Avatar do Moda Run tem prioridade sobre foto de provedor externo.
+    // O Google/OAuth pode preencher meta.picture automaticamente; isso não deve
+    // sobrescrever a foto que o usuário escolheu dentro do app.
+    const avatarAppMeta =
+      (meta.moda_run_avatar_url as string) ||
+      (meta.avatar_url as string) ||
+      (meta.foto_url as string) ||
+      (meta.foto as string) ||
+      null;
+    const avatarProvedor = (meta.picture as string) || null;
 
     const [
+      { data: avatarFeed },
       { data: adminRow },
       { data: treinosData },
       { data: participacoesData },
@@ -249,6 +255,14 @@ export default function PerfilPage(): React.JSX.Element {
       { count: seg },
       { count: seg2 },
     ] = await Promise.all([
+      supabase
+        .from("feed_posts")
+        .select("autor_avatar")
+        .eq("user_id", user.id)
+        .not("autor_avatar", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
       supabase.from("admins").select("email").eq("email", user.email?.toLowerCase() ?? "").single(),
       supabase.from("encontros").select("id, titulo, cidade, estado, data_encontro, tipo_treino, km_planejado, distancia, horario").eq("user_id", user.id).order("data_encontro", { ascending: false }),
       supabase.from("encontro_participantes").select("id, encontro_id, encontros(id, titulo, cidade, estado, data_encontro, tipo_treino, km_planejado, distancia)").eq("user_id", user.id).order("created_at", { ascending: false }),
@@ -258,6 +272,16 @@ export default function PerfilPage(): React.JSX.Element {
       supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
       supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
     ]);
+
+    const avatarAntigoFeed = (avatarFeed as { autor_avatar?: string } | null)?.autor_avatar || null;
+    const avatarFinal = avatarAppMeta || avatarAntigoFeed || avatarProvedor;
+    setAvatarUrl(avatarFinal || null);
+
+    // Se encontramos uma foto antiga do Moda Run no feed e a metadata ainda só
+    // tem a foto do provedor, regrava silenciosamente para estabilizar o avatar.
+    if (!avatarAppMeta && avatarAntigoFeed) {
+      await supabase.auth.updateUser({ data: { moda_run_avatar_url: avatarAntigoFeed, avatar_url: avatarAntigoFeed, foto_url: avatarAntigoFeed, foto: avatarAntigoFeed } });
+    }
 
     setIsAdmin(!!adminRow);
     setTreinos(treinosData || []);
@@ -290,7 +314,7 @@ export default function PerfilPage(): React.JSX.Element {
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
       // Atualiza todos os campos conhecidos para garantir que nenhum legado
       // (picture do Google, foto, foto_url) sobreponha a foto nova.
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl, picture: publicUrl, foto: publicUrl, foto_url: publicUrl } });
+      await supabase.auth.updateUser({ data: { moda_run_avatar_url: publicUrl, avatar_url: publicUrl, foto: publicUrl, foto_url: publicUrl } });
       setAvatarUrl(publicUrl);
     } catch { alert("Erro ao fazer upload."); }
     setUploadandoFoto(false);
@@ -298,7 +322,7 @@ export default function PerfilPage(): React.JSX.Element {
 
   async function removerFoto() {
     if (!confirm("Remover foto de perfil?")) return;
-    await supabase.auth.updateUser({ data: { avatar_url: null, picture: null, foto: null, foto_url: null } });
+    await supabase.auth.updateUser({ data: { moda_run_avatar_url: null, avatar_url: null, foto: null, foto_url: null } });
     setAvatarUrl(null);
   }
 
@@ -321,7 +345,7 @@ export default function PerfilPage(): React.JSX.Element {
       alert("Não encontramos uma foto antiga nos seus posts. Faça upload de uma nova foto.");
       return;
     }
-    await supabase.auth.updateUser({ data: { avatar_url: url, picture: url, foto: url, foto_url: url } });
+    await supabase.auth.updateUser({ data: { moda_run_avatar_url: url, avatar_url: url, foto: url, foto_url: url } });
     setAvatarUrl(url);
     alert("Foto restaurada a partir do seu post mais recente!");
   }

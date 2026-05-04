@@ -57,7 +57,7 @@ function nomeUsuario(user: any) {
 
 function avatarUsuario(user: any) {
   const meta = (user?.user_metadata || {}) as Record<string, unknown>;
-  return ((meta?.avatar_url || meta?.picture || meta?.foto) as string | undefined) ?? null;
+  return ((meta?.moda_run_avatar_url || meta?.avatar_url || meta?.foto_url || meta?.foto || meta?.picture) as string | undefined) ?? null;
 }
 
 function isUuid(value: string) {
@@ -79,98 +79,118 @@ function extrairHandles(texto: string) {
   return Array.from(new Set(Array.from(texto.matchAll(/@([\p{L}\p{N}._-]{2,30})/gu)).map((m) => m[1].toLowerCase())));
 }
 
-async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: string) {
-  const resolvidas = new Map<string, { user_id: string; nome: string }>();
+async function buscarUsuarioBasico(admin: any, userId: string): Promise<{ user_id: string; nome: string; email?: string | null } | null> {
+  if (!admin || !isUuid(userId)) return null;
 
-  // 1) Melhor caminho: usuário escolhido na lista de sugestões do frontend.
-  // Isso evita depender do texto do @, que pode variar conforme nome, e-mail ou handle.
-  // Validamos contra o texto: só consideramos a menção se o handle (ou email/nome
-  // normalizado) aparece de fato no texto, evitando notificar alguém que foi
-  // digitado e depois apagado pelo autor.
-  const handlesNoTexto = new Set(extrairHandles(texto));
-  if (Array.isArray(mencoesBody)) {
-    for (const item of mencoesBody as Array<{ user_id?: unknown; nome?: unknown; handle?: unknown; email?: unknown }>) {
-      const id = String(item?.user_id || "");
-      if (!isUuid(id) || id === autorId) continue;
-
-      const handleEsperado = String(item?.handle || "").toLowerCase();
-      const nomeNormalizado = normalizarHandle(String(item?.nome || ""));
-      const emailNormalizado = normalizarHandle(String(item?.email || "").split("@")[0] || "");
-
-      const aparece =
-        (handleEsperado && handlesNoTexto.has(handleEsperado)) ||
-        (nomeNormalizado && handlesNoTexto.has(nomeNormalizado)) ||
-        (emailNormalizado && handlesNoTexto.has(emailNormalizado)) ||
-        // Se o frontend ainda não enviar handle/email (compatibilidade), aceita
-        // apenas com base no user_id confirmado pela seleção da lista.
-        (!handleEsperado && !item?.email);
-
-      if (aparece) {
-        resolvidas.set(id, { user_id: id, nome: String(item?.nome || "Corredor") });
-      }
-    }
+  const { data: authData } = await admin.auth.admin.getUserById(userId);
+  if (authData?.user) {
+    return { user_id: userId, nome: nomeUsuario(authData.user), email: authData.user.email || null };
   }
 
-  const handles = Array.from(handlesNoTexto);
-  if (handles.length === 0) return Array.from(resolvidas.values());
-
-  const admin = sbAdmin();
-  if (!admin) return Array.from(resolvidas.values());
-
-  const adicionarCandidato = (userId: unknown, nomeBruto: unknown, emailBruto?: unknown) => {
-    const id = String(userId || "");
-    if (!isUuid(id) || id === autorId) return;
-
-    const nome = String(nomeBruto || (typeof emailBruto === "string" ? emailBruto.split("@")[0] : "Corredor"));
-    const email = String(emailBruto || "");
-
-    const possiveis = [
-      normalizarHandle(nome),
-      normalizarHandle(email.split("@")[0] || ""),
-      normalizarHandle(email),
-    ].filter(Boolean);
-
-    if (possiveis.some((h) => handles.includes(h))) {
-      resolvidas.set(id, { user_id: id, nome });
-    }
-  };
-
-  // 2) Procura nos usuários reais do Auth. Pagina para não limitar apenas aos primeiros usuários.
-  for (let page = 1; page <= 10; page++) {
-    const { data: authUsers, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
-    if (error) break;
-
-    const users = authUsers?.users || [];
-    for (const u of users) {
-      adicionarCandidato(u.id, nomeUsuario(u), u.email || "");
-    }
-
-    if (users.length < 100) break;
-  }
-
-  // 3) Complementa com nomes gravados no feed, porque alguns usuários podem ter
-  // nome social/sobrenome/handle nos posts diferente do metadado atual do Auth.
-  const { data: postsAutores } = await admin
+  const { data: postAutor } = await admin
     .from("feed_posts")
     .select("user_id, autor_nome, autor_email")
-    .limit(1000);
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  for (const row of postsAutores || []) {
-    adicionarCandidato((row as any).user_id, (row as any).autor_nome, (row as any).autor_email);
+  if (postAutor) {
+    return {
+      user_id: userId,
+      nome: String((postAutor as any).autor_nome || (postAutor as any).autor_email?.split("@")[0] || "Corredor"),
+      email: (postAutor as any).autor_email || null,
+    };
   }
 
-  const { data: comentarioAutores } = await admin
+  const { data: comentarioAutor } = await admin
     .from("feed_comentarios")
     .select("user_id, autor_nome")
-    .limit(1000);
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  for (const row of comentarioAutores || []) {
-    adicionarCandidato((row as any).user_id, (row as any).autor_nome, "");
+  if (comentarioAutor) {
+    return { user_id: userId, nome: String((comentarioAutor as any).autor_nome || "Corredor"), email: null };
+  }
+
+  return null;
+}
+
+function aliasesDeUsuario(nome: string, email?: string | null) {
+  const baseNome = normalizarHandle(nome || "");
+  const emailLocal = normalizarHandle((email || "").split("@")[0] || "");
+  const emailCompleto = normalizarHandle(email || "");
+  const semPontos = baseNome.replace(/[._-]/g, "");
+  const emailSemPontos = emailLocal.replace(/[._-]/g, "");
+  return Array.from(new Set([baseNome, semPontos, emailLocal, emailSemPontos, emailCompleto].filter(Boolean)));
+}
+
+async function resolverMencoes(texto: string, mencoesBody: unknown, mencoesIdsBody: unknown, autorId: string) {
+  const resolvidas = new Map<string, { user_id: string; nome: string }>();
+  const admin = sbAdmin();
+  const handles = extrairHandles(texto);
+  const handlesNoTexto = new Set(handles);
+
+  if (!admin) return [];
+
+  // Caminho mais confiável: IDs enviados pelo frontend quando o usuário clicou
+  // na sugestão de @. Antes dependíamos de o texto do @ bater exatamente com o
+  // handle, e isso falhava com acentos, pontos, sobrenomes e variações.
+  const idsSelecionados = new Set<string>();
+  if (Array.isArray(mencoesIdsBody)) {
+    for (const raw of mencoesIdsBody) {
+      const id = String(raw || "").trim();
+      if (isUuid(id) && id !== autorId) idsSelecionados.add(id);
+    }
+  }
+
+  if (Array.isArray(mencoesBody)) {
+    for (const item of mencoesBody as Array<{ user_id?: unknown; id?: unknown; nome?: unknown; handle?: unknown; email?: unknown }>) {
+      const id = String(item?.user_id || item?.id || "").trim();
+      if (isUuid(id) && id !== autorId) idsSelecionados.add(id);
+    }
+  }
+
+  for (const id of idsSelecionados) {
+    const perfil = await buscarUsuarioBasico(admin, id);
+    if (perfil) resolvidas.set(id, { user_id: id, nome: perfil.nome });
+  }
+
+  // Caminho complementar: resolve @ digitado manualmente. Aceita variações com
+  // e sem pontos/acentos. Ex.: @cricielly.goncalves e @criciellygoncalves.
+  if (handles.length > 0) {
+    const adicionarCandidato = (userId: unknown, nomeBruto: unknown, emailBruto?: unknown) => {
+      const id = String(userId || "");
+      if (!isUuid(id) || id === autorId) return;
+
+      const nome = String(nomeBruto || (typeof emailBruto === "string" ? emailBruto.split("@")[0] : "Corredor"));
+      const email = String(emailBruto || "");
+      const possiveis = aliasesDeUsuario(nome, email);
+
+      if (possiveis.some((h) => handlesNoTexto.has(h))) {
+        resolvidas.set(id, { user_id: id, nome });
+      }
+    };
+
+    for (let page = 1; page <= 10; page++) {
+      const { data: authUsers, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
+      if (error) break;
+      const users = authUsers?.users || [];
+      for (const u of users) adicionarCandidato(u.id, nomeUsuario(u), u.email || "");
+      if (users.length < 100) break;
+    }
+
+    const { data: postsAutores } = await admin.from("feed_posts").select("user_id, autor_nome, autor_email").limit(1000);
+    for (const row of postsAutores || []) adicionarCandidato((row as any).user_id, (row as any).autor_nome, (row as any).autor_email);
+
+    const { data: comentarioAutores } = await admin.from("feed_comentarios").select("user_id, autor_nome").limit(1000);
+    for (const row of comentarioAutores || []) adicionarCandidato((row as any).user_id, (row as any).autor_nome, "");
   }
 
   return Array.from(resolvidas.values());
 }
-
 async function recalcularTotalComentarios(supabase: any, post_id: number) {
   const { count } = await supabase
     .from("feed_comentarios")
@@ -208,7 +228,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const { data: post } = await supabase.from("feed_posts").select("user_id").eq("id", post_id).single();
 
-  const mencoes = await resolverMencoes(texto, b.mencoes, user.id);
+  const mencoes = await resolverMencoes(texto, b.mencoes, b.mencoes_ids, user.id);
   const diagnostico: Array<Record<string, unknown>> = [];
   let mencoesNotificadas = 0;
   for (const mencao of mencoes) {

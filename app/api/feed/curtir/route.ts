@@ -12,7 +12,7 @@ function nomeDoUsuario(user: any): string {
 
 function avatarDoUsuario(user: any): string | null {
   const meta = (user?.user_metadata || {}) as Record<string, unknown>;
-  const avatar = meta.avatar_url || meta.picture || meta.foto_url;
+  const avatar = meta.moda_run_avatar_url || meta.avatar_url || meta.foto_url || meta.foto || meta.picture;
   return typeof avatar === "string" && avatar.trim() ? avatar.trim() : null;
 }
 
