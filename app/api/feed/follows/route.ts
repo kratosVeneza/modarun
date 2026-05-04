@@ -86,7 +86,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         user.user_metadata?.name ||
         user.email?.split("@")[0] ||
         "Corredor";
-      const avatar = user.user_metadata?.moda_run_avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.foto_url || user.user_metadata?.foto || user.user_metadata?.picture || null;
+      const avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
       // Notificação não pode impedir o follow.
       await writeClient.from("notificacoes").insert({

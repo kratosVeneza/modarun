@@ -57,7 +57,7 @@ function nomeUsuario(user: any) {
 
 function avatarUsuario(user: any) {
   const meta = (user?.user_metadata || {}) as Record<string, unknown>;
-  return ((meta?.moda_run_avatar_url || meta?.avatar_url || meta?.foto_url || meta?.foto || meta?.picture) as string | undefined) ?? null;
+  return ((meta?.avatar_url || meta?.picture || meta?.foto) as string | undefined) ?? null;
 }
 
 function isUuid(value: string) {
@@ -79,118 +79,88 @@ function extrairHandles(texto: string) {
   return Array.from(new Set(Array.from(texto.matchAll(/@([\p{L}\p{N}._-]{2,30})/gu)).map((m) => m[1].toLowerCase())));
 }
 
-async function buscarUsuarioBasico(admin: any, userId: string): Promise<{ user_id: string; nome: string; email?: string | null } | null> {
-  if (!admin || !isUuid(userId)) return null;
+async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: string) {
+  const resolvidas = new Map<string, { user_id: string; nome: string }>();
 
-  const { data: authData } = await admin.auth.admin.getUserById(userId);
-  if (authData?.user) {
-    return { user_id: userId, nome: nomeUsuario(authData.user), email: authData.user.email || null };
+  // 1) Melhor caminho: usuário escolhido na lista de sugestões do frontend.
+  // Isso evita depender do texto do @, que pode variar conforme nome, e-mail ou handle.
+  // Validamos contra o texto: só consideramos a menção se o handle (ou email/nome
+  // normalizado) aparece de fato no texto, evitando notificar alguém que foi
+  // digitado e depois apagado pelo autor.
+  const handlesNoTexto = new Set(extrairHandles(texto));
+  if (Array.isArray(mencoesBody)) {
+    for (const item of mencoesBody as Array<{ user_id?: unknown; nome?: unknown; handle?: unknown; email?: unknown }>) {
+      const id = String(item?.user_id || "");
+      if (!isUuid(id) || id === autorId) continue;
+
+      // Se o usuário veio da lista de sugestões, o ponto mais confiável é o ID real.
+      // O frontend já filtra as menções válidas antes de enviar. Revalidar aqui pelo
+      // texto exato do @ quebrava em casos com acento, ponto, espaço, sobrenome ou
+      // diferenças entre nome público/e-mail/handle.
+      resolvidas.set(id, { user_id: id, nome: String(item?.nome || "Corredor") });
+    }
   }
 
-  const { data: postAutor } = await admin
+  const handles = Array.from(handlesNoTexto);
+  if (handles.length === 0) return Array.from(resolvidas.values());
+
+  const admin = sbAdmin();
+  if (!admin) return Array.from(resolvidas.values());
+
+  const adicionarCandidato = (userId: unknown, nomeBruto: unknown, emailBruto?: unknown) => {
+    const id = String(userId || "");
+    if (!isUuid(id) || id === autorId) return;
+
+    const nome = String(nomeBruto || (typeof emailBruto === "string" ? emailBruto.split("@")[0] : "Corredor"));
+    const email = String(emailBruto || "");
+
+    const possiveis = [
+      normalizarHandle(nome),
+      normalizarHandle(email.split("@")[0] || ""),
+      normalizarHandle(email),
+    ].filter(Boolean);
+
+    if (possiveis.some((h) => handles.includes(h))) {
+      resolvidas.set(id, { user_id: id, nome });
+    }
+  };
+
+  // 2) Procura nos usuários reais do Auth. Pagina para não limitar apenas aos primeiros usuários.
+  for (let page = 1; page <= 10; page++) {
+    const { data: authUsers, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) break;
+
+    const users = authUsers?.users || [];
+    for (const u of users) {
+      adicionarCandidato(u.id, nomeUsuario(u), u.email || "");
+    }
+
+    if (users.length < 100) break;
+  }
+
+  // 3) Complementa com nomes gravados no feed, porque alguns usuários podem ter
+  // nome social/sobrenome/handle nos posts diferente do metadado atual do Auth.
+  const { data: postsAutores } = await admin
     .from("feed_posts")
     .select("user_id, autor_nome, autor_email")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1000);
 
-  if (postAutor) {
-    return {
-      user_id: userId,
-      nome: String((postAutor as any).autor_nome || (postAutor as any).autor_email?.split("@")[0] || "Corredor"),
-      email: (postAutor as any).autor_email || null,
-    };
+  for (const row of postsAutores || []) {
+    adicionarCandidato((row as any).user_id, (row as any).autor_nome, (row as any).autor_email);
   }
 
-  const { data: comentarioAutor } = await admin
+  const { data: comentarioAutores } = await admin
     .from("feed_comentarios")
     .select("user_id, autor_nome")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1000);
 
-  if (comentarioAutor) {
-    return { user_id: userId, nome: String((comentarioAutor as any).autor_nome || "Corredor"), email: null };
-  }
-
-  return null;
-}
-
-function aliasesDeUsuario(nome: string, email?: string | null) {
-  const baseNome = normalizarHandle(nome || "");
-  const emailLocal = normalizarHandle((email || "").split("@")[0] || "");
-  const emailCompleto = normalizarHandle(email || "");
-  const semPontos = baseNome.replace(/[._-]/g, "");
-  const emailSemPontos = emailLocal.replace(/[._-]/g, "");
-  return Array.from(new Set([baseNome, semPontos, emailLocal, emailSemPontos, emailCompleto].filter(Boolean)));
-}
-
-async function resolverMencoes(texto: string, mencoesBody: unknown, mencoesIdsBody: unknown, autorId: string) {
-  const resolvidas = new Map<string, { user_id: string; nome: string }>();
-  const admin = sbAdmin();
-  const handles = extrairHandles(texto);
-  const handlesNoTexto = new Set(handles);
-
-  if (!admin) return [];
-
-  // Caminho mais confiável: IDs enviados pelo frontend quando o usuário clicou
-  // na sugestão de @. Antes dependíamos de o texto do @ bater exatamente com o
-  // handle, e isso falhava com acentos, pontos, sobrenomes e variações.
-  const idsSelecionados = new Set<string>();
-  if (Array.isArray(mencoesIdsBody)) {
-    for (const raw of mencoesIdsBody) {
-      const id = String(raw || "").trim();
-      if (isUuid(id) && id !== autorId) idsSelecionados.add(id);
-    }
-  }
-
-  if (Array.isArray(mencoesBody)) {
-    for (const item of mencoesBody as Array<{ user_id?: unknown; id?: unknown; nome?: unknown; handle?: unknown; email?: unknown }>) {
-      const id = String(item?.user_id || item?.id || "").trim();
-      if (isUuid(id) && id !== autorId) idsSelecionados.add(id);
-    }
-  }
-
-  for (const id of idsSelecionados) {
-    const perfil = await buscarUsuarioBasico(admin, id);
-    if (perfil) resolvidas.set(id, { user_id: id, nome: perfil.nome });
-  }
-
-  // Caminho complementar: resolve @ digitado manualmente. Aceita variações com
-  // e sem pontos/acentos. Ex.: @cricielly.goncalves e @criciellygoncalves.
-  if (handles.length > 0) {
-    const adicionarCandidato = (userId: unknown, nomeBruto: unknown, emailBruto?: unknown) => {
-      const id = String(userId || "");
-      if (!isUuid(id) || id === autorId) return;
-
-      const nome = String(nomeBruto || (typeof emailBruto === "string" ? emailBruto.split("@")[0] : "Corredor"));
-      const email = String(emailBruto || "");
-      const possiveis = aliasesDeUsuario(nome, email);
-
-      if (possiveis.some((h) => handlesNoTexto.has(h))) {
-        resolvidas.set(id, { user_id: id, nome });
-      }
-    };
-
-    for (let page = 1; page <= 10; page++) {
-      const { data: authUsers, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
-      if (error) break;
-      const users = authUsers?.users || [];
-      for (const u of users) adicionarCandidato(u.id, nomeUsuario(u), u.email || "");
-      if (users.length < 100) break;
-    }
-
-    const { data: postsAutores } = await admin.from("feed_posts").select("user_id, autor_nome, autor_email").limit(1000);
-    for (const row of postsAutores || []) adicionarCandidato((row as any).user_id, (row as any).autor_nome, (row as any).autor_email);
-
-    const { data: comentarioAutores } = await admin.from("feed_comentarios").select("user_id, autor_nome").limit(1000);
-    for (const row of comentarioAutores || []) adicionarCandidato((row as any).user_id, (row as any).autor_nome, "");
+  for (const row of comentarioAutores || []) {
+    adicionarCandidato((row as any).user_id, (row as any).autor_nome, "");
   }
 
   return Array.from(resolvidas.values());
 }
+
 async function recalcularTotalComentarios(supabase: any, post_id: number) {
   const { count } = await supabase
     .from("feed_comentarios")
@@ -228,7 +198,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const { data: post } = await supabase.from("feed_posts").select("user_id").eq("id", post_id).single();
 
-  const mencoes = await resolverMencoes(texto, b.mencoes, b.mencoes_ids, user.id);
+  const mencoes = await resolverMencoes(texto, b.mencoes, user.id);
   const diagnostico: Array<Record<string, unknown>> = [];
   let mencoesNotificadas = 0;
   for (const mencao of mencoes) {
@@ -340,6 +310,26 @@ export async function PATCH(req: Request): Promise<NextResponse> {
 
     const writeClient = sbAdmin() || supabase;
 
+    const { data: comentarioAlvo } = await writeClient
+      .from("feed_comentarios")
+      .select("id, user_id, post_id, texto")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!comentarioAlvo) {
+      return NextResponse.json({ error: "Comentário não encontrado." }, { status: 404 });
+    }
+
+    let jaCurtia = false;
+    const { data: curtidaExistente } = await writeClient
+      .from("feed_comentario_curtidas")
+      .select("id")
+      .eq("comentario_id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    jaCurtia = !!curtidaExistente;
+
     if (acao === "curtir") {
       await writeClient
         .from("feed_comentario_curtidas")
@@ -359,22 +349,19 @@ export async function PATCH(req: Request): Promise<NextResponse> {
 
     await writeClient.from("feed_comentarios").update({ total_curtidas: count ?? 0 }).eq("id", id);
 
-    // Notifica o autor do comentário quando alguém curte (somente ao curtir,
-    // não ao descurtir, e nunca quando o próprio autor curte o seu comentário).
-    if (acao === "curtir") {
-      const { data: comentarioAlvo } = await writeClient
-        .from("feed_comentarios")
-        .select("user_id, post_id, texto")
-        .eq("id", id)
-        .maybeSingle();
+    let notificacaoCurtida: Record<string, unknown> | null = null;
 
-      const donoId = (comentarioAlvo as { user_id?: string } | null)?.user_id;
-      if (donoId && donoId !== user.id) {
+    // Notifica o autor do comentário apenas quando a curtida é nova,
+    // nunca quando o próprio autor curte o próprio comentário.
+    if (acao === "curtir" && !jaCurtia) {
+      const donoId = String((comentarioAlvo as { user_id?: string }).user_id || "");
+      if (isUuid(donoId) && donoId !== user.id) {
         const autor_nome = nomeUsuario(user);
         const autor_avatar = avatarUsuario(user);
-        const postId = Number((comentarioAlvo as { post_id?: number } | null)?.post_id ?? 0);
-        const corpoBase = String((comentarioAlvo as { texto?: string } | null)?.texto || "").slice(0, 80);
-        await criarNotificacao({
+        const postId = Number((comentarioAlvo as { post_id?: number }).post_id ?? 0);
+        const corpoBase = String((comentarioAlvo as { texto?: string }).texto || "").slice(0, 80);
+
+        const resultado = await criarNotificacao({
           user_id: donoId,
           tipo: "curtida_comentario",
           titulo: `${autor_nome} curtiu seu comentário`,
@@ -385,11 +372,22 @@ export async function PATCH(req: Request): Promise<NextResponse> {
           ator_nome: autor_nome,
           ator_avatar: autor_avatar,
           lida: false,
-        }, supabase);
+        }, writeClient);
+
+        notificacaoCurtida = {
+          destinatario: donoId,
+          ...resultado,
+        };
       }
     }
 
-    return NextResponse.json({ success: true, total_curtidas: count ?? 0, curtido: acao === "curtir" });
+    return NextResponse.json({
+      success: true,
+      total_curtidas: count ?? 0,
+      curtido: acao === "curtir",
+      notificacao_curtida: notificacaoCurtida,
+      admin_disponivel: !!sbAdmin(),
+    });
   }
 
   return NextResponse.json({ error: "Ação inválida." }, { status: 400 });

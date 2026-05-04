@@ -68,7 +68,7 @@ function nomeDoAuth(user: any) {
 
 function avatarDoAuth(user: any) {
   const meta = user?.user_metadata || {};
-  return meta.moda_run_avatar_url || meta.avatar_url || meta.foto_url || meta.foto || meta.picture || null;
+  return meta.avatar_url || meta.picture || meta.foto || null;
 }
 
 async function buscarPerfis(userIds: string[]) {

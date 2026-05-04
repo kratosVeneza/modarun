@@ -200,15 +200,10 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
     const handlesNoTexto = new Set(
       Array.from(texto.matchAll(/@([\p{L}\p{N}._-]{2,30})/gu)).map((m) => m[1].toLowerCase())
     );
-    const mencoesValidas = mencoesSelecionadas.filter(m => {
-      const handle = (m.handle || "").toLowerCase();
-      const handleSemPontuacao = handle.replace(/[._-]/g, "");
-      return handlesNoTexto.has(handle) || handlesNoTexto.has(handleSemPontuacao);
-    });
-    const mencoesIds = Array.from(new Set(mencoesValidas.map(m => m.user_id).filter(Boolean)));
+    const mencoesValidas = mencoesSelecionadas.filter(m => handlesNoTexto.has((m.handle || "").toLowerCase()));
     const res = await fetch("/api/feed/comentarios", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId, mencoes: mencoesValidas, mencoes_ids: mencoesIds }),
+      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId, mencoes: mencoesValidas }),
     });
     const data = await res.json().catch(() => ({}));
     // Log de diagnóstico das menções: aparece no DevTools do navegador.

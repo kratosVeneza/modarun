@@ -35,7 +35,7 @@ function escolherNomeMeta(meta: Record<string, any> | null | undefined, email?: 
 }
 
 function escolherAvatarMeta(meta: Record<string, any> | null | undefined) {
-  return meta?.moda_run_avatar_url || meta?.avatar_url || meta?.foto_url || meta?.foto || meta?.autor_avatar || meta?.picture || null;
+  return meta?.avatar_url || meta?.picture || meta?.foto || meta?.autor_avatar || null;
 }
 
 function usuarioAuthParaBusca(u: any): UsuarioFeed {

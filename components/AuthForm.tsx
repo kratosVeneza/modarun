@@ -90,10 +90,6 @@ export default function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
         {loadingGoogle ? "REDIRECIONANDO..." : "CONTINUAR COM GOOGLE"}
       </button>
 
-      <p className="-mt-1 text-center text-[11px] leading-relaxed" style={{ color: "#8B949E" }}>
-        Você pode entrar com email e senha ou com Google. Se usar o mesmo email, o app deve reconhecer a mesma conta; sua foto escolhida no Moda Run tem prioridade sobre a foto do provedor.
-      </p>
-
       {/* Divider */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
