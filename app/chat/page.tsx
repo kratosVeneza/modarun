@@ -80,10 +80,14 @@ export default function ChatPage(): React.JSX.Element {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<UsuarioBusca[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const [estaDigitando, setEstaDigitando] = useState(false);
 
   const conversaAtivaRef = useRef<Conversa | null>(null);
   const abriuParametroInicialRef = useRef(false);
   const recarregarConversasTimerRef = useRef<number | null>(null);
+  const canalDigitandoRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pararDigitandoTimerRef = useRef<number | null>(null);
+  const ultimoAvisoDigitandoRef = useRef(0);
 
   const userIdInicial = searchParams.get("user") || searchParams.get("mensagem") || "";
 
@@ -95,9 +99,49 @@ export default function ChatPage(): React.JSX.Element {
     setCarregandoConversas(false);
   }, []);
 
+  const avisarDigitando = useCallback((digitando: boolean) => {
+    const canal = canalDigitandoRef.current;
+    const conversa = conversaAtivaRef.current;
+    if (!canal || !user?.id || !conversa?.outro_id) return;
+
+    canal.send({
+      type: "broadcast",
+      event: "typing",
+      payload: {
+        remetente_id: user.id,
+        destinatario_id: conversa.outro_id,
+        conversa_com: conversa.outro_id,
+        digitando,
+        sent_at: new Date().toISOString(),
+      },
+    }).catch(() => undefined);
+  }, [user?.id]);
+
+  const tratarMudancaTexto = useCallback((valor: string) => {
+    const textoLimitado = valor.slice(0, 1200);
+    setTexto(textoLimitado);
+
+    if (!conversaAtivaRef.current || !user?.id) return;
+
+    const agora = Date.now();
+    if (textoLimitado.trim() && agora - ultimoAvisoDigitandoRef.current > 900) {
+      ultimoAvisoDigitandoRef.current = agora;
+      avisarDigitando(true);
+    }
+
+    if (pararDigitandoTimerRef.current) {
+      window.clearTimeout(pararDigitandoTimerRef.current);
+    }
+
+    pararDigitandoTimerRef.current = window.setTimeout(() => {
+      avisarDigitando(false);
+    }, 1600);
+  }, [avisarDigitando, user?.id]);
+
   const abrirConversa = useCallback(async (outroId: string, parcial?: Partial<Conversa>) => {
     if (!outroId || outroId === user?.id) return;
     setErro("");
+    setEstaDigitando(false);
     setCarregandoMensagens(true);
 
     const res = await fetch(`/api/mensagens?outro_id=${outroId}`, { credentials: "include" });
@@ -225,6 +269,43 @@ export default function ChatPage(): React.JSX.Element {
   }, [carregarConversas, supabase, user]);
 
   useEffect(() => {
+    if (!user) return;
+
+    const canal = supabase
+      .channel("chat-digitando-global")
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const remetenteId = String(payload?.remetente_id || "");
+        const destinatarioId = String(payload?.destinatario_id || "");
+        const conversa = conversaAtivaRef.current;
+
+        if (!conversa) return;
+        if (destinatarioId !== user.id) return;
+        if (remetenteId !== conversa.outro_id) return;
+
+        const digitando = Boolean(payload?.digitando);
+        setEstaDigitando(digitando);
+
+        if (digitando) {
+          window.setTimeout(() => {
+            const conversaAtual = conversaAtivaRef.current;
+            if (conversaAtual?.outro_id === remetenteId) {
+              setEstaDigitando(false);
+            }
+          }, 3500);
+        }
+      })
+      .subscribe();
+
+    canalDigitandoRef.current = canal;
+
+    return () => {
+      canalDigitandoRef.current = null;
+      if (pararDigitandoTimerRef.current) window.clearTimeout(pararDigitandoTimerRef.current);
+      supabase.removeChannel(canal);
+    };
+  }, [supabase, user]);
+
+  useEffect(() => {
     const termo = busca.trim();
     if (termo.length < 2) {
       setResultados([]);
@@ -254,6 +335,8 @@ export default function ChatPage(): React.JSX.Element {
 
     const conteudo = texto.trim();
     setTexto("");
+    avisarDigitando(false);
+    if (pararDigitandoTimerRef.current) window.clearTimeout(pararDigitandoTimerRef.current);
     setEnviando(true);
     setErro("");
 
@@ -483,6 +566,13 @@ export default function ChatPage(): React.JSX.Element {
                         </div>
                       );
                     })}
+                    {estaDigitando && conversaAtiva && (
+                      <div className="flex justify-start">
+                        <div className="rounded-2xl px-4 py-2 text-xs font-semibold" style={{ background: "#21262D", color: "#8B949E" }}>
+                          {conversaAtiva.outro_nome} está digitando<span className="inline-block animate-pulse">...</span>
+                        </div>
+                      </div>
+                    )}
                     <div ref={fimRef} />
                   </div>
 
@@ -490,7 +580,7 @@ export default function ChatPage(): React.JSX.Element {
                     <div className="flex gap-2">
                       <textarea
                         value={texto}
-                        onChange={(e) => setTexto(e.target.value.slice(0, 1200))}
+                        onChange={(e) => tratarMudancaTexto(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
