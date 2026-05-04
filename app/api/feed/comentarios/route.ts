@@ -9,20 +9,22 @@ function sbAdmin() {
   return createServiceClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function criarNotificacao(payload: Record<string, unknown>) {
+async function criarNotificacao(payload: Record<string, unknown>, fallbackClient?: any) {
   const admin = sbAdmin();
-  if (!admin) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY ausente: não foi possível criar notificação.");
-    return { ok: false, error: "admin_client_missing" };
+  const cliente = admin || fallbackClient || null;
+
+  if (!cliente) {
+    console.error("Sem cliente disponível para criar notificação.");
+    return { ok: false, error: "no_client" };
   }
 
-  const { error } = await admin.from("notificacoes").insert(payload as never);
-  if (!error) return { ok: true };
+  const { error } = await cliente.from("notificacoes").insert(payload as never);
+  if (!error) return { ok: true, fallback: !admin };
 
-  console.error("Falha ao criar notificação completa:", error.message);
+  console.error("Falha ao criar notificação completa:", error.message, "tipo:", payload.tipo);
 
   // Fallback para bancos onde algumas colunas opcionais ainda não existem.
-  const fallback = {
+  const colunasMinimas = {
     user_id: payload.user_id,
     tipo: payload.tipo,
     titulo: payload.titulo,
@@ -31,13 +33,13 @@ async function criarNotificacao(payload: Record<string, unknown>) {
     lida: false,
   };
 
-  const { error: fallbackError } = await admin.from("notificacoes").insert(fallback as never);
+  const { error: fallbackError } = await cliente.from("notificacoes").insert(colunasMinimas as never);
   if (fallbackError) {
-    console.error("Falha ao criar notificação fallback:", fallbackError.message);
-    return { ok: false, error: fallbackError.message };
+    console.error("Falha ao criar notificação (mínima):", fallbackError.message);
+    return { ok: false, error: fallbackError.message, detalhe_completo: error.message };
   }
 
-  return { ok: true, fallback: true };
+  return { ok: true, fallback_colunas: true };
 }
 
 function nomeUsuario(user: any) {
@@ -207,6 +209,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const { data: post } = await supabase.from("feed_posts").select("user_id").eq("id", post_id).single();
 
   const mencoes = await resolverMencoes(texto, b.mencoes, user.id);
+  const diagnostico: Array<Record<string, unknown>> = [];
   let mencoesNotificadas = 0;
   for (const mencao of mencoes) {
     const resultado = await criarNotificacao({
@@ -220,7 +223,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       ator_nome: autor_nome,
       ator_avatar: autor_avatar,
       lida: false,
-    });
+    }, supabase);
+    diagnostico.push({ user_id: mencao.user_id, nome: mencao.nome, ...resultado });
     if (resultado?.ok) mencoesNotificadas += 1;
   }
 
@@ -232,7 +236,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         titulo: `${autor_nome} respondeu seu comentário`,
         corpo: texto.slice(0, 80),
         post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
-      });
+      }, supabase);
     }
   } else if (post?.user_id && post.user_id !== user.id) {
     await criarNotificacao({
@@ -240,10 +244,17 @@ export async function POST(req: Request): Promise<NextResponse> {
       titulo: `${autor_nome} comentou sua publicação`,
       corpo: texto.slice(0, 80),
       post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
-    });
+    }, supabase);
   }
 
-  return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar, curtido_por_mim: false }, mencoes_encontradas: mencoes.length, mencoes_notificadas: mencoesNotificadas });
+  return NextResponse.json({
+    success: true,
+    comentario: { ...data, autor_nome, autor_avatar, curtido_por_mim: false },
+    mencoes_encontradas: mencoes.length,
+    mencoes_notificadas: mencoesNotificadas,
+    mencoes_diagnostico: diagnostico,
+    admin_disponivel: !!sbAdmin(),
+  });
 }
 
 export async function GET(req: Request): Promise<NextResponse> {
@@ -354,7 +365,7 @@ export async function PATCH(req: Request): Promise<NextResponse> {
           ator_nome: autor_nome,
           ator_avatar: autor_avatar,
           lida: false,
-        });
+        }, supabase);
       }
     }
 

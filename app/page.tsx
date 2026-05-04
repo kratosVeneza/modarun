@@ -206,6 +206,17 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
       body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId, mencoes: mencoesValidas }),
     });
     const data = await res.json().catch(() => ({}));
+    // Log de diagnóstico das menções: aparece no DevTools do navegador.
+    // Útil quando uma menção não está virando notificação para entender por quê.
+    if (data?.mencoes_diagnostico !== undefined) {
+      // eslint-disable-next-line no-console
+      console.log("[MODA RUN] menções enviadas:", mencoesValidas, "diagnóstico do servidor:", {
+        encontradas: data.mencoes_encontradas,
+        notificadas: data.mencoes_notificadas,
+        admin_disponivel: data.admin_disponivel,
+        detalhes: data.mencoes_diagnostico,
+      });
+    }
     if (data.success) {
       setComentarios(prev => [...prev, data.comentario]);
       if (!respondendoId) {

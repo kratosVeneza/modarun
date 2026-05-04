@@ -230,9 +230,14 @@ export default function PerfilPage(): React.JSX.Element {
 
     setUserEmail(user.email || "");
     setUserId(user.id);
-    const nome = user.user_metadata?.nome_exibicao || user.email?.split("@")[0] || "Corredor";
+    const meta = (user.user_metadata || {}) as Record<string, unknown>;
+    const nome = (meta.nome_exibicao as string) || (meta.full_name as string) || (meta.name as string) || (meta.nome as string) || user.email?.split("@")[0] || "Corredor";
     setNomeExibicao(nome); setNomeTemp(nome);
-    setAvatarUrl(user.user_metadata?.avatar_url || null);
+    // Aceita avatar gravado em qualquer um dos campos conhecidos (avatar_url do
+    // upload manual, picture do Google, foto/foto_url legados). Isso evita que
+    // a foto desapareça quando o Supabase mexe na metadata após login.
+    const avatarBruto = (meta.avatar_url as string) || (meta.picture as string) || (meta.foto as string) || (meta.foto_url as string) || null;
+    setAvatarUrl(avatarBruto);
 
     const [
       { data: adminRow },
@@ -283,7 +288,9 @@ export default function PerfilPage(): React.JSX.Element {
       const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, file, { upsert: true, contentType: file.type });
       if (uploadError) { alert("Erro no upload: " + uploadError.message); setUploadandoFoto(false); return; }
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      // Atualiza todos os campos conhecidos para garantir que nenhum legado
+      // (picture do Google, foto, foto_url) sobreponha a foto nova.
+      await supabase.auth.updateUser({ data: { avatar_url: publicUrl, picture: publicUrl, foto: publicUrl, foto_url: publicUrl } });
       setAvatarUrl(publicUrl);
     } catch { alert("Erro ao fazer upload."); }
     setUploadandoFoto(false);
@@ -291,8 +298,32 @@ export default function PerfilPage(): React.JSX.Element {
 
   async function removerFoto() {
     if (!confirm("Remover foto de perfil?")) return;
-    await supabase.auth.updateUser({ data: { avatar_url: null } });
+    await supabase.auth.updateUser({ data: { avatar_url: null, picture: null, foto: null, foto_url: null } });
     setAvatarUrl(null);
+  }
+
+  // Tenta recuperar a foto do usuário a partir de posts antigos no feed.
+  // Útil quando o Supabase desincronizou a metadata mas as fotos antigas ainda
+  // existem no bucket e estão referenciadas em feed_posts.autor_avatar.
+  async function recuperarFotoDoFeed() {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("feed_posts")
+      .select("autor_avatar")
+      .eq("user_id", userId)
+      .not("autor_avatar", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const url = (data as { autor_avatar?: string } | null)?.autor_avatar;
+    if (!url) {
+      alert("Não encontramos uma foto antiga nos seus posts. Faça upload de uma nova foto.");
+      return;
+    }
+    await supabase.auth.updateUser({ data: { avatar_url: url, picture: url, foto: url, foto_url: url } });
+    setAvatarUrl(url);
+    alert("Foto restaurada a partir do seu post mais recente!");
   }
 
   async function editarPost(id: number) {
@@ -402,6 +433,14 @@ export default function PerfilPage(): React.JSX.Element {
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.target.value = ""; }} />
               </div>
+
+              {!avatarUrl && !uploadandoFoto && userId && (
+                <button onClick={recuperarFotoDoFeed} type="button"
+                  className="self-start rounded-lg px-2 py-1 text-[11px] font-black hover:brightness-110"
+                  style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ↻ RESTAURAR FOTO ANTIGA
+                </button>
+              )}
 
               {/* Info */}
               <div className="flex-1">
