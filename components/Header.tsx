@@ -58,6 +58,8 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
     if (tipo === "novo_seguidor") return "🏃";
     if (tipo === "curtida_post") return "❤️";
     if (tipo === "comentario_post") return "💬";
+    if (tipo === "resposta_comentario") return "↩️";
+    if (tipo === "mencao_comentario") return "@";
     if (tipo === "mensagem_privada") return "✉️";
     return "🔔";
   }

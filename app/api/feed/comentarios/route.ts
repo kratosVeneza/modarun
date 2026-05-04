@@ -12,7 +12,28 @@ function sbAdmin() {
 async function criarNotificacao(payload: Record<string, unknown>) {
   const admin = sbAdmin();
   if (!admin) return;
-  await admin.from("notificacoes").insert(payload as never);
+
+  // Tenta inserir com todos os campos usados pelo app.
+  // Se alguma coluna opcional ainda não existir no Supabase, faz fallback
+  // para os campos essenciais, garantindo que a notificação apareça no sininho.
+  const { error } = await admin.from("notificacoes").insert(payload as never);
+  if (!error) return;
+
+  console.error("Falha ao criar notificação completa:", error.message);
+
+  const fallback = {
+    user_id: payload.user_id,
+    tipo: payload.tipo,
+    titulo: payload.titulo,
+    corpo: payload.corpo ?? null,
+    link: payload.link ?? null,
+    lida: false,
+  };
+
+  const { error: fallbackError } = await admin.from("notificacoes").insert(fallback as never);
+  if (fallbackError) {
+    console.error("Falha ao criar notificação fallback:", fallbackError.message);
+  }
 }
 
 function nomeUsuario(user: any) {
@@ -55,6 +76,8 @@ function extrairHandles(texto: string) {
 async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: string) {
   const resolvidas = new Map<string, { user_id: string; nome: string }>();
 
+  // 1) Melhor caminho: usuário escolhido na lista de sugestões do frontend.
+  // Isso evita depender do texto do @, que pode variar conforme nome, e-mail ou handle.
   if (Array.isArray(mencoesBody)) {
     for (const item of mencoesBody as Array<{ user_id?: unknown; nome?: unknown }>) {
       const id = String(item?.user_id || "");
@@ -70,15 +93,55 @@ async function resolverMencoes(texto: string, mencoesBody: unknown, autorId: str
   const admin = sbAdmin();
   if (!admin) return Array.from(resolvidas.values());
 
-  // Complementa menções que vieram apenas como texto, tentando localizar por nome/e-mail.
-  const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 500 });
-  for (const u of authUsers?.users || []) {
-    const nome = nomeUsuario(u);
-    const email = u.email || "";
-    const possiveis = [normalizarHandle(nome), normalizarHandle(email.split("@")[0] || "")];
-    if (u.id !== autorId && possiveis.some((h) => handles.includes(h))) {
-      resolvidas.set(u.id, { user_id: u.id, nome });
+  const adicionarCandidato = (userId: unknown, nomeBruto: unknown, emailBruto?: unknown) => {
+    const id = String(userId || "");
+    if (!isUuid(id) || id === autorId) return;
+
+    const nome = String(nomeBruto || (typeof emailBruto === "string" ? emailBruto.split("@")[0] : "Corredor"));
+    const email = String(emailBruto || "");
+
+    const possiveis = [
+      normalizarHandle(nome),
+      normalizarHandle(email.split("@")[0] || ""),
+      normalizarHandle(email),
+    ].filter(Boolean);
+
+    if (possiveis.some((h) => handles.includes(h))) {
+      resolvidas.set(id, { user_id: id, nome });
     }
+  };
+
+  // 2) Procura nos usuários reais do Auth. Pagina para não limitar apenas aos primeiros usuários.
+  for (let page = 1; page <= 10; page++) {
+    const { data: authUsers, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) break;
+
+    const users = authUsers?.users || [];
+    for (const u of users) {
+      adicionarCandidato(u.id, nomeUsuario(u), u.email || "");
+    }
+
+    if (users.length < 100) break;
+  }
+
+  // 3) Complementa com nomes gravados no feed, porque alguns usuários podem ter
+  // nome social/sobrenome/handle nos posts diferente do metadado atual do Auth.
+  const { data: postsAutores } = await admin
+    .from("feed_posts")
+    .select("user_id, autor_nome, autor_email")
+    .limit(1000);
+
+  for (const row of postsAutores || []) {
+    adicionarCandidato((row as any).user_id, (row as any).autor_nome, (row as any).autor_email);
+  }
+
+  const { data: comentarioAutores } = await admin
+    .from("feed_comentarios")
+    .select("user_id, autor_nome")
+    .limit(1000);
+
+  for (const row of comentarioAutores || []) {
+    adicionarCandidato((row as any).user_id, (row as any).autor_nome, "");
   }
 
   return Array.from(resolvidas.values());
