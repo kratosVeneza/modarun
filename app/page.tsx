@@ -91,6 +91,111 @@ function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avata
   );
 }
 
+
+function ComentarioLikesResumo({
+  comentarioId,
+  total,
+  curtido,
+  onCurtir,
+}: {
+  comentarioId: number;
+  total: number;
+  curtido: boolean;
+  onCurtir: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [curtidas, setCurtidas] = useState<CurtidaInfo[]>([]);
+  const [totalReal, setTotalReal] = useState(total || 0);
+
+  useEffect(() => {
+    setTotalReal(total || 0);
+  }, [total]);
+
+  async function carregarCurtidasComentario() {
+    if (!comentarioId) return;
+    setCarregando(true);
+    try {
+      const res = await fetch(`/api/feed/comentarios?comentario_id=${comentarioId}&t=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setCurtidas(data.curtidas || []);
+        setTotalReal(Number(data.total ?? 0));
+      }
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function abrirListaCurtidas() {
+    if (totalReal <= 0) return;
+    setAberto(true);
+    await carregarCurtidasComentario();
+  }
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={onCurtir}
+        className="flex items-center gap-1 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
+        style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}
+        aria-label={curtido ? "Remover curtida do comentário" : "Curtir comentário"}
+      >
+        <span>{curtido ? "❤️" : "♡"}</span>
+      </button>
+
+      {totalReal > 0 && (
+        <button
+          type="button"
+          onClick={abrirListaCurtidas}
+          className="text-[11px] sm:text-xs font-black underline-offset-2 hover:underline"
+          style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          {totalReal} {totalReal === 1 ? "curtida" : "curtidas"}
+        </button>
+      )}
+
+      {aberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.65)" }}>
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <h3 className="font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>CURTIDAS NO COMENTÁRIO</h3>
+              <button type="button" onClick={() => setAberto(false)} style={{ color: "#8B949E" }} aria-label="Fechar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto p-3 space-y-2">
+              {carregando ? (
+                <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: "#5CC800" }} /></div>
+              ) : curtidas.length === 0 ? (
+                <p className="py-6 text-center text-sm" style={{ color: "#8B949E" }}>Nenhuma curtida encontrada.</p>
+              ) : curtidas.map((c) => (
+                <Link
+                  key={c.user_id}
+                  href={`/perfil/${c.user_id}`}
+                  onClick={() => setAberto(false)}
+                  className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/5"
+                >
+                  <Avatar nome={c.nome} avatar={c.avatar} email={null} size={36} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black" style={{ color: "#E6EDF3" }}>{c.nome}</p>
+                    <p className="text-xs" style={{ color: "#8B949E" }}>Curtiu este comentário</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }: {
   postId: number;
   total: number;
@@ -405,12 +510,12 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
             <span className="text-[11px] sm:text-xs shrink-0" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
             {usuarioLogado && (
               <>
-                <button onClick={() => curtirComentario(c.id, curtidoComentario)}
-                  className="flex shrink-0 items-center gap-1 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
-                  style={{ color: curtidoComentario ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  <span>{curtidoComentario ? "❤️" : "♡"}</span>
-                  {c.total_curtidas > 0 && <span>{c.total_curtidas}</span>}
-                </button>
+                <ComentarioLikesResumo
+                  comentarioId={c.id}
+                  total={c.total_curtidas || 0}
+                  curtido={curtidoComentario}
+                  onCurtir={() => curtirComentario(c.id, curtidoComentario)}
+                />
                 {!isResposta && (
                   <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
                     className="shrink-0 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"

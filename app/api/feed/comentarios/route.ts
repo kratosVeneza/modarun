@@ -269,7 +269,88 @@ export async function POST(req: Request): Promise<NextResponse> {
 export async function GET(req: Request): Promise<NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const post_id = new URL(req.url).searchParams.get("post_id");
+  const url = new URL(req.url);
+  const comentario_id = url.searchParams.get("comentario_id");
+
+  // Lista quem curtiu um comentário específico.
+  // Usado no feed para abrir um modal com os perfis que curtiram o comentário.
+  if (comentario_id) {
+    const id = Number(comentario_id);
+    if (!id) return NextResponse.json({ error: "comentario_id inválido." }, { status: 400 });
+
+    const readClient = sbAdmin() || supabase;
+
+    const { data: curtidas, error: curtidasError } = await readClient
+      .from("feed_comentario_curtidas")
+      .select("user_id")
+      .eq("comentario_id", id);
+
+    if (curtidasError) {
+      return NextResponse.json({ error: curtidasError.message }, { status: 500 });
+    }
+
+    const ids: string[] = Array.from(
+      new Set<string>(
+        (curtidas || [])
+          .map((c: any) => String(c.user_id || ""))
+          .filter((v: string) => isUuid(v))
+      )
+    );
+
+    const usuarios: Record<string, { user_id: string; nome: string; avatar: string | null }> = {};
+    const admin = sbAdmin();
+
+    if (admin && ids.length > 0) {
+      await Promise.all(ids.map(async (idUsuario: string) => {
+        const { data } = await admin.auth.admin.getUserById(idUsuario);
+        const u = data?.user;
+        usuarios[idUsuario] = {
+          user_id: idUsuario,
+          nome: u ? nomeUsuario(u) : "Corredor",
+          avatar: u ? avatarUsuario(u) : null,
+        };
+      }));
+
+      // Complementa com nomes/avatares gravados no feed quando existirem.
+      const { data: autoresComentarios } = await admin
+        .from("feed_comentarios")
+        .select("user_id, autor_nome, autor_avatar")
+        .in("user_id", ids);
+
+      for (const row of autoresComentarios || []) {
+        const userId = String((row as any).user_id || "");
+        if (!isUuid(userId)) continue;
+        usuarios[userId] = {
+          user_id: userId,
+          nome: String((row as any).autor_nome || usuarios[userId]?.nome || "Corredor"),
+          avatar: ((row as any).autor_avatar as string | null) || usuarios[userId]?.avatar || null,
+        };
+      }
+
+      const { data: autoresPosts } = await admin
+        .from("feed_posts")
+        .select("user_id, autor_nome, autor_avatar")
+        .in("user_id", ids);
+
+      for (const row of autoresPosts || []) {
+        const userId = String((row as any).user_id || "");
+        if (!isUuid(userId)) continue;
+        usuarios[userId] = {
+          user_id: userId,
+          nome: String(usuarios[userId]?.nome || (row as any).autor_nome || "Corredor"),
+          avatar: usuarios[userId]?.avatar || ((row as any).autor_avatar as string | null) || null,
+        };
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      total: ids.length,
+      curtidas: ids.map((idUsuario: string) => usuarios[idUsuario] || { user_id: idUsuario, nome: "Corredor", avatar: null }),
+    });
+  }
+
+  const post_id = url.searchParams.get("post_id");
   if (!post_id) return NextResponse.json({ error: "post_id obrigatório." }, { status: 400 });
 
   const { data, error } = await supabase
