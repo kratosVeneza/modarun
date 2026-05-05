@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { criarNotificacaoSegura } from "@/lib/server-notificacoes";
 
 type MensagemRow = {
   id: number;
@@ -266,20 +267,18 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const admin = sbAdmin();
-  if (admin) {
-    const nome = nomeDoAuth(user);
-    const avatar = avatarDoAuth(user);
-    await admin.from("notificacoes").insert({
-      user_id: destinatarioId,
-      tipo: "mensagem_privada",
-      titulo: `Nova mensagem de ${nome}`,
-      corpo: texto.length > 90 ? `${texto.slice(0, 90)}...` : texto,
-      link: `/chat?user=${user.id}`,
-      ator_nome: nome,
-      ator_avatar: avatar,
-    } as never);
-  }
+  const nome = nomeDoAuth(user);
+  const avatar = avatarDoAuth(user);
+  await criarNotificacaoSegura({
+    user_id: destinatarioId,
+    tipo: "mensagem_privada",
+    titulo: `Nova mensagem de ${nome}`,
+    corpo: texto.length > 90 ? `${texto.slice(0, 90)}...` : texto,
+    link: `/chat?user=${user.id}`,
+    ator_id: user.id,
+    ator_nome: nome,
+    ator_avatar: avatar,
+  });
 
   return NextResponse.json({ success: true, mensagem: data });
 }

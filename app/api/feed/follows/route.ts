@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { criarNotificacaoSegura } from "@/lib/server-notificacoes";
 
 function sbAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -89,7 +90,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       const avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
       // Notificação não pode impedir o follow.
-      await writeClient.from("notificacoes").insert({
+      await criarNotificacaoSegura({
         user_id: followingId,
         tipo: "novo_seguidor",
         titulo: `${nome} começou a seguir você`,
@@ -98,8 +99,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         ator_id: user.id,
         ator_nome: nome,
         ator_avatar: avatar,
-        lida: false,
-      } as never).then(() => undefined);
+      });
     } else {
       const { error } = await writeClient
         .from("follows")

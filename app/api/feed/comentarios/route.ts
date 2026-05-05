@@ -1,43 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { criarNotificacaoSegura } from "@/lib/server-notificacoes";
 
 function sbAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createServiceClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-async function criarNotificacao(payload: Record<string, unknown>) {
-  const admin = sbAdmin();
-  if (!admin) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY ausente: não foi possível criar notificação.");
-    return { ok: false, error: "admin_client_missing" };
-  }
-
-  const { error } = await admin.from("notificacoes").insert(payload as never);
-  if (!error) return { ok: true };
-
-  console.error("Falha ao criar notificação completa:", error.message);
-
-  // Fallback para bancos onde algumas colunas opcionais ainda não existem.
-  const fallback = {
-    user_id: payload.user_id,
-    tipo: payload.tipo,
-    titulo: payload.titulo,
-    corpo: payload.corpo ?? null,
-    link: payload.link ?? null,
-    lida: false,
-  };
-
-  const { error: fallbackError } = await admin.from("notificacoes").insert(fallback as never);
-  if (fallbackError) {
-    console.error("Falha ao criar notificação fallback:", fallbackError.message);
-    return { ok: false, error: fallbackError.message };
-  }
-
-  return { ok: true, fallback: true };
 }
 
 function nomeUsuario(user: any) {
@@ -191,7 +161,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const mencoes = await resolverMencoes(texto, b.mencoes, user.id);
   let mencoesNotificadas = 0;
   for (const mencao of mencoes) {
-    const resultado = await criarNotificacao({
+    const resultado = await criarNotificacaoSegura({
       user_id: mencao.user_id,
       tipo: "mencao_comentario",
       titulo: `${autor_nome} marcou você em um comentário`,
@@ -209,7 +179,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (resposta_para) {
     const { data: pai } = await supabase.from("feed_comentarios").select("user_id").eq("id", resposta_para).single();
     if (pai?.user_id && pai.user_id !== user.id) {
-      await criarNotificacao({
+      await criarNotificacaoSegura({
         user_id: pai.user_id, tipo: "resposta_comentario",
         titulo: `${autor_nome} respondeu seu comentário`,
         corpo: texto.slice(0, 80),
@@ -217,7 +187,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
     }
   } else if (post?.user_id && post.user_id !== user.id) {
-    await criarNotificacao({
+    await criarNotificacaoSegura({
       user_id: post.user_id, tipo: "comentario_post",
       titulo: `${autor_nome} comentou sua publicação`,
       corpo: texto.slice(0, 80),
@@ -309,6 +279,30 @@ export async function PATCH(req: Request): Promise<NextResponse> {
       .eq("comentario_id", id);
 
     await writeClient.from("feed_comentarios").update({ total_curtidas: count ?? 0 }).eq("id", id);
+
+    if (acao === "curtir") {
+      const { data: comentario } = await writeClient
+        .from("feed_comentarios")
+        .select("user_id, post_id, texto")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (comentario?.user_id && comentario.user_id !== user.id) {
+        const autor_nome = nomeUsuario(user);
+        const autor_avatar = avatarUsuario(user);
+        await criarNotificacaoSegura({
+          user_id: comentario.user_id,
+          tipo: "curtida_comentario",
+          titulo: `${autor_nome} curtiu seu comentário`,
+          corpo: String(comentario.texto || "").slice(0, 90),
+          post_id: comentario.post_id,
+          link: `/#post-${comentario.post_id}`,
+          ator_id: user.id,
+          ator_nome,
+          ator_avatar,
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, total_curtidas: count ?? 0, curtido: acao === "curtir" });
   }

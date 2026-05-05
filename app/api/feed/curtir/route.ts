@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { criarNotificacaoSegura } from "@/lib/server-notificacoes";
 
 function nomeDoUsuario(user: any): string {
   const meta = (user?.user_metadata || {}) as Record<string, unknown>;
@@ -128,9 +129,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (post?.user_id && post.user_id !== user.id) {
       const nome = nomeDoUsuario(user);
       const avatar = avatarDoUsuario(user);
-      const admin = adminClient();
-      const db: any = admin ?? supabase;
-      await db.from("notificacoes").insert({
+      await criarNotificacaoSegura({
         user_id: post.user_id,
         tipo: "curtida_post",
         titulo: `${nome} curtiu sua publicação`,
@@ -140,8 +139,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         ator_id: user.id,
         ator_nome: nome,
         ator_avatar: avatar,
-        lida: false,
-      } as never).then(() => undefined);
+      });
     }
   }
 
