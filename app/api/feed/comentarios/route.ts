@@ -11,17 +11,16 @@ function sbAdmin() {
 
 async function criarNotificacao(payload: Record<string, unknown>) {
   const admin = sbAdmin();
-  if (!admin) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY ausente: não foi possível criar notificação.");
-    return { ok: false, error: "admin_client_missing" };
-  }
+  if (!admin) return;
 
+  // Tenta inserir com todos os campos usados pelo app.
+  // Se alguma coluna opcional ainda não existir no Supabase, faz fallback
+  // para os campos essenciais, garantindo que a notificação apareça no sininho.
   const { error } = await admin.from("notificacoes").insert(payload as never);
-  if (!error) return { ok: true };
+  if (!error) return;
 
   console.error("Falha ao criar notificação completa:", error.message);
 
-  // Fallback para bancos onde algumas colunas opcionais ainda não existem.
   const fallback = {
     user_id: payload.user_id,
     tipo: payload.tipo,
@@ -34,10 +33,7 @@ async function criarNotificacao(payload: Record<string, unknown>) {
   const { error: fallbackError } = await admin.from("notificacoes").insert(fallback as never);
   if (fallbackError) {
     console.error("Falha ao criar notificação fallback:", fallbackError.message);
-    return { ok: false, error: fallbackError.message };
   }
-
-  return { ok: true, fallback: true };
 }
 
 function nomeUsuario(user: any) {
@@ -189,9 +185,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   const { data: post } = await supabase.from("feed_posts").select("user_id").eq("id", post_id).single();
 
   const mencoes = await resolverMencoes(texto, b.mencoes, user.id);
-  let mencoesNotificadas = 0;
   for (const mencao of mencoes) {
-    const resultado = await criarNotificacao({
+    await criarNotificacao({
       user_id: mencao.user_id,
       tipo: "mencao_comentario",
       titulo: `${autor_nome} marcou você em um comentário`,
@@ -203,7 +198,6 @@ export async function POST(req: Request): Promise<NextResponse> {
       ator_avatar: autor_avatar,
       lida: false,
     });
-    if (resultado?.ok) mencoesNotificadas += 1;
   }
 
   if (resposta_para) {
@@ -225,7 +219,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     });
   }
 
-  return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar, curtido_por_mim: false }, mencoes_encontradas: mencoes.length, mencoes_notificadas: mencoesNotificadas });
+  return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar, curtido_por_mim: false } });
 }
 
 export async function GET(req: Request): Promise<NextResponse> {

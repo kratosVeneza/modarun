@@ -29,8 +29,7 @@ type Noticia = { titulo: string; url: string; fonte: string; imagem: string | nu
 type Comentario = {
   id: number; texto: string; created_at: string;
   autor_nome: string; autor_avatar: string | null;
-  user_id: string; resposta_para: number | null; total_curtidas: number;
-  curtido_por_mim?: boolean;
+  user_id: string; resposta_para: number | null; total_curtidas: number; curtido_por_mim?: boolean;
 };
 
 type CurtidaInfo = {
@@ -780,15 +779,15 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
             </button>
           </div>
 
-          <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
               <button onClick={toggleCurtida} disabled={!usuarioLogado}
                 className="flex items-center gap-1.5 text-sm font-black transition-all hover:scale-105 disabled:cursor-default"
                 style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                 <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
                 {curtido ? "CURTIDO" : "CURTIR"}
               </button>
-              <div id={`comentarios-${post.id}`}>
+              <div id={`comentarios-${post.id}`} className="min-w-0 flex-1 sm:flex-none">
                 <CardComentarios
                   postId={post.id}
                   total={totalComentarios}
@@ -799,7 +798,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               </div>
             </div>
             <button onClick={compartilhar}
-              className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
+              className="flex w-fit items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
               style={{ color: copiado ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
               <Share2 size={14} strokeWidth={2} />
               {copiado ? "COPIADO!" : ""}
