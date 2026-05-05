@@ -223,34 +223,6 @@ export default function PerfilPage(): React.JSX.Element {
   const [salvandoCidade, setSalvandoCidade] = useState(false);
   const [removendoId, setRemovendoId] = useState<number | null>(null);
   const [removendoEventoId, setRemovendoEventoId] = useState<number | null>(null);
-  const [excluindoConta, setExcluindoConta] = useState(false);
-
-
-  async function excluirConta() {
-    if (excluindoConta) return;
-    const aviso = "Esta ação é irreversível. Sua conta será excluída e seus dados sociais serão removidos. Para confirmar, digite EXCLUIR.";
-    const confirmacao = window.prompt(aviso);
-    if (confirmacao === null) return;
-    setExcluindoConta(true);
-    try {
-      const res = await fetch("/api/conta/excluir", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ confirmacao }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data.error || "Não foi possível excluir a conta.");
-        return;
-      }
-      alert("Conta excluída com sucesso.");
-      await supabase.auth.signOut();
-      router.push("/");
-    } finally {
-      setExcluindoConta(false);
-    }
-  }
 
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -1029,21 +1001,6 @@ export default function PerfilPage(): React.JSX.Element {
               </section>
             );
           })()}
-
-          {/* Zona de segurança */}
-          <section className="rounded-2xl p-5" style={{ background: "rgba(255,107,0,0.06)", border: "1px solid rgba(255,107,0,0.22)" }}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-black text-sm" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>ZONA DE SEGURANÇA</p>
-                <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Exclua sua conta e remova seus dados sociais do Moda Run caso não queira mais usar o app.</p>
-              </div>
-              <button onClick={excluirConta} disabled={excluindoConta}
-                className="rounded-xl px-4 py-2.5 text-xs font-black transition-all hover:brightness-110 disabled:opacity-60"
-                style={{ background: "rgba(255,107,0,0.16)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.35)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>
-                {excluindoConta ? "EXCLUINDO..." : "EXCLUIR MINHA CONTA"}
-              </button>
-            </div>
-          </section>
 
           {/* Links rápidos */}
           <section className="grid grid-cols-2 gap-3 pt-2">

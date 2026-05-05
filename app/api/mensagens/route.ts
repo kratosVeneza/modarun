@@ -253,18 +253,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "A mensagem deve ter no máximo 1200 caracteres." }, { status: 400 });
   }
 
-  const bloqueioClient: any = sbAdmin() || supabase;
-  const { data: bloqueio } = await bloqueioClient
-    .from("user_blocks")
-    .select("id")
-    .or(`and(bloqueador_id.eq.${user.id},bloqueado_id.eq.${destinatarioId}),and(bloqueador_id.eq.${destinatarioId},bloqueado_id.eq.${user.id})`)
-    .limit(1)
-    .maybeSingle();
-
-  if (bloqueio) {
-    return NextResponse.json({ error: "Não é possível enviar mensagem porque existe bloqueio entre estes usuários." }, { status: 403 });
-  }
-
   const { data, error } = await supabase
     .from("mensagens")
     .insert({

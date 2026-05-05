@@ -72,7 +72,7 @@ export default function AdminPage(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync"|"mensagens"|"moderacao">("eventos");
+  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync"|"mensagens">("eventos");
   const [lojaRestrita, setLojaRestrita] = useState<boolean | null>(null);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -175,7 +175,7 @@ export default function AdminPage(): React.JSX.Element {
 
           {/* Tabs */}
           <div className="flex gap-3">
-            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"],["moderacao","🛡️","MODERAÇÃO","Denúncias e segurança"]] as const).map(([id,icon,label,desc]) => (
+            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
                 style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: aba===id ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}>
@@ -209,7 +209,6 @@ export default function AdminPage(): React.JSX.Element {
             />
           )}
           {aba === "mensagens" && <AbaMensagens key="mensagens-tab" />}
-          {aba === "moderacao" && <AbaModeracao key="moderacao-tab" />}
         </div>
       </main>
     </>
@@ -1815,108 +1814,6 @@ function chaveEventoLocal(evento: { nome: string; cidade: string; estado: string
   ].join("|");
 }
 
-
-
-type DenunciaAdmin = {
-  id: number;
-  tipo: string;
-  alvo_id: string;
-  alvo_user_id?: string | null;
-  post_id?: number | null;
-  comentario_id?: number | null;
-  motivo?: string | null;
-  detalhes?: string | null;
-  status: string;
-  denunciante_email?: string | null;
-  created_at: string;
-};
-
-function AbaModeracao(): React.JSX.Element {
-  const [denuncias, setDenuncias] = useState<DenunciaAdmin[]>([]);
-  const [status, setStatus] = useState("pendente");
-  const [loading, setLoading] = useState(false);
-
-  async function carregar() {
-    setLoading(true);
-    const res = await fetch(`/api/moderacao/denuncias?status=${status}`, { credentials: "include", cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) setDenuncias(data.denuncias || []);
-    else alert(data.error || "Erro ao carregar denúncias.");
-    setLoading(false);
-  }
-
-  useEffect(() => { carregar(); }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function agir(id: number, acao: "resolver" | "ignorar" | "remover_conteudo") {
-    const msg = acao === "remover_conteudo" ? "Remover o conteúdo denunciado?" : acao === "ignorar" ? "Ignorar esta denúncia?" : "Marcar como resolvida?";
-    if (!confirm(msg)) return;
-    const res = await fetch("/api/moderacao/denuncias", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ id, acao }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return alert(data.error || "Erro ao executar ação.");
-    carregar();
-  }
-
-  return (
-    <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.16)" }}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
-        <div>
-          <h2 className="text-xl font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>🛡️ MODERAÇÃO</h2>
-          <p className="text-sm" style={{ color: "#8B949E" }}>Analise denúncias de publicações, comentários e perfis.</p>
-        </div>
-        <div className="flex gap-2">
-          {["pendente", "resolvida", "ignorada", "todas"].map(st => (
-            <button key={st} onClick={() => setStatus(st)} className="rounded-xl px-3 py-2 text-xs font-black"
-              style={{ background: status === st ? "#FF6B00" : "#21262D", color: status === st ? "#fff" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {st.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <p className="text-sm" style={{ color: "#8B949E" }}>Carregando denúncias...</p>
-      ) : denuncias.length === 0 ? (
-        <div className="rounded-xl p-5 text-center" style={{ background: "#0D1117", border: "1px solid rgba(255,255,255,0.06)", color: "#8B949E" }}>
-          Nenhuma denúncia encontrada neste filtro.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {denuncias.map(d => (
-            <div key={d.id} className="rounded-2xl p-4" style={{ background: "#0D1117", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
-                    {d.tipo.toUpperCase()} • STATUS: {d.status.toUpperCase()}
-                  </p>
-                  <p className="text-sm" style={{ color: "#E6EDF3" }}><b>Motivo:</b> {d.motivo || "—"}</p>
-                  {d.detalhes && <p className="text-sm" style={{ color: "#C9D1D9" }}><b>Detalhes:</b> {d.detalhes}</p>}
-                  <p className="text-xs" style={{ color: "#8B949E" }}>Alvo: {d.alvo_id} {d.post_id ? `• Post #${d.post_id}` : ""} {d.comentario_id ? `• Comentário #${d.comentario_id}` : ""}</p>
-                  <p className="text-xs" style={{ color: "#8B949E" }}>Denunciante: {d.denunciante_email || "usuário"} • {new Date(d.created_at).toLocaleString("pt-BR")}</p>
-                  {d.post_id && <a href={`/#post-${d.post_id}`} className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>ABRIR POST</a>}
-                  {d.alvo_user_id && <a href={`/perfil/${d.alvo_user_id}`} className="ml-3 text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>ABRIR PERFIL</a>}
-                </div>
-                {d.status === "pendente" && (
-                  <div className="flex flex-wrap gap-2 shrink-0">
-                    {(d.tipo === "post" || d.tipo === "comentario") && (
-                      <button onClick={() => agir(d.id, "remover_conteudo")} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background: "rgba(255,107,0,0.16)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>REMOVER CONTEÚDO</button>
-                    )}
-                    <button onClick={() => agir(d.id, "resolver")} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.16)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>RESOLVIDA</button>
-                    <button onClick={() => agir(d.id, "ignorar")} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background: "#21262D", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>IGNORAR</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
 
 function AbaMensagens(): React.JSX.Element {
   const [titulo, setTitulo] = React.useState("");

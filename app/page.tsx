@@ -70,35 +70,6 @@ function nomeExibicao(nome: string | null, email: string | null): string {
   return "Corredor";
 }
 
-async function denunciarConteudo(payload: {
-  tipo: "post" | "comentario" | "usuario" | "mensagem";
-  alvo_id: string;
-  alvo_user_id?: string | null;
-  post_id?: number;
-  comentario_id?: number;
-}) {
-  const motivo = window.prompt("Motivo da denúncia? Ex.: spam, ofensa, assédio, conteúdo inadequado");
-  if (motivo === null) return;
-
-  const detalhes = window.prompt("Deseja adicionar detalhes? (opcional)") || "";
-
-  const res = await fetch("/api/moderacao/denuncias", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ ...payload, motivo, detalhes }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    alert(data.error || "Não foi possível enviar a denúncia.");
-    return;
-  }
-
-  alert(data.duplicada ? "Você já denunciou este conteúdo." : "Denúncia enviada para análise da moderação.");
-}
-
 function formatarData(data: string) {
   if (!data) return "—";
   const [, mes, dia] = String(data).split("-");
@@ -360,19 +331,15 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
                     RESPONDER
                   </button>
                 )}
-                {c.user_id === userId ? (
+                {c.user_id === userId && (
                   <>
                     <button onClick={() => { setEditandoId(c.id); setTextoEdit(c.texto); }}
-                      className="whitespace-nowrap text-xs font-black transition-colors hover:opacity-70"
+                      className="text-xs font-black transition-colors hover:opacity-70"
                       style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
                     <button onClick={() => excluirComentario(c.id)}
-                      className="whitespace-nowrap text-xs font-black transition-colors hover:opacity-70"
+                      className="text-xs font-black transition-colors hover:opacity-70"
                       style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXCLUIR</button>
                   </>
-                ) : (
-                  <button onClick={() => denunciarConteudo({ tipo: "comentario", alvo_id: String(c.id), alvo_user_id: c.user_id, post_id: postId, comentario_id: c.id })}
-                    className="whitespace-nowrap text-xs font-black transition-colors hover:opacity-70"
-                    style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>DENUNCIAR</button>
                 )}
               </>
             )}
@@ -716,7 +683,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                 {seguindo ? "SEGUINDO" : "+ SEGUIR"}
               </button>
             )}
-            {userId === post.user_id ? (
+            {userId === post.user_id && (
               <div className="flex items-center gap-1">
                 <button onClick={() => { setEditandoPost(true); setTextoEditPost(post.texto || ""); }}
                   className="rounded-lg p-1.5 transition-colors hover:bg-green-500/10" style={{ color: "#8B949E" }}>
@@ -726,14 +693,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                   <X size={14} strokeWidth={2} />
                 </button>
               </div>
-            ) : usuarioLogado ? (
-              <button onClick={() => denunciarConteudo({ tipo: "post", alvo_id: String(post.id), alvo_user_id: post.user_id, post_id: post.id })}
-                className="rounded-lg px-2 py-1 text-xs font-black transition-colors hover:bg-orange-500/10"
-                title="Denunciar publicação"
-                style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                DENUNCIAR
-              </button>
-            ) : null}
+            )}
           </div>
         </div>
 
