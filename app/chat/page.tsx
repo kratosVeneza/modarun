@@ -156,7 +156,7 @@ export default function ChatPage(): React.JSX.Element {
     const conversaExistente = conversas.find((c) => c.outro_id === outroId);
     const outro = data.outro;
 
-    setConversaAtiva(conversaExistente || {
+    const proximaConversa = conversaExistente || {
       outro_id: outroId,
       outro_nome: parcial?.outro_nome || outro?.nome || "Corredor",
       outro_avatar: parcial?.outro_avatar ?? outro?.avatar ?? null,
@@ -166,7 +166,10 @@ export default function ChatPage(): React.JSX.Element {
       nao_lidas: 0,
       remetente_id: user?.id || "",
       destinatario_id: outroId,
-    });
+    };
+
+    conversaAtivaRef.current = proximaConversa;
+    setConversaAtiva(proximaConversa);
 
     setMensagens(data.mensagens || []);
     setCarregandoMensagens(false);
