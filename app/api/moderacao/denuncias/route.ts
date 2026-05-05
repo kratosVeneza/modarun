@@ -145,16 +145,17 @@ export async function PATCH(req: Request): Promise<NextResponse> {
   const acao = limparTexto(body.acao, 40);
   const admin = adminClient();
   if (!admin) return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada." }, { status: 500 });
+  const adminDb = admin;
   if (!Number.isFinite(id)) return NextResponse.json({ error: "Denúncia inválida." }, { status: 400 });
 
-  const { data: denuncia, error: denError } = await admin.from("denuncias").select("*").eq("id", id).maybeSingle();
+  const { data: denuncia, error: denError } = await adminDb.from("denuncias").select("*").eq("id", id).maybeSingle();
   if (denError || !denuncia) return NextResponse.json({ error: "Denúncia não encontrada." }, { status: 404 });
 
   async function atualizarDenuncia(update: Record<string, unknown>) {
     const tentativas = [update, { status: update.status, acao_tomada: update.acao_tomada }].filter(Boolean);
     let ultimoErro: any = null;
     for (const t of tentativas) {
-      const { error } = await admin.from("denuncias").update(t).eq("id", id);
+      const { error } = await adminDb.from("denuncias").update(t).eq("id", id);
       if (!error) return null;
       ultimoErro = error;
       if (!colunaInexistente(error)) break;
@@ -171,27 +172,27 @@ export async function PATCH(req: Request): Promise<NextResponse> {
 
   if (acao === "remover_conteudo") {
     if (denuncia.tipo === "post" && denuncia.post_id) {
-      const { data: comentariosDoPost } = await admin.from("feed_comentarios").select("id").eq("post_id", denuncia.post_id);
+      const { data: comentariosDoPost } = await adminDb.from("feed_comentarios").select("id").eq("post_id", denuncia.post_id);
       const idsComentariosDoPost = (comentariosDoPost || []).map((c: any) => c.id).filter(Boolean);
       if (idsComentariosDoPost.length > 0) {
-        await admin.from("feed_comentario_curtidas").delete().in("comentario_id", idsComentariosDoPost);
+        await adminDb.from("feed_comentario_curtidas").delete().in("comentario_id", idsComentariosDoPost);
       }
-      await admin.from("feed_curtidas").delete().eq("post_id", denuncia.post_id);
-      await admin.from("feed_comentarios").delete().eq("post_id", denuncia.post_id);
-      const { error } = await admin.from("feed_posts").delete().eq("id", denuncia.post_id);
+      await adminDb.from("feed_curtidas").delete().eq("post_id", denuncia.post_id);
+      await adminDb.from("feed_comentarios").delete().eq("post_id", denuncia.post_id);
+      const { error } = await adminDb.from("feed_posts").delete().eq("id", denuncia.post_id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
     if (denuncia.tipo === "comentario" && denuncia.comentario_id) {
-      const { data: comentario } = await admin.from("feed_comentarios").select("post_id").eq("id", denuncia.comentario_id).maybeSingle();
-      const { data: respostas } = await admin.from("feed_comentarios").select("id").eq("resposta_para", denuncia.comentario_id);
+      const { data: comentario } = await adminDb.from("feed_comentarios").select("post_id").eq("id", denuncia.comentario_id).maybeSingle();
+      const { data: respostas } = await adminDb.from("feed_comentarios").select("id").eq("resposta_para", denuncia.comentario_id);
       const idsComentarios = [denuncia.comentario_id, ...((respostas || []).map((r: any) => r.id))];
-      await admin.from("feed_comentario_curtidas").delete().in("comentario_id", idsComentarios);
-      await admin.from("feed_comentarios").delete().eq("resposta_para", denuncia.comentario_id);
-      const { error } = await admin.from("feed_comentarios").delete().eq("id", denuncia.comentario_id);
+      await adminDb.from("feed_comentario_curtidas").delete().in("comentario_id", idsComentarios);
+      await adminDb.from("feed_comentarios").delete().eq("resposta_para", denuncia.comentario_id);
+      const { error } = await adminDb.from("feed_comentarios").delete().eq("id", denuncia.comentario_id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       if (comentario?.post_id) {
-        const { count } = await admin.from("feed_comentarios").select("id", { count: "exact", head: true }).eq("post_id", comentario.post_id).is("resposta_para", null);
-        await admin.from("feed_posts").update({ total_comentarios: count ?? 0 }).eq("id", comentario.post_id);
+        const { count } = await adminDb.from("feed_comentarios").select("id", { count: "exact", head: true }).eq("post_id", comentario.post_id).is("resposta_para", null);
+        await adminDb.from("feed_posts").update({ total_comentarios: count ?? 0 }).eq("id", comentario.post_id);
       }
     }
     const error = await atualizarDenuncia({ status: "resolvida", resolvida_em: new Date().toISOString(), resolvida_por: user.id, acao_tomada: "conteudo_removido" });
