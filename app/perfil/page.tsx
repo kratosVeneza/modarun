@@ -223,6 +223,34 @@ export default function PerfilPage(): React.JSX.Element {
   const [salvandoCidade, setSalvandoCidade] = useState(false);
   const [removendoId, setRemovendoId] = useState<number | null>(null);
   const [removendoEventoId, setRemovendoEventoId] = useState<number | null>(null);
+  const [excluindoConta, setExcluindoConta] = useState(false);
+
+
+  async function excluirConta() {
+    if (excluindoConta) return;
+    const aviso = "Esta ação é irreversível. Sua conta será excluída e seus dados sociais serão removidos. Para confirmar, digite EXCLUIR.";
+    const confirmacao = window.prompt(aviso);
+    if (confirmacao === null) return;
+    setExcluindoConta(true);
+    try {
+      const res = await fetch("/api/conta/excluir", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ confirmacao }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || "Não foi possível excluir a conta.");
+        return;
+      }
+      alert("Conta excluída com sucesso.");
+      await supabase.auth.signOut();
+      router.push("/");
+    } finally {
+      setExcluindoConta(false);
+    }
+  }
 
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -230,14 +258,9 @@ export default function PerfilPage(): React.JSX.Element {
 
     setUserEmail(user.email || "");
     setUserId(user.id);
-    const meta = (user.user_metadata || {}) as Record<string, unknown>;
-    const nome = (meta.nome_exibicao as string) || (meta.full_name as string) || (meta.name as string) || (meta.nome as string) || user.email?.split("@")[0] || "Corredor";
+    const nome = user.user_metadata?.nome_exibicao || user.email?.split("@")[0] || "Corredor";
     setNomeExibicao(nome); setNomeTemp(nome);
-    // Aceita avatar gravado em qualquer um dos campos conhecidos (avatar_url do
-    // upload manual, picture do Google, foto/foto_url legados). Isso evita que
-    // a foto desapareça quando o Supabase mexe na metadata após login.
-    const avatarBruto = (meta.avatar_url as string) || (meta.picture as string) || (meta.foto as string) || (meta.foto_url as string) || null;
-    setAvatarUrl(avatarBruto);
+    setAvatarUrl(user.user_metadata?.avatar_url || null);
 
     const [
       { data: adminRow },
@@ -288,9 +311,7 @@ export default function PerfilPage(): React.JSX.Element {
       const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, file, { upsert: true, contentType: file.type });
       if (uploadError) { alert("Erro no upload: " + uploadError.message); setUploadandoFoto(false); return; }
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
-      // Atualiza todos os campos conhecidos para garantir que nenhum legado
-      // (picture do Google, foto, foto_url) sobreponha a foto nova.
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl, picture: publicUrl, foto: publicUrl, foto_url: publicUrl } });
+      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
       setAvatarUrl(publicUrl);
     } catch { alert("Erro ao fazer upload."); }
     setUploadandoFoto(false);
@@ -298,32 +319,8 @@ export default function PerfilPage(): React.JSX.Element {
 
   async function removerFoto() {
     if (!confirm("Remover foto de perfil?")) return;
-    await supabase.auth.updateUser({ data: { avatar_url: null, picture: null, foto: null, foto_url: null } });
+    await supabase.auth.updateUser({ data: { avatar_url: null } });
     setAvatarUrl(null);
-  }
-
-  // Tenta recuperar a foto do usuário a partir de posts antigos no feed.
-  // Útil quando o Supabase desincronizou a metadata mas as fotos antigas ainda
-  // existem no bucket e estão referenciadas em feed_posts.autor_avatar.
-  async function recuperarFotoDoFeed() {
-    if (!userId) return;
-    const { data } = await supabase
-      .from("feed_posts")
-      .select("autor_avatar")
-      .eq("user_id", userId)
-      .not("autor_avatar", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const url = (data as { autor_avatar?: string } | null)?.autor_avatar;
-    if (!url) {
-      alert("Não encontramos uma foto antiga nos seus posts. Faça upload de uma nova foto.");
-      return;
-    }
-    await supabase.auth.updateUser({ data: { avatar_url: url, picture: url, foto: url, foto_url: url } });
-    setAvatarUrl(url);
-    alert("Foto restaurada a partir do seu post mais recente!");
   }
 
   async function editarPost(id: number) {
@@ -433,14 +430,6 @@ export default function PerfilPage(): React.JSX.Element {
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.target.value = ""; }} />
               </div>
-
-              {!avatarUrl && !uploadandoFoto && userId && (
-                <button onClick={recuperarFotoDoFeed} type="button"
-                  className="self-start rounded-lg px-2 py-1 text-[11px] font-black hover:brightness-110"
-                  style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  ↻ RESTAURAR FOTO ANTIGA
-                </button>
-              )}
 
               {/* Info */}
               <div className="flex-1">
@@ -1040,6 +1029,21 @@ export default function PerfilPage(): React.JSX.Element {
               </section>
             );
           })()}
+
+          {/* Zona de segurança */}
+          <section className="rounded-2xl p-5" style={{ background: "rgba(255,107,0,0.06)", border: "1px solid rgba(255,107,0,0.22)" }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-black text-sm" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>ZONA DE SEGURANÇA</p>
+                <p className="text-xs mt-1" style={{ color: "#8B949E" }}>Exclua sua conta e remova seus dados sociais do Moda Run caso não queira mais usar o app.</p>
+              </div>
+              <button onClick={excluirConta} disabled={excluindoConta}
+                className="rounded-xl px-4 py-2.5 text-xs font-black transition-all hover:brightness-110 disabled:opacity-60"
+                style={{ background: "rgba(255,107,0,0.16)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.35)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.06em" }}>
+                {excluindoConta ? "EXCLUINDO..." : "EXCLUIR MINHA CONTA"}
+              </button>
+            </div>
+          </section>
 
           {/* Links rápidos */}
           <section className="grid grid-cols-2 gap-3 pt-2">

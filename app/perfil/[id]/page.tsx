@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import { ArrowLeft, Heart, MessageCircle, Share2, Users, Loader2 } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Share2, Users, Loader2, ShieldAlert, Ban } from "lucide-react";
 
 type Usuario = {
   id: string; nome: string | null; avatar: string | null; email: string | null;
@@ -51,6 +51,8 @@ export default function PerfilPublicoPage(): React.JSX.Element {
   const [viewer, setViewer] = useState<{ id: string; email?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOwn, setIsOwn] = useState(false);
+  const [bloqueado, setBloqueado] = useState(false);
+  const [loadingBloqueio, setLoadingBloqueio] = useState(false);
 
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -66,6 +68,12 @@ export default function PerfilPublicoPage(): React.JSX.Element {
     const data = await res.json();
     setUsuario(data.usuario);
     setSeguindo(data.usuario.viewer_segue);
+
+    if (user) {
+      const rb = await fetch(`/api/moderacao/bloqueios?user_id=${id}`, { credentials: "include", cache: "no-store" });
+      const jb = await rb.json().catch(() => ({}));
+      if (rb.ok) setBloqueado(!!jb.bloqueado);
+    }
 
     const { data: postsData } = await supabase
       .from("feed_posts_view")
@@ -126,6 +134,43 @@ export default function PerfilPublicoPage(): React.JSX.Element {
     } finally {
       setLoadingFollow(false);
     }
+  }
+
+
+  async function denunciarUsuario() {
+    if (!viewer || !usuario) return;
+    const motivo = window.prompt("Motivo da denúncia? Ex.: perfil falso, assédio, spam, conteúdo inadequado");
+    if (motivo === null) return;
+    const detalhes = window.prompt("Deseja adicionar detalhes? (opcional)") || "";
+    const res = await fetch("/api/moderacao/denuncias", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ tipo: "usuario", alvo_id: usuario.id, alvo_user_id: usuario.id, motivo, detalhes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    alert(res.ok ? (data.duplicada ? "Você já denunciou este perfil." : "Denúncia enviada para análise.") : (data.error || "Não foi possível denunciar."));
+  }
+
+  async function toggleBloqueio() {
+    if (!viewer || !usuario || loadingBloqueio) return;
+    const msg = bloqueado ? "Desbloquear este usuário?" : "Bloquear este usuário? Ele não poderá interagir com você enquanto estiver bloqueado.";
+    if (!confirm(msg)) return;
+    setLoadingBloqueio(true);
+    const res = await fetch("/api/moderacao/bloqueios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ bloqueado_id: usuario.id, acao: bloqueado ? "desbloquear" : "bloquear" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setBloqueado(!!data.bloqueado);
+      if (data.bloqueado) setSeguindo(false);
+    } else {
+      alert(data.error || "Não foi possível atualizar o bloqueio.");
+    }
+    setLoadingBloqueio(false);
   }
 
   if (loading) return (
@@ -222,9 +267,20 @@ export default function PerfilPublicoPage(): React.JSX.Element {
                     {seguindo ? "SEGUINDO" : "SEGUIR"}
                   </button>
                   <button onClick={() => { if (usuario?.id) window.location.href = "/chat?user=" + usuario.id; }}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110"
+                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50"
+                    disabled={bloqueado}
                     style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
                     💬 MENSAGEM
+                  </button>
+                  <button onClick={toggleBloqueio} disabled={loadingBloqueio}
+                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110 disabled:opacity-50"
+                    style={{ background: bloqueado ? "rgba(255,107,0,0.16)" : "rgba(255,255,255,0.05)", color: bloqueado ? "#FF6B00" : "#8B949E", border: "1px solid rgba(255,255,255,0.1)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    <Ban size={15} /> {bloqueado ? "DESBLOQUEAR" : "BLOQUEAR"}
+                  </button>
+                  <button onClick={denunciarUsuario}
+                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110"
+                    style={{ background: "rgba(255,107,0,0.08)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.25)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    <ShieldAlert size={15} /> DENUNCIAR
                   </button>
                   </div>
                 )}

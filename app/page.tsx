@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
 import CardLoja from "@/components/CardLoja";
 import { createClient } from "@/utils/supabase/client";
@@ -30,7 +30,6 @@ type Comentario = {
   id: number; texto: string; created_at: string;
   autor_nome: string; autor_avatar: string | null;
   user_id: string; resposta_para: number | null; total_curtidas: number;
-  curtido_por_mim?: boolean;
 };
 
 type CurtidaInfo = {
@@ -70,6 +69,30 @@ function nomeExibicao(nome: string | null, email: string | null): string {
   return "Corredor";
 }
 
+async function denunciarConteudo(payload: {
+  tipo: "post" | "comentario" | "usuario" | "mensagem";
+  alvo_id: string;
+  alvo_user_id?: string | null;
+  post_id?: number;
+  comentario_id?: number;
+}) {
+  const motivo = window.prompt("Motivo da denúncia? Ex.: spam, ofensa, assédio, conteúdo inadequado");
+  if (motivo === null) return;
+  const detalhes = window.prompt("Deseja adicionar detalhes? (opcional)") || "";
+  const res = await fetch("/api/moderacao/denuncias", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...payload, motivo, detalhes }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    alert(data.error || "Não foi possível enviar a denúncia.");
+    return;
+  }
+  alert(data.duplicada ? "Você já denunciou este conteúdo." : "Denúncia enviada para análise da moderação.");
+}
+
 function formatarData(data: string) {
   if (!data) return "—";
   const [, mes, dia] = String(data).split("-");
@@ -91,111 +114,6 @@ function Avatar({ nome, avatar, email, size = 40 }: { nome: string | null; avata
   );
 }
 
-
-function ComentarioLikesResumo({
-  comentarioId,
-  total,
-  curtido,
-  onCurtir,
-}: {
-  comentarioId: number;
-  total: number;
-  curtido: boolean;
-  onCurtir: () => void;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const [carregando, setCarregando] = useState(false);
-  const [curtidas, setCurtidas] = useState<CurtidaInfo[]>([]);
-  const [totalReal, setTotalReal] = useState(total || 0);
-
-  useEffect(() => {
-    setTotalReal(total || 0);
-  }, [total]);
-
-  async function carregarCurtidasComentario() {
-    if (!comentarioId) return;
-    setCarregando(true);
-    try {
-      const res = await fetch(`/api/feed/comentarios?comentario_id=${comentarioId}&t=${Date.now()}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        setCurtidas(data.curtidas || []);
-        setTotalReal(Number(data.total ?? 0));
-      }
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  async function abrirListaCurtidas() {
-    if (totalReal <= 0) return;
-    setAberto(true);
-    await carregarCurtidasComentario();
-  }
-
-  return (
-    <div className="flex shrink-0 items-center gap-1">
-      <button
-        type="button"
-        onClick={onCurtir}
-        className="flex items-center gap-1 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
-        style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}
-        aria-label={curtido ? "Remover curtida do comentário" : "Curtir comentário"}
-      >
-        <span>{curtido ? "❤️" : "♡"}</span>
-      </button>
-
-      {totalReal > 0 && (
-        <button
-          type="button"
-          onClick={abrirListaCurtidas}
-          className="text-[11px] sm:text-xs font-black underline-offset-2 hover:underline"
-          style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}
-        >
-          {totalReal} {totalReal === 1 ? "curtida" : "curtidas"}
-        </button>
-      )}
-
-      {aberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.65)" }}>
-          <div className="w-full max-w-sm overflow-hidden rounded-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
-            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <h3 className="font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>CURTIDAS NO COMENTÁRIO</h3>
-              <button type="button" onClick={() => setAberto(false)} style={{ color: "#8B949E" }} aria-label="Fechar">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto p-3 space-y-2">
-              {carregando ? (
-                <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" style={{ color: "#5CC800" }} /></div>
-              ) : curtidas.length === 0 ? (
-                <p className="py-6 text-center text-sm" style={{ color: "#8B949E" }}>Nenhuma curtida encontrada.</p>
-              ) : curtidas.map((c) => (
-                <Link
-                  key={c.user_id}
-                  href={`/perfil/${c.user_id}`}
-                  onClick={() => setAberto(false)}
-                  className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/5"
-                >
-                  <Avatar nome={c.nome} avatar={c.avatar} email={null} size={36} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black" style={{ color: "#E6EDF3" }}>{c.nome}</p>
-                    <p className="text-xs" style={{ color: "#8B949E" }}>Curtiu este comentário</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }: {
   postId: number;
   total: number;
@@ -213,111 +131,15 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
   const [respondendoId, setRespondendoId] = useState<number | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [textoEdit, setTextoEdit] = useState("");
-  const [mentionQuery, setMentionQuery] = useState("");
-  const [mentionResults, setMentionResults] = useState<{ user_id: string; autor_nome: string | null; autor_avatar: string | null; autor_email: string | null }[]>([]);
-  const [mentionLoading, setMentionLoading] = useState(false);
-  const [mencoesSelecionadas, setMencoesSelecionadas] = useState<{ user_id: string; nome: string; handle: string; email?: string | null }[]>([]);
-  const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const realtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     setTotalAtual(total ?? 0);
   }, [total]);
 
-  const recarregarComentarios = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/feed/comentarios?post_id=${postId}&t=${Date.now()}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return;
-
-      const lista = data.comentarios || [];
-      const totalPrincipais = lista.filter((c: Comentario) => !c.resposta_para).length;
-
-      setComentarios(lista);
-      setTotalAtual(totalPrincipais);
-      onTotalChange?.(totalPrincipais);
-    } catch {
-      // mantém a interface como está se houver falha momentânea de rede
-    }
-  }, [onTotalChange, postId]);
-
-  // Atualiza comentários em tempo real.
-  // Mantém Supabase Realtime, mas adiciona polling leve enquanto os comentários estão abertos.
-  // Isso evita depender 100% do Realtime/RLS/publication e dá a sensação de chat no feed.
-  useEffect(() => {
-    if (!aberto) return;
-
-    recarregarComentarios();
-
-    const intervalo = window.setInterval(() => {
-      recarregarComentarios();
-    }, 1800);
-
-    return () => window.clearInterval(intervalo);
-  }, [aberto, recarregarComentarios]);
-
-  useEffect(() => {
-    let cancelado = false;
-
-    function agendarRecarregamento() {
-      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = setTimeout(() => {
-        if (!cancelado) recarregarComentarios();
-      }, 200);
-    }
-
-    const canal = supabase
-      .channel(`feed-comentarios-post-${postId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "feed_comentarios", filter: `post_id=eq.${postId}` },
-        () => agendarRecarregamento()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "feed_comentario_curtidas" },
-        () => {
-          if (aberto) agendarRecarregamento();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      cancelado = true;
-      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
-      supabase.removeChannel(canal);
-    };
-  }, [aberto, postId, recarregarComentarios, supabase]);
-
-  useEffect(() => {
-    if (!mentionQuery || mentionQuery.length < 2) {
-      setMentionResults([]);
-      return;
-    }
-    if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-    mentionTimerRef.current = setTimeout(async () => {
-      setMentionLoading(true);
-      try {
-        const res = await fetch(`/api/usuarios?q=${encodeURIComponent(mentionQuery)}`, { credentials: "include", cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        setMentionResults(data.usuarios || []);
-      } finally {
-        setMentionLoading(false);
-      }
-    }, 250);
-    return () => {
-      if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
-    };
-  }, [mentionQuery]);
-
   async function carregar() {
     setCarregando(true);
-    const res = await fetch(`/api/feed/comentarios?post_id=${postId}`, { credentials: "include", cache: "no-store" });
-    const data = await res.json().catch(() => ({}));
+    const res = await fetch(`/api/feed/comentarios?post_id=${postId}`);
+    const data = await res.json();
     const lista = data.comentarios || [];
     const totalPrincipais = lista.filter((c: Comentario) => !c.resposta_para).length;
     setComentarios(lista);
@@ -328,70 +150,14 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
 
   function toggle() { if (!aberto) carregar(); setAberto(v => !v); }
 
-  function handleUsuario(u: { autor_nome: string | null; autor_email: string | null }) {
-    return String(u.autor_nome || u.autor_email?.split("@")[0] || "corredor")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9._-]/g, ".")
-      .replace(/\.+/g, ".")
-      .replace(/^\.|\.$/g, "")
-      .slice(0, 30)
-      .toLowerCase();
-  }
-
-  function detectarMention(valor: string) {
-    const antesDoCursor = valor;
-    const match = antesDoCursor.match(/(?:^|\s)@([\p{L}\p{N}._-]{1,30})$/u);
-    setMentionQuery(match?.[1] || "");
-  }
-
-  function alterarTexto(valor: string) {
-    setTexto(valor);
-    detectarMention(valor);
-  }
-
-  function inserirMencao(u: { user_id: string; autor_nome: string | null; autor_email: string | null; autor_avatar: string | null }) {
-    const handle = handleUsuario(u);
-    const nome = u.autor_nome || u.autor_email?.split("@")[0] || handle;
-    setTexto(prev => {
-      if (/(^|\s)@[\p{L}\p{N}._-]{1,30}$/u.test(prev)) {
-        return prev.replace(/(^|\s)@[\p{L}\p{N}._-]{1,30}$/u, `$1@${handle} `);
-      }
-      return `${prev}${prev.endsWith(" ") || prev.length === 0 ? "" : " "}@${handle} `;
-    });
-    setMencoesSelecionadas(prev => {
-      if (prev.some(m => m.user_id === u.user_id)) return prev;
-      return [...prev, { user_id: u.user_id, nome, handle, email: u.autor_email || null }];
-    });
-    setMentionQuery("");
-    setMentionResults([]);
-  }
-
   async function enviar() {
     if (!texto.trim() || enviando) return;
     setEnviando(true);
-    // Filtra apenas menções cujo handle ainda aparece no texto, para não notificar
-    // alguém que o autor digitou e depois apagou.
-    const handlesNoTexto = new Set(
-      Array.from(texto.matchAll(/@([\p{L}\p{N}._-]{2,30})/gu)).map((m) => m[1].toLowerCase())
-    );
-    const mencoesValidas = mencoesSelecionadas.filter(m => handlesNoTexto.has((m.handle || "").toLowerCase()));
     const res = await fetch("/api/feed/comentarios", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId, mencoes: mencoesValidas }),
+      body: JSON.stringify({ post_id: postId, texto, resposta_para: respondendoId }),
     });
-    const data = await res.json().catch(() => ({}));
-    // Log de diagnóstico das menções: aparece no DevTools do navegador.
-    // Útil quando uma menção não está virando notificação para entender por quê.
-    if (data?.mencoes_diagnostico !== undefined) {
-      // eslint-disable-next-line no-console
-      console.log("[MODA RUN] menções enviadas:", mencoesValidas, "diagnóstico do servidor:", {
-        encontradas: data.mencoes_encontradas,
-        notificadas: data.mencoes_notificadas,
-        admin_disponivel: data.admin_disponivel,
-        detalhes: data.mencoes_diagnostico,
-      });
-    }
+    const data = await res.json();
     if (data.success) {
       setComentarios(prev => [...prev, data.comentario]);
       if (!respondendoId) {
@@ -401,35 +167,19 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
           return novoTotal;
         });
       }
-      setTexto(""); setRespondendoId(null); setMostrarEmojis(false); setMentionQuery(""); setMentionResults([]); setMencoesSelecionadas([]);
+      setTexto(""); setRespondendoId(null); setMostrarEmojis(false);
     }
     setEnviando(false);
   }
 
   async function curtirComentario(id: number, curtido: boolean) {
-    setComentarios(prev => prev.map(c => c.id === id ? {
-      ...c,
-      curtido_por_mim: !curtido,
-      total_curtidas: Math.max(0, (c.total_curtidas || 0) + (curtido ? -1 : 1)),
-    } : c));
-
     const res = await fetch("/api/feed/comentarios", {
       method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ acao: curtido ? "descurtir" : "curtir", id }),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json();
     if (data.success) {
-      setComentarios(prev => prev.map(c => c.id === id ? {
-        ...c,
-        total_curtidas: Number(data.total_curtidas ?? 0),
-        curtido_por_mim: !!data.curtido,
-      } : c));
-    } else {
-      setComentarios(prev => prev.map(c => c.id === id ? {
-        ...c,
-        curtido_por_mim: curtido,
-        total_curtidas: Math.max(0, (c.total_curtidas || 0) + (curtido ? 1 : -1)),
-      } : c));
+      setComentarios(prev => prev.map(c => c.id === id ? { ...c, total_curtidas: data.total_curtidas } : c));
     }
   }
 
@@ -460,102 +210,83 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
   const principais = comentarios.filter(c => !c.resposta_para);
   const respostas = (id: number) => comentarios.filter(c => c.resposta_para === id);
 
-  function renderTextoComMencoes(valor: string) {
-    const partes = valor.split(/(@[\p{L}\p{N}._-]+)/gu);
-    return partes.map((parte, i) => {
-      if (parte.startsWith("@")) {
-        return <span key={`${parte}-${i}`} className="font-bold" style={{ color: "#5CC800" }}>{parte}</span>;
-      }
-      return <React.Fragment key={`${parte}-${i}`}>{parte}</React.Fragment>;
-    });
-  }
-
   function renderComentario(c: Comentario, isResposta = false) {
-    const listaRespostas = respostas(c.id);
-    const curtidoComentario = !!c.curtido_por_mim;
-
     return (
-      <div key={c.id} className={`flex min-w-0 gap-2 ${isResposta ? "ml-3 sm:ml-8 mt-2" : ""}`}>
-        <Link href={`/perfil/${c.user_id}`} className="shrink-0">
-          {c.autor_avatar ? (
-            <img src={c.autor_avatar} alt="" className="rounded-full object-cover" style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28 }} />
-          ) : (
-            <div className="rounded-full flex items-center justify-center font-black text-xs"
-              style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {c.autor_nome?.[0]?.toUpperCase() || "?"}
-            </div>
-          )}
-        </Link>
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <div className="inline-block max-w-full rounded-xl px-3 py-2 align-top" style={{ background: "#21262D" }}>
-            <Link href={`/perfil/${c.user_id}`} className="text-xs font-black mr-2 hover:underline break-all" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</Link>
+      <div key={c.id} className={`flex gap-2 ${isResposta ? "ml-8 mt-2" : ""}`}>
+        {c.autor_avatar ? (
+          <img src={c.autor_avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28 }} />
+        ) : (
+          <div className="rounded-full flex items-center justify-center shrink-0 font-black text-xs"
+            style={{ width: isResposta ? 24 : 28, height: isResposta ? 24 : 28, background: "rgba(92,200,0,0.15)", color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+            {c.autor_nome[0]?.toUpperCase()}
+          </div>
+        )}
+        <div className="flex-1">
+          <div className="rounded-xl px-3 py-2" style={{ background: "#21262D" }}>
+            <span className="text-xs font-black mr-2" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</span>
             {editandoId === c.id ? (
-              <div className="mt-1 flex min-w-0 flex-col gap-2 sm:flex-row">
+              <div className="mt-1 flex gap-2">
                 <input value={textoEdit} onChange={e => setTextoEdit(e.target.value)}
-                  className="min-w-0 flex-1 rounded-lg px-2 py-1 text-sm outline-none"
+                  className="flex-1 rounded-lg px-2 py-1 text-sm outline-none"
                   style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.3)", color: "#E6EDF3" }} />
-                <div className="flex gap-2">
-                  <button onClick={() => editarComentario(c.id)}
-                    className="text-xs font-black px-3 py-1 rounded-lg"
-                    style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>OK</button>
-                  <button onClick={() => setEditandoId(null)}
-                    className="text-xs px-3 py-1 rounded-lg" style={{ color: "#8B949E" }}>✕</button>
-                </div>
+                <button onClick={() => editarComentario(c.id)}
+                  className="text-xs font-black px-2 py-1 rounded-lg"
+                  style={{ background: "#5CC800", color: "#0D1117", fontFamily: "'Barlow Condensed', sans-serif" }}>OK</button>
+                <button onClick={() => setEditandoId(null)}
+                  className="text-xs px-2 py-1 rounded-lg" style={{ color: "#8B949E" }}>✕</button>
               </div>
             ) : (
-              <span className="break-words text-sm leading-relaxed" style={{ color: "#C9D1D9", overflowWrap: "anywhere", wordBreak: "break-word" }}>{renderTextoComMencoes(c.texto)}</span>
+              <span className="text-sm" style={{ color: "#C9D1D9" }}>{c.texto}</span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 px-1" style={{ rowGap: 4 }}>
-            <span className="text-[11px] sm:text-xs shrink-0" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
+          <div className="flex items-center gap-3 mt-1 px-1">
+            <span className="text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
             {usuarioLogado && (
               <>
-                <ComentarioLikesResumo
-                  comentarioId={c.id}
-                  total={c.total_curtidas || 0}
-                  curtido={curtidoComentario}
-                  onCurtir={() => curtirComentario(c.id, curtidoComentario)}
-                />
+                <button onClick={() => curtirComentario(c.id, false)}
+                  className="flex items-center gap-1 text-xs font-black transition-colors hover:opacity-70"
+                  style={{ color: c.total_curtidas > 0 ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  ❤️ {c.total_curtidas > 0 && c.total_curtidas}
+                </button>
                 {!isResposta && (
                   <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
-                    className="shrink-0 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
+                    className="text-xs font-black transition-colors hover:opacity-70"
                     style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                     RESPONDER
                   </button>
                 )}
-                {c.user_id === userId && (
+                {c.user_id === userId ? (
                   <>
                     <button onClick={() => { setEditandoId(c.id); setTextoEdit(c.texto); }}
-                      className="shrink-0 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
+                      className="text-xs font-black transition-colors hover:opacity-70"
                       style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
                     <button onClick={() => excluirComentario(c.id)}
-                      className="shrink-0 text-[11px] sm:text-xs font-black transition-colors hover:opacity-70"
+                      className="text-xs font-black transition-colors hover:opacity-70"
                       style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXCLUIR</button>
                   </>
+                ) : (
+                  <button onClick={() => denunciarConteudo({ tipo: "comentario", alvo_id: String(c.id), alvo_user_id: c.user_id, post_id: postId, comentario_id: c.id })}
+                    className="text-xs font-black transition-colors hover:opacity-70"
+                    style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>DENUNCIAR</button>
                 )}
               </>
             )}
           </div>
-          {!isResposta && listaRespostas.length > 0 && (
-            <div className="ml-1 mt-1 text-xs font-black" style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-              ↳ {listaRespostas.length} {listaRespostas.length === 1 ? "resposta" : "respostas"}
-            </div>
-          )}
-          {listaRespostas.map(r => renderComentario(r, true))}
+          {respostas(c.id).map(r => renderComentario(r, true))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-w-0 w-full">
+    <div>
       <button onClick={toggle} className="flex items-center gap-1.5 text-sm transition-colors hover:text-green-400"
         style={{ color: aberto ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700 }}>
         <MessageCircle size={16} strokeWidth={2} />
-        {totalAtual} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
+{totalAtual} {totalAtual === 1 ? "COMENTÁRIO" : "COMENTÁRIOS"}
       </button>
       {aberto && (
-        <div className="mt-3 min-w-0 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+        <div className="mt-3 space-y-3 border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           {carregando ? (
             <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin" style={{ color: "#5CC800" }} /></div>
           ) : principais.length === 0 ? (
@@ -568,26 +299,10 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
             <div className="space-y-2 pt-1">
               {respondendoId && (
                 <div className="flex items-center gap-2 px-2 py-1 rounded-lg" style={{ background: "rgba(92,200,0,0.08)" }}>
-                  <span className="min-w-0 flex-1 truncate text-xs" style={{ color: "#5CC800" }}>
+                  <span className="text-xs" style={{ color: "#5CC800" }}>
                     ↩ Respondendo a {comentarios.find(c => c.id === respondendoId)?.autor_nome}
                   </span>
                   <button onClick={() => setRespondendoId(null)} style={{ color: "#8B949E" }}><X size={12} /></button>
-                </div>
-              )}
-              {mentionQuery && (mentionResults.length > 0 || mentionLoading) && (
-                <div className="rounded-xl p-2 shadow-xl" style={{ background: "#0D1117", border: "1px solid rgba(92,200,0,0.25)" }}>
-                  {mentionLoading ? (
-                    <div className="flex items-center gap-2 px-2 py-2 text-xs" style={{ color: "#8B949E" }}><Loader2 size={12} className="animate-spin" /> Buscando usuários...</div>
-                  ) : mentionResults.slice(0, 5).map(u => (
-                    <button key={u.user_id} type="button" onClick={() => inserirMencao(u)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/5">
-                      <Avatar nome={u.autor_nome} avatar={u.autor_avatar} email={u.autor_email} size={28} />
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-black" style={{ color: "#E6EDF3" }}>{u.autor_nome || u.autor_email?.split("@")[0] || "Corredor"}</p>
-                        <p className="truncate text-[11px]" style={{ color: "#5CC800" }}>@{handleUsuario(u)}</p>
-                      </div>
-                    </button>
-                  ))}
                 </div>
               )}
               {mostrarEmojis && (
@@ -598,22 +313,21 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
                   ))}
                 </div>
               )}
-              <div className="flex min-w-0 gap-2">
+              <div className="flex gap-2">
                 <button onClick={() => setMostrarEmojis(v => !v)}
-                  className="shrink-0 rounded-xl px-2 text-lg transition-all hover:scale-110"
+                  className="rounded-xl px-2 text-lg transition-all hover:scale-110"
                   style={{ background: mostrarEmojis ? "rgba(92,200,0,0.15)" : "#21262D" }}>😊</button>
-                <input value={texto} onChange={e => alterarTexto(e.target.value)}
+                <input value={texto} onChange={e => setTexto(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviar()}
-                  placeholder={respondendoId ? "Escreva uma resposta... Use @ para marcar" : "Escreva um comentário... Use @ para marcar"}
-                  className="min-w-0 flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                  placeholder={respondendoId ? "Escreva uma resposta..." : "Escreva um comentário..."}
+                  className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
                   style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
                 <button onClick={enviar} disabled={!texto.trim() || enviando}
-                  className="flex shrink-0 items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
+                  className="flex items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
                   style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
                   {enviando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
                 </button>
               </div>
-              <p className="px-1 text-[11px]" style={{ color: "#8B949E" }}>Digite @ e escolha um corredor para marcar no comentário.</p>
             </div>
           )}
         </div>
@@ -621,6 +335,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
     </div>
   );
 }
+
 
 function LikesResumo({ postId, total, curtido, onTotalSync }: {
   postId: number;
@@ -875,7 +590,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                 {seguindo ? "SEGUINDO" : "+ SEGUIR"}
               </button>
             )}
-            {userId === post.user_id && (
+            {userId === post.user_id ? (
               <div className="flex items-center gap-1">
                 <button onClick={() => { setEditandoPost(true); setTextoEditPost(post.texto || ""); }}
                   className="rounded-lg p-1.5 transition-colors hover:bg-green-500/10" style={{ color: "#8B949E" }}>
@@ -885,7 +600,14 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
                   <X size={14} strokeWidth={2} />
                 </button>
               </div>
-            )}
+            ) : usuarioLogado ? (
+              <button onClick={() => denunciarConteudo({ tipo: "post", alvo_id: String(post.id), alvo_user_id: post.user_id, post_id: post.id })}
+                className="rounded-lg p-1.5 text-xs font-black transition-colors hover:bg-orange-500/10"
+                title="Denunciar publicação"
+                style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                DENUNCIAR
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -972,30 +694,30 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-            <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-4">
               <button onClick={toggleCurtida} disabled={!usuarioLogado}
                 className="flex items-center gap-1.5 text-sm font-black transition-all hover:scale-105 disabled:cursor-default"
                 style={{ color: curtido ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                 <Heart size={16} strokeWidth={2} fill={curtido ? "#FF6B00" : "none"} />
                 {curtido ? "CURTIDO" : "CURTIR"}
               </button>
+              <div id={`comentarios-${post.id}`}>
+                <CardComentarios
+                  postId={post.id}
+                  total={totalComentarios}
+                  usuarioLogado={usuarioLogado}
+                  userId={userId}
+                  onTotalChange={setTotalComentarios}
+                />
+              </div>
             </div>
             <button onClick={compartilhar}
               className="flex items-center gap-1.5 text-xs font-black transition-colors hover:text-green-400"
               style={{ color: copiado ? "#5CC800" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
               <Share2 size={14} strokeWidth={2} />
-              {copiado ? "COPIADO!" : "COMPARTILHAR"}
+              {copiado ? "COPIADO!" : ""}
             </button>
-          </div>
-          <div id={`comentarios-${post.id}`} className="mt-2 w-full min-w-0">
-            <CardComentarios
-              postId={post.id}
-              total={totalComentarios}
-              usuarioLogado={usuarioLogado}
-              userId={userId}
-              onTotalChange={setTotalComentarios}
-            />
           </div>
         </div>
       </div>
