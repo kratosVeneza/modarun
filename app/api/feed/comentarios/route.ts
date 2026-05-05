@@ -298,8 +298,8 @@ export async function PATCH(req: Request): Promise<NextResponse> {
           post_id: comentario.post_id,
           link: `/#post-${comentario.post_id}`,
           ator_id: user.id,
-          ator_nome,
-          ator_avatar,
+          ator_nome: autor_nome,
+          ator_avatar: autor_avatar,
         });
       }
     }
