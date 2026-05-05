@@ -55,7 +55,7 @@ export async function DELETE(req: Request): Promise<NextResponse> {
 
 export async function POST(req: Request): Promise<NextResponse> {
   const b = await req.json().catch(() => ({}));
-  const result = await criarNotificacaoSegura(b);
+  const result = await criarNotificacaoSegura(b, { fallbackClient: await createClient() });
   if (!result.ok) return NextResponse.json({ error: result.error || "Erro ao criar notificação." }, { status: 500 });
   return NextResponse.json({ success: true });
 }

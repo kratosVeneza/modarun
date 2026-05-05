@@ -66,9 +66,28 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
   }
 
   async function carregarResumoMensagens() {
-    const res = await fetch("/api/mensagens?resumo=1", { credentials: "include" });
+    const res = await fetch("/api/mensagens?resumo=1", { credentials: "include", cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) setMensagensNaoLidas(data.total_nao_lidas || 0);
+  }
+
+  async function carregarNotificacoesEMensagens() {
+    const [notificacoesRes, mensagensRes] = await Promise.all([
+      fetch("/api/notificacoes", { credentials: "include", cache: "no-store" }),
+      fetch("/api/mensagens?resumo=1", { credentials: "include", cache: "no-store" }),
+    ]);
+
+    const notificacoesData = await notificacoesRes.json().catch(() => ({}));
+    const mensagensData = await mensagensRes.json().catch(() => ({}));
+
+    if (notificacoesRes.ok) {
+      setNotifs(notificacoesData.notificacoes || []);
+      setNaoLidas(notificacoesData.nao_lidas || 0);
+    }
+
+    if (mensagensRes.ok) {
+      setMensagensNaoLidas(mensagensData.total_nao_lidas || 0);
+    }
   }
 
   useEffect(() => {
@@ -80,24 +99,20 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
       if (!user || cancelado) return;
       setAuthUserId(user.id);
 
-      const [notificacoesRes, mensagensRes, sugestoesRes] = await Promise.all([
-        fetch("/api/notificacoes", { credentials: "include" }),
-        fetch("/api/mensagens?resumo=1", { credentials: "include" }),
-        fetch("/api/usuarios?sugestoes=1", { credentials: "include" }),
-      ]);
-
-      const notificacoesData = await notificacoesRes.json().catch(() => ({}));
-      const mensagensData = await mensagensRes.json().catch(() => ({}));
+      const sugestoesRes = await fetch("/api/usuarios?sugestoes=1", { credentials: "include", cache: "no-store" });
       const sugestoesData = await sugestoesRes.json().catch(() => ({}));
 
       if (cancelado) return;
-      setNotifs(notificacoesData.notificacoes || []);
-      setNaoLidas(notificacoesData.nao_lidas || 0);
-      setMensagensNaoLidas(mensagensData.total_nao_lidas || 0);
+      await carregarNotificacoesEMensagens();
+      if (cancelado) return;
       setSugestoes(sugestoesData.usuarios || []);
     }
 
     iniciar();
+
+    const intervalo = window.setInterval(() => {
+      if (!cancelado) carregarNotificacoesEMensagens().catch(() => undefined);
+    }, 12000);
 
     function handleClick(e: MouseEvent) {
       if (painelRef.current && !painelRef.current.contains(e.target as Node)) setPainelAberto(false);
@@ -106,9 +121,15 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
     document.addEventListener("mousedown", handleClick);
     return () => {
       cancelado = true;
+      window.clearInterval(intervalo);
       document.removeEventListener("mousedown", handleClick);
     };
   }, [supabase, userEmail]);
+
+  useEffect(() => {
+    if (!painelAberto || !userEmail) return;
+    carregarNotificacoesEMensagens().catch(() => undefined);
+  }, [painelAberto, userEmail]);
 
   useEffect(() => {
     if (!authUserId) return;

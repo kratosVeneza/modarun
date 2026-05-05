@@ -172,7 +172,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       ator_nome: autor_nome,
       ator_avatar: autor_avatar,
       lida: false,
-    });
+    }, { fallbackClient: supabase });
     if (resultado?.ok) mencoesNotificadas += 1;
   }
 
@@ -184,7 +184,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         titulo: `${autor_nome} respondeu seu comentário`,
         corpo: texto.slice(0, 80),
         post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
-      });
+      }, { fallbackClient: supabase });
     }
   } else if (post?.user_id && post.user_id !== user.id) {
     await criarNotificacaoSegura({
@@ -192,7 +192,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       titulo: `${autor_nome} comentou sua publicação`,
       corpo: texto.slice(0, 80),
       post_id, link: `/#post-${post_id}`, ator_id: user.id, ator_nome: autor_nome, ator_avatar: autor_avatar, lida: false,
-    });
+    }, { fallbackClient: supabase });
   }
 
   return NextResponse.json({ success: true, comentario: { ...data, autor_nome, autor_avatar, curtido_por_mim: false }, mencoes_encontradas: mencoes.length, mencoes_notificadas: mencoesNotificadas });
@@ -300,7 +300,7 @@ export async function PATCH(req: Request): Promise<NextResponse> {
           ator_id: user.id,
           ator_nome: autor_nome,
           ator_avatar: autor_avatar,
-        });
+        }, { fallbackClient: supabase });
       }
     }
 

@@ -294,7 +294,7 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
             </div>
           )}
         </Link>
-        <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="min-w-0 flex-1 overflow-visible">
           <div className="inline-block max-w-full rounded-xl px-3 py-2 align-top" style={{ background: "#21262D" }}>
             <Link href={`/perfil/${c.user_id}`} className="text-xs font-black mr-2 hover:underline" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>{c.autor_nome}</Link>
             {editandoId === c.id ? (
@@ -314,34 +314,36 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
               <span className="break-words text-sm leading-relaxed" style={{ color: "#C9D1D9", overflowWrap: "anywhere" }}>{renderTextoComMencoes(c.texto)}</span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 px-1">
-            <span className="shrink-0 text-[11px] sm:text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
-            {usuarioLogado && (
-              <>
-                <button onClick={() => curtirComentario(c.id, curtidoComentario)}
-                  className="flex shrink-0 items-center gap-1 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
-                  style={{ color: curtidoComentario ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  <span>{curtidoComentario ? "❤️" : "♡"}</span>
-                  {c.total_curtidas > 0 && <span>{c.total_curtidas}</span>}
-                </button>
-                {!isResposta && (
-                  <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
-                    className="shrink-0 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
-                    style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    RESPONDER
+          <div className="mt-1 space-y-1 px-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="shrink-0 text-[11px] sm:text-xs" style={{ color: "#8B949E" }}>{tempoRelativo(c.created_at)}</span>
+              {usuarioLogado && (
+                <>
+                  <button onClick={() => curtirComentario(c.id, curtidoComentario)}
+                    className="flex shrink-0 items-center gap-1 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
+                    style={{ color: curtidoComentario ? "#FF6B00" : "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <span>{curtidoComentario ? "❤️" : "♡"}</span>
+                    {c.total_curtidas > 0 && <span>{c.total_curtidas}</span>}
                   </button>
-                )}
-                {c.user_id === userId && (
-                  <>
-                    <button onClick={() => { setEditandoId(c.id); setTextoEdit(c.texto); }}
+                  {!isResposta && (
+                    <button onClick={() => { setRespondendoId(c.id); setAberto(true); }}
                       className="shrink-0 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
-                      style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
-                    <button onClick={() => excluirComentario(c.id)}
-                      className="shrink-0 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
-                      style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXCLUIR</button>
-                  </>
-                )}
-              </>
+                      style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      RESPONDER
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {usuarioLogado && c.user_id === userId && (
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <button onClick={() => { setEditandoId(c.id); setTextoEdit(c.texto); }}
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
+                  style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR</button>
+                <button onClick={() => excluirComentario(c.id)}
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-black transition-colors hover:opacity-70 sm:text-xs"
+                  style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXCLUIR</button>
+              </div>
             )}
           </div>
           {!isResposta && listaRespostas.length > 0 && (
@@ -406,17 +408,17 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
                   ))}
                 </div>
               )}
-              <div className="flex min-w-0 gap-2">
+              <div className="grid min-w-0 grid-cols-[42px_minmax(0,1fr)_42px] gap-2">
                 <button onClick={() => setMostrarEmojis(v => !v)}
-                  className="shrink-0 rounded-xl px-2 text-lg transition-all hover:scale-110"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg transition-all hover:scale-110"
                   style={{ background: mostrarEmojis ? "rgba(92,200,0,0.15)" : "#21262D" }}>😊</button>
                 <input value={texto} onChange={e => alterarTexto(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && !e.shiftKey && enviar()}
-                  placeholder={respondendoId ? "Escreva uma resposta... Use @ para marcar" : "Escreva um comentário... Use @ para marcar"}
-                  className="min-w-0 flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                  placeholder={respondendoId ? "Escreva uma resposta..." : "Escreva um comentário..."}
+                  className="min-w-0 w-full rounded-xl px-3 py-2 text-sm outline-none"
                   style={{ background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3" }} />
                 <button onClick={enviar} disabled={!texto.trim() || enviando}
-                  className="flex shrink-0 items-center justify-center rounded-xl px-3 transition-all disabled:opacity-40"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-40"
                   style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff" }}>
                   {enviando ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
                 </button>
@@ -650,7 +652,7 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
   }
 
   return (
-    <article id={`post-${post.id}`} className="rounded-2xl overflow-hidden"
+    <article id={`post-${post.id}`} className="rounded-2xl overflow-visible"
       style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.08)" }}>
       <div className="h-0.5 w-full" style={{ background: post.tipo === "atividade" ? "linear-gradient(90deg, #FF6B00, #5CC800)" : "linear-gradient(90deg, #5CC800, #4aaa00)" }} />
       <div className="p-4">

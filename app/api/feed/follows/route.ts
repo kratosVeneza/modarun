@@ -99,7 +99,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         ator_id: user.id,
         ator_nome: nome,
         ator_avatar: avatar,
-      });
+      }, { fallbackClient: supabase });
     } else {
       const { error } = await writeClient
         .from("follows")

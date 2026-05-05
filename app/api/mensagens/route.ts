@@ -278,7 +278,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     ator_id: user.id,
     ator_nome: nome,
     ator_avatar: avatar,
-  });
+  }, { fallbackClient: supabase });
 
   return NextResponse.json({ success: true, mensagem: data });
 }
