@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
+import { DenunciarButton, BloquearUsuarioButton } from "@/components/Moderacao";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
 import { ArrowLeft, Heart, MessageCircle, Share2, Users, Loader2 } from "lucide-react";
@@ -208,24 +209,26 @@ export default function PerfilPublicoPage(): React.JSX.Element {
 
                 {/* Botão seguir */}
                 {viewer && !isOwn && (
-                  <div className="flex items-center gap-2">
-                  <button onClick={toggleFollow} disabled={loadingFollow}
-                    className="flex items-center gap-2 rounded-xl px-5 py-2.5 font-black text-sm transition-all hover:scale-105 disabled:opacity-60"
-                    style={{
-                      background: seguindo ? "rgba(92,200,0,0.15)" : "linear-gradient(135deg, #5CC800, #4aaa00)",
-                      color: seguindo ? "#5CC800" : "#fff",
-                      border: seguindo ? "2px solid rgba(92,200,0,0.4)" : "none",
-                      fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em",
-                      boxShadow: seguindo ? "none" : "0 4px 20px rgba(92,200,0,0.3)",
-                    }}>
-                    {loadingFollow ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} strokeWidth={2} />}
-                    {seguindo ? "SEGUINDO" : "SEGUIR"}
-                  </button>
-                  <button onClick={() => { if (usuario?.id) window.location.href = "/chat?user=" + usuario.id; }}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110"
-                    style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                    💬 MENSAGEM
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={toggleFollow} disabled={loadingFollow}
+                      className="flex items-center gap-2 rounded-xl px-5 py-2.5 font-black text-sm transition-all hover:scale-105 disabled:opacity-60"
+                      style={{
+                        background: seguindo ? "rgba(92,200,0,0.15)" : "linear-gradient(135deg, #5CC800, #4aaa00)",
+                        color: seguindo ? "#5CC800" : "#fff",
+                        border: seguindo ? "2px solid rgba(92,200,0,0.4)" : "none",
+                        fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em",
+                        boxShadow: seguindo ? "none" : "0 4px 20px rgba(92,200,0,0.3)",
+                      }}>
+                      {loadingFollow ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} strokeWidth={2} />}
+                      {seguindo ? "SEGUINDO" : "SEGUIR"}
+                    </button>
+                    <button onClick={() => { if (usuario?.id) window.location.href = "/chat?user=" + usuario.id; }}
+                      className="flex items-center gap-2 rounded-xl px-4 py-2.5 font-black text-sm transition-all hover:brightness-110"
+                      style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                      💬 MENSAGEM
+                    </button>
+                    <DenunciarButton tipo="usuario" alvoId={usuario.id} alvoUserId={usuario.id} label="DENUNCIAR" />
+                    <BloquearUsuarioButton userId={usuario.id} nome={nome} onBloqueado={() => router.push("/")} />
                   </div>
                 )}
 
@@ -310,6 +313,9 @@ export default function PerfilPublicoPage(): React.JSX.Element {
                     <span className="flex items-center gap-1.5 text-sm" style={{ color: "#8B949E" }}>
                       <MessageCircle size={15} strokeWidth={2} /> {post.total_comentarios > 0 && post.total_comentarios}
                     </span>
+                    {viewer && !isOwn && (
+                      <DenunciarButton tipo="post" alvoId={post.id} alvoUserId={usuario.id} postId={post.id} compact />
+                    )}
                     <Link href="/" className="ml-auto flex items-center gap-1 text-xs font-black transition-colors hover:opacity-70"
                       style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                       <Share2 size={13} strokeWidth={2} />

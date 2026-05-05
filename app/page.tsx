@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
+import { DenunciarButton } from "@/components/Moderacao";
 import CardLoja from "@/components/CardLoja";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
@@ -331,6 +332,16 @@ function CardComentarios({ postId, total, usuarioLogado, userId, onTotalChange }
                       style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>
                       RESPONDER
                     </button>
+                  )}
+                  {c.user_id !== userId && (
+                    <DenunciarButton
+                      tipo="comentario"
+                      alvoId={c.id}
+                      alvoUserId={c.user_id}
+                      postId={postId}
+                      comentarioId={c.id}
+                      compact
+                    />
                   )}
                 </>
               )}
@@ -674,16 +685,19 @@ function CardPost({ post, usuarioLogado, userId, onDelete }: {
               </span>
             )}
             {usuarioLogado && userId !== post.user_id && (
-              <button onClick={toggleFollow} disabled={carregandoFollow}
-                className="rounded-full px-3 py-1 text-xs font-black transition-all hover:scale-105 disabled:opacity-60"
-                style={{
-                  background: seguindo ? "rgba(92,200,0,0.15)" : "rgba(92,200,0,0.08)",
-                  color: seguindo ? "#5CC800" : "#8B949E",
-                  border: seguindo ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.1)",
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                }}>
-                {seguindo ? "SEGUINDO" : "+ SEGUIR"}
-              </button>
+              <>
+                <button onClick={toggleFollow} disabled={carregandoFollow}
+                  className="rounded-full px-3 py-1 text-xs font-black transition-all hover:scale-105 disabled:opacity-60"
+                  style={{
+                    background: seguindo ? "rgba(92,200,0,0.15)" : "rgba(92,200,0,0.08)",
+                    color: seguindo ? "#5CC800" : "#8B949E",
+                    border: seguindo ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                  }}>
+                  {seguindo ? "SEGUINDO" : "+ SEGUIR"}
+                </button>
+                <DenunciarButton tipo="post" alvoId={post.id} alvoUserId={post.user_id} postId={post.id} compact />
+              </>
             )}
             {userId === post.user_id && (
               <div className="flex items-center gap-1">

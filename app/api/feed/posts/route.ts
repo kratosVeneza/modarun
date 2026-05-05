@@ -74,6 +74,18 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   let posts = (data ?? []) as FeedPost[];
 
+  if (user && posts.length > 0) {
+    const autores = [...new Set(posts.map((p) => p.user_id).filter(Boolean))];
+    const { data: bloqueios } = await supabase
+      .from("user_blocks")
+      .select("bloqueado_id")
+      .eq("bloqueador_id", user.id)
+      .in("bloqueado_id", autores);
+
+    const bloqueados = new Set((bloqueios || []).map((b: { bloqueado_id: string }) => b.bloqueado_id));
+    if (bloqueados.size > 0) posts = posts.filter((p) => !bloqueados.has(p.user_id));
+  }
+
   if (posts.length > 0) {
     const postIds = posts.map((p) => p.id);
 

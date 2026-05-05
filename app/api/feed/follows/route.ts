@@ -42,6 +42,16 @@ async function viewerSegue(client: any, viewerId: string, followingId: string) {
   return (count ?? 0) > 0;
 }
 
+async function existeBloqueioEntre(client: any, a: string, b: string) {
+  const { data, error } = await client
+    .from("user_blocks")
+    .select("id")
+    .or(`and(bloqueador_id.eq.${a},bloqueado_id.eq.${b}),and(bloqueador_id.eq.${b},bloqueado_id.eq.${a})`)
+    .limit(1);
+  if (error) return false;
+  return (data || []).length > 0;
+}
+
 async function getCurrentUser() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -72,6 +82,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   const writeClient = sbAdmin() || supabase;
 
   try {
+    if (acao === "seguir" && await existeBloqueioEntre(writeClient, user.id, followingId)) {
+      return json({ error: "Não é possível seguir este usuário." }, { status: 403 });
+    }
+
     if (acao === "seguir") {
       const { error } = await writeClient
         .from("follows")

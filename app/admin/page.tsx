@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
+import AdminDenuncias from "@/components/AdminDenuncias";
 import { createClient } from "@/utils/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -72,7 +73,7 @@ export default function AdminPage(): React.JSX.Element {
   const [carregando, setCarregando] = useState(true);
   const [autorizado, setAutorizado] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync"|"mensagens">("eventos");
+  const [aba, setAba] = useState<"eventos"|"produtos"|"banners"|"sugestoes"|"sync"|"mensagens"|"denuncias">("eventos");
   const [lojaRestrita, setLojaRestrita] = useState<boolean | null>(null);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -174,8 +175,8 @@ export default function AdminPage(): React.JSX.Element {
           </section>
 
           {/* Tabs */}
-          <div className="flex gap-3">
-            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"]] as const).map(([id,icon,label,desc]) => (
+          <div className="flex flex-wrap gap-3">
+            {([["eventos","🏁","EVENTOS","Corridas e provas"],["produtos","🛒","PRODUTOS","Loja Moda Run"],["banners","🖼","BANNERS","Carrossel da loja"],["sugestoes","💡","SUGESTÕES","Eventos enviados"],["sync","🔄","SYNC","corridasbr.com.br"],["mensagens","🔔","MENSAGENS","Notificar usuários"],["denuncias","🛡️","DENÚNCIAS","Moderação do app"]] as const).map(([id,icon,label,desc]) => (
               <button key={id} onClick={() => setAba(id)}
                 className="flex-1 rounded-2xl px-5 py-4 text-left transition-all"
                 style={{ background: aba===id ? "rgba(92,200,0,0.1)" : "#161B22", border: aba===id ? "1px solid rgba(92,200,0,0.4)" : "1px solid rgba(92,200,0,0.1)" }}>
@@ -209,6 +210,7 @@ export default function AdminPage(): React.JSX.Element {
             />
           )}
           {aba === "mensagens" && <AbaMensagens key="mensagens-tab" />}
+          {aba === "denuncias" && <AdminDenuncias key="denuncias-tab" />}
         </div>
       </main>
     </>
@@ -736,7 +738,7 @@ function AbaEventos({ eventos, setEventos }: { eventos: Evento[]; setEventos: (e
                 <div><p className="text-sm font-bold" style={{ color:"#E6EDF3" }}>⭐ Destaque</p><p className="text-xs" style={{ color:"#8B949E" }}>Badge especial na listagem</p></div>
               </label>
               {erro&&<div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button onClick={()=>setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", border:"1px solid rgba(255,255,255,0.1)", fontFamily:"'Barlow Condensed', sans-serif" }}>CANCELAR</button>
                 <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60" style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
                   {loading?"SALVANDO...":editando?"SALVAR":"ADICIONAR"}
@@ -1180,7 +1182,7 @@ function AbaProdutos({ produtos, setProdutos }: { produtos: Produto[]; setProdut
 
               {erro&&<div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
 
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button onClick={()=>setAberto(false)} className="flex-1 rounded-xl py-3.5 text-sm font-black" style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", border:"1px solid rgba(255,255,255,0.1)", fontFamily:"'Barlow Condensed', sans-serif" }}>CANCELAR</button>
                 <button onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3.5 text-sm font-black transition-all hover:brightness-110 disabled:opacity-60"
                   style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
@@ -1501,7 +1503,7 @@ function AbaBanners(): React.JSX.Element {
                 </div>
               </div>
               {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)" }}>{erro}</div>}
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={() => setAberto(false)} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
                 <button type="button" onClick={salvar} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black hover:brightness-110 disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -2109,7 +2111,7 @@ function AbaSync({ eventosAtuais, onImportar }: { eventosAtuais: Evento[]; onImp
           <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
             {preview.map((ev, index) => (
               <div key={`${ev.estado}-${ev.data_evento}-${ev.nome}-${index}`} className="rounded-2xl p-4" style={{ background: ev.jaExiste ? "rgba(255,255,255,0.035)" : ev.selecionado ? "rgba(92,200,0,0.08)" : "#21262D", border: ev.jaExiste ? "1px solid rgba(255,255,255,0.06)" : ev.selecionado ? "1px solid rgba(92,200,0,0.35)" : "1px solid rgba(255,255,255,0.08)", opacity: ev.jaExiste ? 0.55 : 1 }}>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <input type="checkbox" checked={!!ev.selecionado} disabled={ev.jaExiste} onChange={() => setPreview((prev) => prev.map((item, i) => i === index ? { ...item, selecionado: !item.selecionado } : item))} className="mt-1 h-5 w-5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">

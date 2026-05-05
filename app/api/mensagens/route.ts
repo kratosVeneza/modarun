@@ -72,6 +72,16 @@ function avatarDoAuth(user: any) {
   return meta.avatar_url || meta.picture || meta.foto || null;
 }
 
+async function existeBloqueioEntre(client: any, a: string, b: string) {
+  const { data, error } = await client
+    .from("user_blocks")
+    .select("id")
+    .or(`and(bloqueador_id.eq.${a},bloqueado_id.eq.${b}),and(bloqueador_id.eq.${b},bloqueado_id.eq.${a})`)
+    .limit(1);
+  if (error) return false;
+  return (data || []).length > 0;
+}
+
 async function buscarPerfis(userIds: string[]) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (ids.length === 0) return new Map<string, PerfilUsuario>();
@@ -252,6 +262,11 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   if (texto.length > 1200) {
     return NextResponse.json({ error: "A mensagem deve ter no máximo 1200 caracteres." }, { status: 400 });
+  }
+
+  const blockClient = sbAdmin() || supabase;
+  if (await existeBloqueioEntre(blockClient, user.id, destinatarioId)) {
+    return NextResponse.json({ error: "Não é possível enviar mensagem para este usuário." }, { status: 403 });
   }
 
   const { data, error } = await supabase

@@ -223,6 +223,8 @@ export default function PerfilPage(): React.JSX.Element {
   const [salvandoCidade, setSalvandoCidade] = useState(false);
   const [removendoId, setRemovendoId] = useState<number | null>(null);
   const [removendoEventoId, setRemovendoEventoId] = useState<number | null>(null);
+  const [confirmacaoExcluirConta, setConfirmacaoExcluirConta] = useState("");
+  const [excluindoConta, setExcluindoConta] = useState(false);
 
   const carregar = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -333,6 +335,31 @@ export default function PerfilPage(): React.JSX.Element {
     await supabase.from("user_eventos_salvos").delete().eq("id", id);
     setEventosSalvos(prev => prev.filter(e => e.id !== id));
     setRemovendoEventoId(null);
+  }
+
+  async function excluirConta() {
+    if (confirmacaoExcluirConta.trim().toUpperCase() !== "EXCLUIR") {
+      alert("Digite EXCLUIR para confirmar a exclusão da conta.");
+      return;
+    }
+    if (!confirm("Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita.")) return;
+    setExcluindoConta(true);
+    try {
+      const res = await fetch("/api/conta/excluir", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ confirmacao: confirmacaoExcluirConta }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Não foi possível excluir a conta.");
+      await supabase.auth.signOut();
+      router.push("/");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao excluir conta.");
+    } finally {
+      setExcluindoConta(false);
+    }
   }
 
   if (loading) return (
@@ -1001,6 +1028,27 @@ export default function PerfilPage(): React.JSX.Element {
               </section>
             );
           })()}
+
+          {/* Zona de segurança da conta */}
+          <section className="rounded-2xl p-5" style={{ background: "#161B22", border: "1px solid rgba(255,107,0,0.18)" }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>ZONA DE SEGURANÇA</p>
+                <h2 className="mt-1 text-lg font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>Excluir conta do aplicativo</h2>
+                <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>Ao excluir sua conta, seus dados sociais do app são removidos e o acesso é encerrado. Digite <b>EXCLUIR</b> para liberar o botão.</p>
+              </div>
+              <div className="w-full space-y-2 sm:w-72">
+                <input value={confirmacaoExcluirConta} onChange={e => setConfirmacaoExcluirConta(e.target.value)} placeholder="Digite EXCLUIR"
+                  className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                  style={{ background: "#21262D", border: "1px solid rgba(255,107,0,0.25)", color: "#E6EDF3" }} />
+                <button onClick={excluirConta} disabled={excluindoConta || confirmacaoExcluirConta.trim().toUpperCase() !== "EXCLUIR"}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-40"
+                  style={{ background: "linear-gradient(135deg,#FF6B00,#cc5500)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  {excluindoConta ? "EXCLUINDO..." : "EXCLUIR MINHA CONTA"}
+                </button>
+              </div>
+            </div>
+          </section>
 
           {/* Links rápidos */}
           <section className="grid grid-cols-2 gap-3 pt-2">

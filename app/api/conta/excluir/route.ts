@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) return null;
   return createServiceClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
@@ -34,6 +34,7 @@ export async function DELETE(req: Request): Promise<NextResponse> {
     admin.from("feed_posts").delete().eq("user_id", uid),
     admin.from("follows").delete().or(`follower_id.eq.${uid},following_id.eq.${uid}`),
     admin.from("user_blocks").delete().or(`bloqueador_id.eq.${uid},bloqueado_id.eq.${uid}`),
+    admin.from("denuncias").delete().or(`denunciante_id.eq.${uid},alvo_user_id.eq.${uid}`),
     admin.from("notificacoes").delete().eq("user_id", uid),
     admin.from("user_cidades_interesse").delete().eq("user_id", uid),
     admin.from("user_eventos_salvos").delete().eq("user_id", uid),
