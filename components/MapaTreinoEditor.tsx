@@ -9,6 +9,9 @@ type Props = {
   rotaCoords: LatLng[];
   setRotaCoords: (r: LatLng[]) => void;
   onDistanciaChange: (d: number) => void;
+  cidade?: string;
+  estado?: string;
+  localBusca?: string;
 };
 
 function haversine(a: LatLng, b: LatLng): number {
@@ -27,13 +30,14 @@ function calcularDistancia(ponto: LatLng | null, rota: LatLng[]): number {
   return total;
 }
 
-export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rotaCoords, setRotaCoords, onDistanciaChange }: Props) {
+export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rotaCoords, setRotaCoords, onDistanciaChange, cidade, estado, localBusca }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const LRef = useRef<unknown>(null);
   const polylineRef = useRef<unknown>(null);
   const pontoMarkerRef = useRef<unknown>(null);
   const rotaMarcadoresRef = useRef<unknown[]>([]);
+  const ultimoEnderecoCentralizadoRef = useRef("");
 
   // Always-fresh refs for state and callbacks
   const pontoRef = useRef(pontoEncontro);
@@ -100,6 +104,56 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
     else if (bounds.length === 1) map.setView(bounds[0], 15);
   }
 
+
+  async function centralizarEnderecoDoTreino() {
+    const map = mapRef.current as { setView: (center: [number, number], zoom: number) => void } | null;
+    if (!map) return;
+    if (pontoRef.current || rotaRef.current.length > 0) return;
+
+    const cidadeLimpa = String(cidade || "").trim();
+    const estadoLimpo = String(estado || "").trim().toUpperCase();
+    const localLimpo = String(localBusca || "").trim();
+    if (!cidadeLimpa || !estadoLimpo) return;
+
+    const endereco = [localLimpo, cidadeLimpa, estadoLimpo, "Brasil"].filter(Boolean).join(", ");
+    const chaveEndereco = endereco.toLowerCase();
+    if (ultimoEnderecoCentralizadoRef.current === chaveEndereco) return;
+    ultimoEnderecoCentralizadoRef.current = chaveEndereco;
+
+    try {
+      const params = new URLSearchParams({
+        format: "jsonv2",
+        limit: "1",
+        countrycodes: "br",
+        q: endereco,
+      });
+      let res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+      let dados = await res.json() as Array<{ lat?: string; lon?: string }>;
+
+      // Se o ponto de encontro digitado for específico demais e não for encontrado,
+      // tenta pelo par cidade/estado para não voltar ao padrão Tucuruí/PA.
+      if ((!Array.isArray(dados) || dados.length === 0) && localLimpo) {
+        const paramsCidade = new URLSearchParams({
+          format: "jsonv2",
+          limit: "1",
+          countrycodes: "br",
+          q: [cidadeLimpa, estadoLimpo, "Brasil"].join(", "),
+        });
+        res = await fetch(`https://nominatim.openstreetmap.org/search?${paramsCidade.toString()}`);
+        dados = await res.json() as Array<{ lat?: string; lon?: string }>;
+      }
+
+      const item = Array.isArray(dados) ? dados[0] : null;
+      const lat = Number(item?.lat);
+      const lng = Number(item?.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        map.setView([lat, lng], localLimpo ? 15 : 13);
+      }
+    } catch {
+      // Mantém o mapa atual se o serviço de localização não responder.
+    }
+  }
+
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
 
@@ -124,6 +178,7 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
       }).addTo(map);
 
       renderizarEstadoInicial(L.default, map, pontoRef.current, rotaRef.current);
+      setTimeout(() => { void centralizarEnderecoDoTreino(); }, 250);
 
       map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
         const latlng: LatLng = { lat: e.latlng.lat, lng: e.latlng.lng };
@@ -137,6 +192,7 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
             iconSize: [22, 22], iconAnchor: [11, 11],
           });
           pontoMarkerRef.current = L2.marker([latlng.lat, latlng.lng], { icon: greenIcon }).addTo(map);
+          pontoRef.current = latlng;
           setPontoRef.current(latlng);
           onDistanciaRef.current(0); // ponto só, sem rota ainda
 
@@ -151,6 +207,7 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
           rotaMarcadoresRef.current.push(marker);
 
           const novaRota = [...rotaRef.current, latlng];
+          rotaRef.current = novaRota;
           setRotaRef.current(novaRota);
 
           // Draw polyline
@@ -177,30 +234,40 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    void centralizarEnderecoDoTreino();
+  }, [cidade, estado, localBusca]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function desfazer() {
     if (rotaMarcadoresRef.current.length > 0) {
       const ultimo = rotaMarcadoresRef.current.pop();
       (ultimo as { remove: () => void }).remove();
       const novaRota = rotaRef.current.slice(0, -1);
+      rotaRef.current = novaRota;
       setRotaRef.current(novaRota);
       atualizarPolyline(LRef.current, mapRef.current, pontoRef.current, novaRota);
       onDistanciaRef.current(calcularDistancia(pontoRef.current, novaRota));
     } else if (pontoMarkerRef.current) {
       (pontoMarkerRef.current as { remove: () => void }).remove();
       pontoMarkerRef.current = null;
+      pontoRef.current = null;
       setPontoRef.current(null);
       onDistanciaRef.current(0);
     }
   }
 
   function limpar() {
+    ultimoEnderecoCentralizadoRef.current = "";
     rotaMarcadoresRef.current.forEach(m => (m as { remove: () => void }).remove());
     rotaMarcadoresRef.current = [];
     if (pontoMarkerRef.current) { (pontoMarkerRef.current as { remove: () => void }).remove(); pontoMarkerRef.current = null; }
     if (polylineRef.current) { (polylineRef.current as { remove: () => void }).remove(); polylineRef.current = null; }
+    pontoRef.current = null;
+    rotaRef.current = [];
     setPontoRef.current(null);
     setRotaRef.current([]);
     onDistanciaRef.current(0);
+    setTimeout(() => { void centralizarEnderecoDoTreino(); }, 0);
   }
 
   return (
@@ -210,7 +277,7 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
           <div>
             <p className="text-xs font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>🗺 MAPA DO TREINO</p>
             <p className="text-xs" style={{ color: "#8B949E" }}>
-              {!pontoEncontro ? "1° clique = ponto de encontro 📍" : rotaCoords.length === 0 ? "Próximos cliques = traçar rota 🟠" : `Rota: ${rotaCoords.length} ponto${rotaCoords.length > 1 ? "s" : ""}`}
+              {!pontoEncontro ? (cidade && estado ? `Mapa centralizado em ${cidade}/${estado}. 1° clique = ponto de encontro 📍` : "1° clique = ponto de encontro 📍") : rotaCoords.length === 0 ? "Próximos cliques = traçar rota 🟠" : `Rota: ${rotaCoords.length} ponto${rotaCoords.length > 1 ? "s" : ""}`}
             </p>
           </div>
           <div className="flex gap-2">

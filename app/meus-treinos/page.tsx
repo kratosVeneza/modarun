@@ -197,6 +197,9 @@ function BotaoEditarTreino({ encontro, onSaved }: { encontro: Encontro; onSaved?
                 rotaCoords={rotaCoords}
                 setRotaCoords={setRotaCoords}
                 onDistanciaChange={setDistanciaReal}
+                cidade={form.cidade}
+                estado={form.estado}
+                localBusca={form.local_saida}
               />
             </div>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">

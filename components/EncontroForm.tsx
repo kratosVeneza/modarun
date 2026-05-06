@@ -376,7 +376,10 @@ export default function EncontroForm(): React.JSX.Element {
             <MapaTreinoEditor
               pontoEncontro={pontoEncontro} setPontoEncontro={setPontoEncontro}
               rotaCoords={rotaCoords} setRotaCoords={setRotaCoords}
-              onDistanciaChange={setDistanciaReal} />
+              onDistanciaChange={setDistanciaReal}
+              cidade={form.cidade}
+              estado={form.estado}
+              localBusca={form.local_saida} />
 
             {erro && <div className="rounded-xl p-3 text-sm font-semibold" style={{ background:"rgba(255,107,0,0.1)", color:"#FF6B00", border:"1px solid rgba(255,107,0,0.2)" }}>{erro}</div>}
 
