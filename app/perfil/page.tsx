@@ -446,8 +446,8 @@ export default function PerfilPage(): React.JSX.Element {
     { id: "treinos", label: "⚡ TREINOS", count: treinos.length },
     { id: "participacoes", label: "🏃 PARTICIPAÇÕES", count: treinosParticipados.length },
     { id: "preferencias", label: "⭐ PREFERÊNCIAS", count: cidadesInteresse.length + eventosSalvos.length },
-    { id: "estatisticas", label: "📊 STATS", count: 0 },
-    { id: "conquistas", label: "🏅 BADGES", count: 0 },
+    { id: "estatisticas", label: "📊 ESTATÍSTICAS", count: 0 },
+    { id: "conquistas", label: "🏅 CONQUISTAS", count: 0 },
   ] as const;
 
   return (
@@ -558,6 +558,27 @@ export default function PerfilPage(): React.JSX.Element {
           </div>
         </section>
 
+        {/* ── ORIENTAÇÃO RÁPIDA DO PERFIL ── */}
+        <section className="px-4 py-4" style={{ background: "#0D1117", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="mx-auto max-w-3xl rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
+            <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>SEU PERFIL</p>
+            <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>Aqui você acompanha o que publicou, os treinos que criou e os treinos em que confirmou participação. Para alterar data, horário, local ou percurso de um treino criado por você, use a aba <strong style={{ color: "#E6EDF3" }}>Treinos</strong> ou acesse <strong style={{ color: "#E6EDF3" }}>Meus Treinos</strong>.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {[
+                ["📝", "Publicações", "Posts que você fez no feed."],
+                ["⚡", "Treinos", "Encontros criados por você."],
+                ["🏃", "Participações", "Treinos de outros corredores que você confirmou."],
+              ].map(([icon, title, desc]) => (
+                <div key={title} className="rounded-xl p-3" style={{ background: "#21262D", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <p className="text-lg">{icon}</p>
+                  <p className="text-sm font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{title}</p>
+                  <p className="text-xs" style={{ color: "#8B949E" }}>{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── STATS CARDS ── */}
         <div className="px-4 py-4" style={{ background: "#161B22", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div className="mx-auto max-w-3xl grid grid-cols-4 gap-3 sm:grid-cols-4">
@@ -595,6 +616,16 @@ export default function PerfilPage(): React.JSX.Element {
         </div>
 
         {/* ── CONTEÚDO DAS ABAS ── */}
+        <div className="mx-auto max-w-3xl px-4 pt-4">
+          <div className="rounded-2xl p-3 text-xs" style={{ background: "rgba(92,200,0,0.06)", border: "1px solid rgba(92,200,0,0.12)", color: "#8B949E" }}>
+            {abaAtiva === "publicacoes" && "Suas publicações aparecem aqui. Para publicar algo novo, volte para Comunidade."}
+            {abaAtiva === "treinos" && "Treinos criados por você aparecem aqui. Se a data venceu, redefina uma nova data para ele voltar à lista pública."}
+            {abaAtiva === "participacoes" && "Aqui ficam os treinos de outras pessoas em que você confirmou presença."}
+            {abaAtiva === "preferencias" && "Salve cidades e eventos para encontrar corridas com mais facilidade."}
+            {abaAtiva === "estatisticas" && "Resumo simples da sua atividade dentro da comunidade Moda Run."}
+            {abaAtiva === "conquistas" && "Conquistas e marcos da sua jornada aparecem nesta área."}
+          </div>
+        </div>
         <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
 
           {/* PUBLICAÇÕES */}

@@ -1198,6 +1198,36 @@ export default function HomePage(): React.JSX.Element {
           </section>
         )}
 
+        {/* ── GUIA RÁPIDO PARA NÃO SE PERDER ── */}
+        <section className="px-4 py-5" style={{ background: user ? "#0D1117" : "#161B22", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="mx-auto max-w-2xl rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>COMECE POR AQUI</p>
+                <h2 className="mt-1 text-2xl font-black leading-none" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>O QUE VOCÊ QUER FAZER?</h2>
+                <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>Escolha uma ação rápida. Depois você pode voltar para o feed da comunidade.</p>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { href: "/eventos", icon: "🏁", title: "Encontrar corridas", desc: "Veja provas e eventos próximos." },
+                { href: "/encontros", icon: "⚡", title: "Correr com alguém", desc: "Crie ou participe de treinos em grupo." },
+                { href: "/loja", icon: "🛒", title: "Comprar produtos", desc: "Acesse roupas e acessórios Moda Run." },
+                { href: user ? "/perfil" : "/cadastro", icon: "👤", title: user ? "Ver meus dados" : "Criar minha conta", desc: user ? "Treinos, participações e histórico." : "Entre para publicar e participar." },
+              ].map(item => (
+                <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-xl p-3 transition-all hover:brightness-110"
+                  style={{ background: "#21262D", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ background: "rgba(92,200,0,0.08)" }}>{item.icon}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{item.title}</span>
+                    <span className="block text-xs" style={{ color: "#8B949E" }}>{item.desc}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── DESTAQUES RÁPIDOS (logado) ── */}
         {user && (proximosEventos.length > 0 || proximosTreinos.length > 0) && (
           <section className="px-4 py-5" style={{ background: "#161B22", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>

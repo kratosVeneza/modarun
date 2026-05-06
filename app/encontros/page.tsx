@@ -57,21 +57,47 @@ export default async function EncontrosPage({ searchParams }: { searchParams: Se
                 TREINOS EM GRUPO
               </h1>
               <p className="mt-3 max-w-2xl text-sm" style={{ color: "#8B949E" }}>
-                Organize corridas, marque pontos de encontro e treine com outras pessoas na sua cidade.
+                Aqui ficam os encontros de corrida criados pela comunidade. Treinos com data vencida saem desta lista e ficam apenas no histórico do perfil.
               </p>
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                {[
+                  ["1", "Veja treinos disponíveis", "Escolha um card abaixo e confirme participação."],
+                  ["2", "Crie seu treino", "Defina data, horário, local e percurso para convidar corredores."],
+                  ["3", "Edite pelo Meus Treinos", "Criadores podem alterar data, horário, percurso e local depois."],
+                ].map(([num, titulo, desc]) => (
+                  <div key={num} className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(92,200,0,0.12)" }}>
+                    <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>PASSO {num}</p>
+                    <p className="mt-1 text-sm font-black" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{titulo}</p>
+                    <p className="mt-0.5 text-xs" style={{ color: "#8B949E" }}>{desc}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a href="#lista-treinos" className="rounded-xl px-4 py-2 text-xs font-black" style={{ background: "rgba(92,200,0,0.12)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.25)", fontFamily: "'Barlow Condensed', sans-serif" }}>VER TREINOS DISPONÍVEIS</a>
+                <a href="/meus-treinos" className="rounded-xl px-4 py-2 text-xs font-black" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.22)", fontFamily: "'Barlow Condensed', sans-serif" }}>MEUS TREINOS / EDITAR</a>
+              </div>
             </div>
           </section>
           {/* Banner de propaganda da loja - Criar treino */}
           <CardLoja variante="banner" paginaKey="criar-treino" />
 
           {/* Formulário criar treino */}
-          <EncontroForm />
+          <section className="rounded-2xl p-4" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.12)" }}>
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>CRIAR TREINO EM GRUPO</p>
+                <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>Use esta área somente quando quiser chamar outras pessoas para correr com você.</p>
+              </div>
+              <a href="/meus-treinos" className="self-start rounded-xl px-4 py-2 text-xs font-black" style={{ background: "rgba(255,184,0,0.1)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>EDITAR TREINOS CRIADOS</a>
+            </div>
+            <EncontroForm />
+          </section>
 
           {/* Filtro */}
           <FiltroEncontros cidadeInicial={cidadeFiltro} />
 
           {/* Lista */}
-          <section className="space-y-4">
+          <section id="lista-treinos" className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="h-5 w-1 rounded-full" style={{ background: "#5CC800" }} />
