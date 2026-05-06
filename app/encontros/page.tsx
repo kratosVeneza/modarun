@@ -168,6 +168,13 @@ export default async function EncontrosPage({ searchParams }: { searchParams: Se
                           style={{ background: "linear-gradient(135deg,#5CC800,#4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
                           ⚡ ABRIR TREINO
                         </a>
+                        {(isAdmin || e.user_id === user?.id || e.user_id === null) && (
+                          <a href="/meus-treinos"
+                            className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
+                            style={{ background: "rgba(92,200,0,0.12)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.25)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                            ✏️ EDITAR TREINO
+                          </a>
+                        )}
                         <a href="/loja"
                           className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition-all hover:brightness-110"
                           style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>

@@ -2,15 +2,20 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+
+const MapaTreinoEditor = dynamic(() => import("@/components/MapaTreinoEditor"), { ssr: false });
+type LatLng = { lat: number; lng: number };
 
 type Encontro = {
   id: number; titulo: string; cidade: string; estado: string;
   tipo_treino?: string; horario?: string; km_planejado?: number;
   distancia?: string; local_saida?: string; user_id?: string | null;
   data_encontro: string; percurso?: string | null; ritmo?: string | null; observacoes?: string | null; organizador_nome?: string | null;
+  ponto_encontro_lat?: number | null; ponto_encontro_lng?: number | null; rota_coords?: LatLng[] | null;
   encontro_participantes?: { id: number }[];
 };
 
@@ -33,7 +38,7 @@ function treinoExpirado(data: string): boolean {
 const campoStyle = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "10px 12px", fontSize: "13px", outline: "none", width: "100%" } as React.CSSProperties;
 const labelStyle = { display: "block", fontSize: "11px", fontWeight: 800, color: "#8B949E", marginBottom: "5px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" } as React.CSSProperties;
 
-function BotaoExcluir({ encontroId, titulo }: { encontroId: number; titulo: string }): React.JSX.Element {
+function BotaoExcluir({ encontroId, titulo, onDeleted }: { encontroId: number; titulo: string; onDeleted?: (id: number) => void }): React.JSX.Element {
   const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,6 +50,9 @@ function BotaoExcluir({ encontroId, titulo }: { encontroId: number; titulo: stri
       const res = await fetch("/api/deletar-encontro", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ encontroId }) });
       const result = await res.json();
       if (!res.ok) { setErro(result.error || "Erro ao excluir."); setLoading(false); return; }
+      setConfirmando(false);
+      setLoading(false);
+      onDeleted?.(encontroId);
       router.refresh();
     } catch { setErro("Erro de conexão."); setLoading(false); }
   }
@@ -80,10 +88,17 @@ function BotaoExcluir({ encontroId, titulo }: { encontroId: number; titulo: stri
   );
 }
 
-function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Element {
+function BotaoEditarTreino({ encontro, onSaved }: { encontro: Encontro; onSaved?: (treino: Encontro) => void }): React.JSX.Element {
   const [aberto, setAberto] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
+  const [pontoEncontro, setPontoEncontro] = useState<LatLng | null>(
+    encontro.ponto_encontro_lat != null && encontro.ponto_encontro_lng != null
+      ? { lat: Number(encontro.ponto_encontro_lat), lng: Number(encontro.ponto_encontro_lng) }
+      : null
+  );
+  const [rotaCoords, setRotaCoords] = useState<LatLng[]>(Array.isArray(encontro.rota_coords) ? encontro.rota_coords : []);
+  const [distanciaReal, setDistanciaReal] = useState(0);
   const [form, setForm] = useState({
     titulo: encontro.titulo || "",
     cidade: encontro.cidade || "",
@@ -99,7 +114,7 @@ function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Elem
     organizador_nome: encontro.organizador_nome || "",
   });
 
-  function alterar(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  function alterar(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
@@ -111,7 +126,14 @@ function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Elem
       const res = await fetch("/api/editar-encontro", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ encontroId: encontro.id, ...form }),
+        body: JSON.stringify({
+          encontroId: encontro.id,
+          ...form,
+          ponto_encontro_lat: pontoEncontro?.lat ?? null,
+          ponto_encontro_lng: pontoEncontro?.lng ?? null,
+          rota_coords: rotaCoords,
+          distancia: distanciaReal > 0 ? `${distanciaReal.toFixed(2)} km` : encontro.distancia || null,
+        }),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -119,7 +141,9 @@ function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Elem
         setLoading(false);
         return;
       }
-      window.location.reload();
+      if (result.data) onSaved?.(result.data as Encontro);
+      setAberto(false);
+      setLoading(false);
     } catch {
       setErro("Erro de conexão ao salvar o treino.");
       setLoading(false);
@@ -151,11 +175,29 @@ function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Elem
               <label><span style={labelStyle}>DATA</span><input name="data_encontro" type="date" value={form.data_encontro} onChange={alterar} style={campoStyle} required /></label>
               <label><span style={labelStyle}>HORÁRIO</span><input name="horario" type="time" value={form.horario} onChange={alterar} style={campoStyle} required /></label>
               <label><span style={labelStyle}>LOCAL DE SAÍDA</span><input name="local_saida" value={form.local_saida} onChange={alterar} style={campoStyle} /></label>
-              <label><span style={labelStyle}>TIPO DE TREINO</span><input name="tipo_treino" value={form.tipo_treino} onChange={alterar} style={campoStyle} /></label>
+              <label><span style={labelStyle}>TIPO DE TREINO</span><select name="tipo_treino" value={form.tipo_treino} onChange={alterar} style={campoStyle}>
+                <option value="">Selecione</option>
+                {["Caminhada longa","Corrida leve","Corrida moderada","Longão","Tiro","Fartlek","Intervalado","Regenerativo","Subida","Trail","Outro"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select></label>
               <label><span style={labelStyle}>KM PLANEJADO</span><input name="km_planejado" type="number" step="0.1" value={form.km_planejado} onChange={alterar} style={campoStyle} /></label>
               <label><span style={labelStyle}>RITMO</span><input name="ritmo" value={form.ritmo} onChange={alterar} style={campoStyle} /></label>
               <label className="sm:col-span-2"><span style={labelStyle}>PERCURSO</span><textarea name="percurso" value={form.percurso} onChange={alterar} style={{ ...campoStyle, minHeight: 80 }} /></label>
               <label className="sm:col-span-2"><span style={labelStyle}>OBSERVAÇÕES</span><textarea name="observacoes" value={form.observacoes} onChange={alterar} style={{ ...campoStyle, minHeight: 80 }} /></label>
+            </div>
+            <div className="mt-4 rounded-2xl p-3" style={{ background: "rgba(92,200,0,0.04)", border: "1px solid rgba(92,200,0,0.14)" }}>
+              <p className="mb-2 text-xs font-black" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
+                ALTERAR LOCAL E PERCURSO NO MAPA
+              </p>
+              <p className="mb-3 text-xs" style={{ color: "#8B949E" }}>
+                Toque em LIMPAR para escolher um novo ponto. O primeiro toque no mapa marca o local de saída; os próximos toques traçam o percurso.
+              </p>
+              <MapaTreinoEditor
+                pontoEncontro={pontoEncontro}
+                setPontoEncontro={setPontoEncontro}
+                rotaCoords={rotaCoords}
+                setRotaCoords={setRotaCoords}
+                onDistanciaChange={setDistanciaReal}
+              />
             </div>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button type="button" onClick={() => setAberto(false)} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
@@ -271,8 +313,8 @@ export default function MeusTreinosPage(): React.JSX.Element {
                       style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                       ABRIR →
                     </Link>
-                    <BotaoEditarTreino encontro={e} />
-                    <BotaoExcluir encontroId={e.id} titulo={e.titulo} />
+                    <BotaoEditarTreino encontro={e} onSaved={(treino) => setEncontros(prev => prev.map(item => item.id === treino.id ? { ...item, ...treino } : item))} />
+                    <BotaoExcluir encontroId={e.id} titulo={e.titulo} onDeleted={(id) => setEncontros(prev => prev.filter(item => item.id !== id))} />
                   </div>
                 </div>
 

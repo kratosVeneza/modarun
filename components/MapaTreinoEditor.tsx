@@ -58,6 +58,48 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
     polylineRef.current = L.polyline(pontos, { color: "#5CC800", weight: 4, opacity: 0.9 }).addTo(map2 as unknown);
   }
 
+  function renderizarEstadoInicial(L2: unknown, map2: unknown, ponto: LatLng | null, rota: LatLng[]) {
+    const L = L2 as {
+      divIcon: (opts: object) => unknown;
+      marker: (latlng: [number, number], opts: object) => { addTo: (m: unknown) => unknown };
+    };
+    const map = map2 as {
+      fitBounds: (bounds: [number, number][], opts?: object) => void;
+      setView: (center: [number, number], zoom: number) => void;
+    };
+
+    rotaMarcadoresRef.current.forEach(m => (m as { remove: () => void }).remove());
+    rotaMarcadoresRef.current = [];
+    if (pontoMarkerRef.current) { (pontoMarkerRef.current as { remove: () => void }).remove(); pontoMarkerRef.current = null; }
+    if (polylineRef.current) { (polylineRef.current as { remove: () => void }).remove(); polylineRef.current = null; }
+
+    const greenIcon = L.divIcon({
+      className: "",
+      html: `<div style="width:22px;height:22px;background:#5CC800;border:3px solid #fff;border-radius:50%;box-shadow:0 0 12px rgba(92,200,0,0.7);"></div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11],
+    });
+    const rotaIcon = L.divIcon({
+      className: "",
+      html: `<div style="width:14px;height:14px;background:#FF6B00;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(255,107,0,0.6);"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7],
+    });
+
+    const bounds: [number, number][] = [];
+    if (ponto) {
+      pontoMarkerRef.current = L.marker([ponto.lat, ponto.lng], { icon: greenIcon }).addTo(map);
+      bounds.push([ponto.lat, ponto.lng]);
+    }
+    rota.forEach((p) => {
+      const marker = L.marker([p.lat, p.lng], { icon: rotaIcon }).addTo(map);
+      rotaMarcadoresRef.current.push(marker);
+      bounds.push([p.lat, p.lng]);
+    });
+    atualizarPolyline(L, map, ponto, rota);
+    onDistanciaRef.current(calcularDistancia(ponto, rota));
+    if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24] });
+    else if (bounds.length === 1) map.setView(bounds[0], 15);
+  }
+
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
 
@@ -80,6 +122,8 @@ export default function MapaTreinoEditor({ pontoEncontro, setPontoEncontro, rota
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
         maxZoom: 19,
       }).addTo(map);
+
+      renderizarEstadoInicial(L.default, map, pontoRef.current, rotaRef.current);
 
       map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
         const latlng: LatLng = { lat: e.latlng.lat, lng: e.latlng.lng };

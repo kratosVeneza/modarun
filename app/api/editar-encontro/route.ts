@@ -52,7 +52,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
     }
 
-    const updateData: Record<string, string | number | null> = {};
+    const updateData: Record<string, unknown> = {};
 
     for (const chave of ["titulo", "cidade", "estado", "data_encontro", "horario", "local_saida"] as const) {
       if (temCampo(campos, chave) && typeof campos[chave] === "string") {
@@ -60,13 +60,28 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       }
     }
 
-    for (const chave of ["tipo_treino", "ritmo", "percurso", "observacoes", "organizador_nome"] as const) {
+    for (const chave of ["tipo_treino", "ritmo", "percurso", "observacoes", "organizador_nome", "distancia"] as const) {
       if (temCampo(campos, chave)) updateData[chave] = textoOuNull(campos[chave]);
     }
 
     if (temCampo(campos, "km_planejado")) {
       const valor = campos.km_planejado;
       updateData.km_planejado = valor === null || valor === "" ? null : Number(valor);
+    }
+
+
+    if (temCampo(campos, "ponto_encontro_lat")) {
+      const valor = campos.ponto_encontro_lat;
+      updateData.ponto_encontro_lat = valor === null || valor === "" ? null : Number(valor);
+    }
+
+    if (temCampo(campos, "ponto_encontro_lng")) {
+      const valor = campos.ponto_encontro_lng;
+      updateData.ponto_encontro_lng = valor === null || valor === "" ? null : Number(valor);
+    }
+
+    if (temCampo(campos, "rota_coords")) {
+      updateData.rota_coords = Array.isArray(campos.rota_coords) ? campos.rota_coords : [];
     }
 
     if (Object.keys(updateData).length === 0) {
