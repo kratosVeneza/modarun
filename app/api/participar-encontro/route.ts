@@ -14,6 +14,15 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60_000;
 
+function hojeSaoPauloISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
@@ -45,6 +54,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!encontro_id || !nome) {
       return NextResponse.json({ error: "Encontro e nome são obrigatórios." }, { status: 400 });
+    }
+
+    const { data: treinoStatus, error: treinoStatusError } = await supabase
+      .from("encontros")
+      .select("id, data_encontro")
+      .eq("id", encontro_id)
+      .single();
+
+    if (treinoStatusError || !treinoStatus) {
+      return NextResponse.json({ error: "Treino não encontrado." }, { status: 404 });
+    }
+
+    if (String(treinoStatus.data_encontro) < hojeSaoPauloISO()) {
+      return NextResponse.json(
+        { error: "Este treino já está com a data expirada. O organizador precisa redefinir uma nova data para reabrir as confirmações." },
+        { status: 410 }
+      );
     }
 
     // Verificar duplicidade por WhatsApp (prioritário) ou nome

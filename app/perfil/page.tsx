@@ -28,6 +28,16 @@ function formatarData(data: string) {
   return `${dia}/${mes}`;
 }
 
+function hojeLocalISO(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function treinoExpirado(data: string): boolean {
+  return String(data || "") < hojeLocalISO();
+}
+
 function formatarDataCompleta(data: string) {
   if (!data) return "—";
   const [ano, mes, dia] = String(data).split("-");
@@ -44,6 +54,56 @@ function tempoRelativo(data: string): string {
   const d = Math.floor(h / 24);
   if (d < 7) return `${d}d`;
   return new Date(data).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function RedefinirDataTreino({ treinoId, dataAtual }: { treinoId: number; dataAtual: string }) {
+  const [data, setData] = useState(dataAtual || hojeLocalISO());
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  async function salvar() {
+    setErro("");
+    if (!data || data < hojeLocalISO()) {
+      setErro("Escolha uma data futura ou a data de hoje.");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const res = await fetch("/api/editar-encontro", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ encontroId: treinoId, data_encontro: data }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setErro(result.error || "Não foi possível redefinir a data.");
+        setSalvando(false);
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setErro("Erro de conexão ao redefinir a data.");
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl p-3" style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.18)" }}>
+      <p className="text-xs font-black" style={{ color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>DATA DO TREINO EXPIRADA</p>
+      <p className="mt-1 text-xs" style={{ color: "#8B949E" }}>Defina uma nova data futura para este treino voltar a aparecer na área de treinos disponíveis.</p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input type="date" value={data} min={hojeLocalISO()} onChange={e => setData(e.target.value)}
+          className="rounded-xl px-3 py-2 text-sm outline-none"
+          style={{ background: "#21262D", border: "1px solid rgba(255,107,0,0.25)", color: "#E6EDF3" }} />
+        <button type="button" onClick={salvar} disabled={salvando}
+          className="rounded-xl px-4 py-2 text-xs font-black"
+          style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>
+          {salvando ? "SALVANDO..." : "REDEFINIR DATA"}
+        </button>
+      </div>
+      {erro && <p className="mt-2 text-xs" style={{ color: "#FF6B00" }}>{erro}</p>}
+    </div>
+  );
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -646,31 +706,41 @@ export default function PerfilPage(): React.JSX.Element {
                   </Link>
                 </div>
               ) : (
-                treinos.map(t => (
-                  <Link key={t.id} href={`/treinos/${t.id}`}
-                    className="flex items-start gap-3 rounded-2xl p-4 transition-all hover:brightness-110"
-                    style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)" }}>
-                    <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl"
-                      style={{ background: "rgba(92,200,0,0.1)" }}>
-                      <p className="text-xs font-black leading-none" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {formatarData(t.data_encontro)}
-                      </p>
+                treinos.map(t => {
+                  const expirado = treinoExpirado(t.data_encontro);
+                  return (
+                    <div key={t.id} className="rounded-2xl" style={{ background: "#161B22", border: expirado ? "1px solid rgba(255,107,0,0.2)" : "1px solid rgba(92,200,0,0.1)" }}>
+                      <Link href={`/treinos/${t.id}`}
+                        className="flex items-start gap-3 rounded-2xl p-4 transition-all hover:brightness-110">
+                        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl"
+                          style={{ background: expirado ? "rgba(255,107,0,0.1)" : "rgba(92,200,0,0.1)" }}>
+                          <p className="text-xs font-black leading-none" style={{ color: expirado ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            {formatarData(t.data_encontro)}
+                          </p>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{t.titulo}</p>
+                            {expirado && (
+                              <span className="rounded-lg px-2 py-0.5 text-[10px] font-black" style={{ background: "rgba(255,107,0,0.12)", color: "#FF6B00", fontFamily: "'Barlow Condensed', sans-serif" }}>EXPIRADO</span>
+                            )}
+                          </div>
+                          <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>
+                            {t.cidade} — {t.estado}{t.tipo_treino ? ` · ${t.tipo_treino}` : ""}{t.horario ? ` · ${t.horario}` : ""}
+                          </p>
+                        </div>
+                        {t.km_planejado ? (
+                          <span className="text-sm font-black shrink-0" style={{ color: expirado ? "#FF6B00" : "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            {t.km_planejado}km
+                          </span>
+                        ) : t.distancia ? (
+                          <span className="text-xs shrink-0" style={{ color: "#8B949E" }}>{t.distancia}</span>
+                        ) : null}
+                      </Link>
+                      {expirado && <div className="px-4 pb-4"><RedefinirDataTreino treinoId={t.id} dataAtual={t.data_encontro} /></div>}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-black text-sm" style={{ color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>{t.titulo}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "#8B949E" }}>
-                        {t.cidade} — {t.estado}{t.tipo_treino ? ` · ${t.tipo_treino}` : ""}{t.horario ? ` · ${t.horario}` : ""}
-                      </p>
-                    </div>
-                    {t.km_planejado ? (
-                      <span className="text-sm font-black shrink-0" style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
-                        {t.km_planejado}km
-                      </span>
-                    ) : t.distancia ? (
-                      <span className="text-xs shrink-0" style={{ color: "#8B949E" }}>{t.distancia}</span>
-                    ) : null}
-                  </Link>
-                ))
+                  );
+                })
               )}
             </>
           )}

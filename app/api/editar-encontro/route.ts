@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
+type CamposEdicao = Record<string, unknown>;
+
+function textoOuNull(valor: unknown): string | null {
+  if (typeof valor !== "string") return null;
+  const limpo = valor.trim();
+  return limpo || null;
+}
+
+function temCampo(campos: CamposEdicao, chave: string): boolean {
+  return Object.prototype.hasOwnProperty.call(campos, chave);
+}
+
 export async function PATCH(request: Request): Promise<NextResponse> {
   try {
     const supabase = await createClient();
@@ -10,7 +22,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
     }
 
-    const body = await request.json() as Record<string, unknown>;
+    const body = await request.json() as CamposEdicao;
     const { encontroId, ...campos } = body;
 
     if (!encontroId) {
@@ -40,22 +52,30 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
     }
 
+    const updateData: Record<string, string | number | null> = {};
+
+    for (const chave of ["titulo", "cidade", "estado", "data_encontro", "horario", "local_saida"] as const) {
+      if (temCampo(campos, chave) && typeof campos[chave] === "string") {
+        updateData[chave] = String(campos[chave]).trim();
+      }
+    }
+
+    for (const chave of ["tipo_treino", "ritmo", "percurso", "observacoes", "organizador_nome"] as const) {
+      if (temCampo(campos, chave)) updateData[chave] = textoOuNull(campos[chave]);
+    }
+
+    if (temCampo(campos, "km_planejado")) {
+      const valor = campos.km_planejado;
+      updateData.km_planejado = valor === null || valor === "" ? null : Number(valor);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: "Nenhum campo válido para atualizar." }, { status: 400 });
+    }
+
     const { data, error } = await supabase
       .from("encontros")
-      .update({
-        titulo: campos.titulo as string,
-        cidade: campos.cidade as string,
-        estado: campos.estado as string,
-        data_encontro: campos.data_encontro as string,
-        horario: campos.horario as string,
-        local_saida: campos.local_saida as string,
-        tipo_treino: (campos.tipo_treino as string) || null,
-        km_planejado: campos.km_planejado ? Number(campos.km_planejado) : null,
-        ritmo: (campos.ritmo as string) || null,
-        percurso: (campos.percurso as string) || null,
-        observacoes: (campos.observacoes as string) || null,
-        organizador_nome: (campos.organizador_nome as string) || null,
-      })
+      .update(updateData)
       .eq("id", encontroId)
       .select()
       .single();

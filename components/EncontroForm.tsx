@@ -147,14 +147,18 @@ export default function EncontroForm(): React.JSX.Element {
             </a>
           )}
 
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={() => { setTreinoId(null); setCopiado(false); }} className="flex-1 rounded-xl py-3 text-sm font-black"
+          <div className="grid gap-3 pt-1 sm:grid-cols-3">
+            <button type="button" onClick={() => { setTreinoId(null); setCopiado(false); }} className="rounded-xl py-3 text-sm font-black"
               style={{ background:"rgba(255,255,255,0.05)", color:"#8B949E", fontFamily:"'Barlow Condensed', sans-serif" }}>
               + CRIAR OUTRO
             </button>
-            <a href={`/treinos/${treinoId}`} className="flex-1 flex items-center justify-center rounded-xl py-3 text-sm font-black"
+            <a href={`/treinos/${treinoId}`} className="flex items-center justify-center rounded-xl py-3 text-sm font-black"
               style={{ background:"linear-gradient(135deg,#5CC800,#4aaa00)", color:"#fff", fontFamily:"'Barlow Condensed', sans-serif" }}>
               VER TREINO →
+            </a>
+            <a href="/meus-treinos" className="flex items-center justify-center rounded-xl py-3 text-sm font-black"
+              style={{ background:"rgba(92,200,0,0.12)", color:"#5CC800", border:"1px solid rgba(92,200,0,0.25)", fontFamily:"'Barlow Condensed', sans-serif" }}>
+              EDITAR TREINO
             </a>
           </div>
         </div>

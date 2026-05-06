@@ -14,14 +14,26 @@ function formatarData(data: string) {
   return `${dia}/${mes}/${ano}`;
 }
 
+function hojeSaoPauloISO() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export default async function EncontrosPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const cidadeFiltro = params.cidade?.trim() || "";
   const { user, isAdmin } = await getAdminStatus();
 
+  const hoje = hojeSaoPauloISO();
+
   let query = supabase
     .from("encontros")
     .select("*, encontro_participantes(id, nome)")
+    .gte("data_encontro", hoje)
     .order("data_encontro", { ascending: true });
 
   if (cidadeFiltro) query = query.ilike("cidade", `%${cidadeFiltro}%`);

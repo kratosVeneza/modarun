@@ -10,7 +10,8 @@ type Encontro = {
   id: number; titulo: string; cidade: string; estado: string;
   tipo_treino?: string; horario?: string; km_planejado?: number;
   distancia?: string; local_saida?: string; user_id?: string | null;
-  data_encontro: string; encontro_participantes?: { id: number }[];
+  data_encontro: string; percurso?: string | null; ritmo?: string | null; observacoes?: string | null; organizador_nome?: string | null;
+  encontro_participantes?: { id: number }[];
 };
 
 function formatarData(data: string) {
@@ -18,6 +19,19 @@ function formatarData(data: string) {
   const [, mes, dia] = String(data).split("-");
   return `${dia}/${mes}`;
 }
+
+function hojeLocalISO(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function treinoExpirado(data: string): boolean {
+  return String(data || "") < hojeLocalISO();
+}
+
+const campoStyle = { background: "#21262D", border: "1px solid rgba(92,200,0,0.2)", color: "#E6EDF3", borderRadius: "12px", padding: "10px 12px", fontSize: "13px", outline: "none", width: "100%" } as React.CSSProperties;
+const labelStyle = { display: "block", fontSize: "11px", fontWeight: 800, color: "#8B949E", marginBottom: "5px", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" } as React.CSSProperties;
 
 function BotaoExcluir({ encontroId, titulo }: { encontroId: number; titulo: string }): React.JSX.Element {
   const router = useRouter();
@@ -65,6 +79,95 @@ function BotaoExcluir({ encontroId, titulo }: { encontroId: number; titulo: stri
     </button>
   );
 }
+
+function BotaoEditarTreino({ encontro }: { encontro: Encontro }): React.JSX.Element {
+  const [aberto, setAberto] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState("");
+  const [form, setForm] = useState({
+    titulo: encontro.titulo || "",
+    cidade: encontro.cidade || "",
+    estado: encontro.estado || "",
+    data_encontro: encontro.data_encontro || "",
+    horario: encontro.horario || "",
+    local_saida: encontro.local_saida || "",
+    tipo_treino: encontro.tipo_treino || "",
+    km_planejado: encontro.km_planejado ? String(encontro.km_planejado) : "",
+    ritmo: encontro.ritmo || "",
+    percurso: encontro.percurso || "",
+    observacoes: encontro.observacoes || "",
+    organizador_nome: encontro.organizador_nome || "",
+  });
+
+  function alterar(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  }
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setErro("");
+    try {
+      const res = await fetch("/api/editar-encontro", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ encontroId: encontro.id, ...form }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setErro(result.error || "Não foi possível salvar o treino.");
+        setLoading(false);
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setErro("Erro de conexão ao salvar o treino.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => setAberto(true)} className="rounded-xl px-3 py-2 text-xs font-black"
+        style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+        ✏️ EDITAR
+      </button>
+      {aberto && (
+        <div className="fixed inset-0 z-50 overflow-y-auto px-4 py-6" style={{ background: "rgba(0,0,0,0.86)", backdropFilter: "blur(8px)" }} onClick={e => e.target === e.currentTarget && setAberto(false)}>
+          <form onSubmit={salvar} className="mx-auto w-full max-w-2xl rounded-2xl p-5 shadow-2xl" style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.25)" }}>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#E6EDF3" }}>EDITAR TREINO</h3>
+                <p className="text-xs" style={{ color: "#8B949E" }}>Altere data, horário, percurso e demais informações do treino.</p>
+              </div>
+              <button type="button" onClick={() => setAberto(false)} className="rounded-xl px-3 py-2 text-xs font-black" style={{ background: "rgba(255,255,255,0.06)", color: "#8B949E" }}>FECHAR</button>
+            </div>
+            {erro && <div className="mb-3 rounded-xl p-3 text-sm" style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00" }}>{erro}</div>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label><span style={labelStyle}>TÍTULO</span><input name="titulo" value={form.titulo} onChange={alterar} style={campoStyle} required /></label>
+              <label><span style={labelStyle}>ORGANIZADOR</span><input name="organizador_nome" value={form.organizador_nome} onChange={alterar} style={campoStyle} /></label>
+              <label><span style={labelStyle}>CIDADE</span><input name="cidade" value={form.cidade} onChange={alterar} style={campoStyle} required /></label>
+              <label><span style={labelStyle}>ESTADO</span><input name="estado" value={form.estado} onChange={alterar} style={campoStyle} required maxLength={2} /></label>
+              <label><span style={labelStyle}>DATA</span><input name="data_encontro" type="date" value={form.data_encontro} onChange={alterar} style={campoStyle} required /></label>
+              <label><span style={labelStyle}>HORÁRIO</span><input name="horario" type="time" value={form.horario} onChange={alterar} style={campoStyle} required /></label>
+              <label><span style={labelStyle}>LOCAL DE SAÍDA</span><input name="local_saida" value={form.local_saida} onChange={alterar} style={campoStyle} /></label>
+              <label><span style={labelStyle}>TIPO DE TREINO</span><input name="tipo_treino" value={form.tipo_treino} onChange={alterar} style={campoStyle} /></label>
+              <label><span style={labelStyle}>KM PLANEJADO</span><input name="km_planejado" type="number" step="0.1" value={form.km_planejado} onChange={alterar} style={campoStyle} /></label>
+              <label><span style={labelStyle}>RITMO</span><input name="ritmo" value={form.ritmo} onChange={alterar} style={campoStyle} /></label>
+              <label className="sm:col-span-2"><span style={labelStyle}>PERCURSO</span><textarea name="percurso" value={form.percurso} onChange={alterar} style={{ ...campoStyle, minHeight: 80 }} /></label>
+              <label className="sm:col-span-2"><span style={labelStyle}>OBSERVAÇÕES</span><textarea name="observacoes" value={form.observacoes} onChange={alterar} style={{ ...campoStyle, minHeight: 80 }} /></label>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={() => setAberto(false)} disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif" }}>CANCELAR</button>
+              <button type="submit" disabled={loading} className="flex-1 rounded-xl py-3 text-sm font-black" style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif" }}>{loading ? "SALVANDO..." : "SALVAR ALTERAÇÕES"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
 
 export default function MeusTreinosPage(): React.JSX.Element {
   const router = useRouter();
@@ -157,12 +260,18 @@ export default function MeusTreinosPage(): React.JSX.Element {
                       {isAdmin && !ehDono && <span className="rounded-lg px-2 py-0.5 text-xs font-bold" style={{ background: "rgba(255,255,255,0.05)", color: "#8B949E" }}>outro usuário</span>}
                     </div>
                     <p className="mt-1 text-sm" style={{ color: "#8B949E" }}>📍 {e.cidade} - {e.estado}</p>
+                    {treinoExpirado(e.data_encontro) && (
+                      <span className="mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-black" style={{ background: "rgba(255,107,0,0.12)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        DATA DO TREINO EXPIRADA · EDITE A DATA PARA REATIVAR
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <Link href={`/treinos/${e.id}`} className="rounded-xl px-4 py-2 text-xs font-black transition-all hover:brightness-110"
                       style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.2)", fontFamily: "'Barlow Condensed', sans-serif" }}>
                       ABRIR →
                     </Link>
+                    <BotaoEditarTreino encontro={e} />
                     <BotaoExcluir encontroId={e.id} titulo={e.titulo} />
                   </div>
                 </div>
