@@ -54,19 +54,6 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
     return pathname === path || (path !== "/" && pathname.startsWith(path));
   }
 
-  function descricaoLink(href: string) {
-    const descricoes: Record<string, string> = {
-      "/": "Feed, posts e interações da comunidade",
-      "/eventos": "Corridas oficiais e provas próximas",
-      "/encontros": "Treinos em grupo criados por corredores",
-      "/loja": "Produtos Moda Run para corrida e treino",
-      "/ferramentas": "Calculadoras de pace e frequência cardíaca",
-      "/perfil": "Seus treinos, participações e configurações",
-      "/chat": "Conversas privadas com outros corredores",
-    };
-    return descricoes[href] || "";
-  }
-
   function iconeNotif(tipo: string) {
     if (tipo === "novo_seguidor") return "🏃";
     if (tipo === "curtida_post") return "❤️";
@@ -407,13 +394,7 @@ export default function Header({ userEmail, isAdmin = false }: { userEmail?: str
                   background: isActive(link.href) ? (link.href === "/ferramentas" ? "rgba(255,184,0,0.1)" : "rgba(92,200,0,0.1)") : "transparent",
                   fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em",
                 }}>
-                <span className="text-lg">{link.icon}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block leading-tight">{link.label.toUpperCase()}</span>
-                  <span className="block text-[11px] font-normal leading-tight" style={{ color: "#8B949E", fontFamily: "Barlow, sans-serif", letterSpacing: 0 }}>
-                    {descricaoLink(link.href)}
-                  </span>
-                </span>
+                <span className="text-lg">{link.icon}</span>{link.label.toUpperCase()}
                 {!!link.badge && link.badge > 0 && <span className="ml-auto rounded-full px-2 py-0.5 text-xs" style={{ background: "#FF6B00", color: "#fff" }}>{link.badge > 9 ? "9+" : link.badge}</span>}
               </Link>
             ))}
