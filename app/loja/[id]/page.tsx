@@ -5,7 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
-import { ArrowLeft, ShoppingBag, Share2, ChevronLeft, ChevronRight, ZoomIn, X, Star, Tag, Ruler, Package } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Share2, ChevronLeft, ChevronRight, ZoomIn, X, Star, Tag, Ruler, Package, Plus, Minus, Zap } from "lucide-react";
+import { useCarrinho } from "@/contexts/CarrinhoContext";
+import CarrinhoDrawer from "@/components/CarrinhoDrawer";
+import CarrinhoFAB from "@/components/CarrinhoFAB";
 
 type VariacaoCor = {
   cor: string; fotos: string[]; tamanhos: string[];
@@ -100,6 +103,11 @@ export default function ProdutoPage(): React.JSX.Element {
   const [copiado, setCopiado] = useState(false);
   const [copiandoFoto, setCopiandoFoto] = useState(false);
 
+  // ─── NOVO: quantidade + integração com carrinho ───────────────────────────
+  const [quantidade, setQuantidade] = useState(1);
+  const [feedback, setFeedback] = useState<null | "ok" | "falta">(null);
+  const { adicionar, abrir } = useCarrinho();
+
   const carregar = useCallback(async () => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email);
@@ -150,23 +158,66 @@ export default function ProdutoPage(): React.JSX.Element {
   const temDesconto = !!produto.preco_promocional && produto.preco_promocional < produto.preco;
   const desconto = temDesconto ? Math.round((1 - produto.preco_promocional! / produto.preco) * 100) : 0;
 
+  // ─── Validação compartilhada por todas as ações de compra ────────────────
+  function validarSelecao(): { ok: boolean; motivo?: string } {
+    if (temVariacoes && !corSelecionada) return { ok: false, motivo: "Escolha uma cor" };
+    if (corEsgotada) return { ok: false, motivo: "Cor esgotada" };
+    if (tamanhosAtuais.length > 0 && !tamanhoSelecionado) return { ok: false, motivo: "Escolha um tamanho" };
+    return { ok: true };
+  }
+
+  // ─── Adiciona ao carrinho (opcionalmente abre o drawer) ───────────────────
+  function handleAdicionar({ abrirDrawer }: { abrirDrawer: boolean }) {
+    const { ok } = validarSelecao();
+    if (!ok) {
+      setFeedback("falta");
+      setTimeout(() => setFeedback(null), 1800);
+      return;
+    }
+    adicionar(
+      {
+        produto_id: produto!.id,
+        nome: produto!.nome,
+        categoria: produto!.categoria,
+        preco_unitario: precoFinal,
+        preco_original: temDesconto ? produto!.preco : undefined,
+        cor: corSelecionada || undefined,
+        tamanho: tamanhoSelecionado || undefined,
+        foto: fotosAtuais[fotoAtiva] || undefined,
+      },
+      quantidade
+    );
+    setFeedback("ok");
+    setTimeout(() => setFeedback(null), 1500);
+    if (abrirDrawer) abrir();
+  }
+
   function montarMsgWhatsapp(incluirAvisoFoto: boolean) {
     const base = `Olá! Tenho interesse no produto *${produto!.nome}*`;
     const cor = corSelecionada ? `\nCor: *${corSelecionada}*` : "";
     const tam = tamanhoSelecionado ? `\nTamanho: *${tamanhoSelecionado}*` : "";
-    const preco = `\nValor: *${formatarPreco(precoFinal)}*`;
+    const qtd = quantidade > 1 ? `\nQuantidade: *${quantidade}*` : "";
+    const valorUnitario = `\nValor unitário: *${formatarPreco(precoFinal)}*`;
+    const valorTotal = quantidade > 1 ? `\nValor total: *${formatarPreco(precoFinal * quantidade)}*` : "";
     const link = `\n\n🔗 ${window.location.href}`;
     const avisoFoto = incluirAvisoFoto && fotosAtuais[fotoAtiva]
       ? `\n\n📎 *Foto do produto em anexo* (enviada separadamente)`
       : "";
-    return produto!.whatsapp_msg || (base + cor + tam + preco + avisoFoto + link);
+    return produto!.whatsapp_msg || (base + cor + tam + qtd + valorUnitario + valorTotal + avisoFoto + link);
   }
 
   async function abrirWhatsapp() {
+    // Validar antes — não faz sentido abrir WhatsApp pedindo "preto sem tamanho"
+    const { ok } = validarSelecao();
+    if (!ok) {
+      setFeedback("falta");
+      setTimeout(() => setFeedback(null), 1800);
+      return;
+    }
+
     const numero = process.env.NEXT_PUBLIC_WHATSAPP_ORGANIZADOR || "5594920009526";
     const fotoUrl = fotosAtuais[fotoAtiva];
 
-    // Tentar copiar a imagem para a área de transferência
     let fotoCopiada = false;
     if (fotoUrl) {
       try {
@@ -177,7 +228,6 @@ export default function ProdutoPage(): React.JSX.Element {
         await navigator.clipboard.write([item]);
         fotoCopiada = true;
       } catch {
-        // ClipboardItem não suportado em todos os browsers — ignora silenciosamente
         fotoCopiada = false;
       } finally {
         setCopiandoFoto(false);
@@ -187,7 +237,6 @@ export default function ProdutoPage(): React.JSX.Element {
     const msg = montarMsgWhatsapp(fotoCopiada);
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, "_blank");
 
-    // Mostrar toast se a foto foi copiada
     if (fotoCopiada) {
       setTimeout(() => {
         alert("📎 A foto do produto foi copiada! Cole no WhatsApp antes de enviar (Ctrl+V ou segurar para colar).");
@@ -208,7 +257,8 @@ export default function ProdutoPage(): React.JSX.Element {
   return (
     <>
       <Header userEmail={userEmail} isAdmin={isAdmin} />
-      <main style={{ background: "#0D1117", minHeight: "100vh" }}>
+      <CarrinhoDrawer />
+      <main style={{ background: "#0D1117", minHeight: "100vh", paddingBottom: "100px" }}>
 
         {/* Breadcrumb */}
         <div className="px-4 py-4 mx-auto max-w-5xl">
@@ -227,7 +277,6 @@ export default function ProdutoPage(): React.JSX.Element {
 
             {/* ── GALERIA ─────────────────────────────────────────────── */}
             <div className="space-y-3">
-              {/* Foto principal */}
               <div className="relative overflow-hidden rounded-2xl cursor-zoom-in group"
                 style={{ background: "#161B22", border: "1px solid rgba(92,200,0,0.1)", aspectRatio: "1" }}
                 onClick={() => fotosAtuais.length > 0 && setModalAberto(true)}>
@@ -259,7 +308,6 @@ export default function ProdutoPage(): React.JSX.Element {
                   </div>
                 )}
 
-                {/* Badges */}
                 <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                   {produto.destaque && (
                     <span className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-black"
@@ -275,7 +323,6 @@ export default function ProdutoPage(): React.JSX.Element {
                   )}
                 </div>
 
-                {/* Navegação de fotos */}
                 {fotosAtuais.length > 1 && (
                   <>
                     <button onClick={e => { e.stopPropagation(); setFotoAtiva(i => (i - 1 + fotosAtuais.length) % fotosAtuais.length); }}
@@ -292,7 +339,6 @@ export default function ProdutoPage(): React.JSX.Element {
                 )}
               </div>
 
-              {/* Miniaturas */}
               {fotosAtuais.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                   {fotosAtuais.map((foto, i) => (
@@ -417,32 +463,127 @@ export default function ProdutoPage(): React.JSX.Element {
                 </div>
               )}
 
-              {/* CTA compra */}
-              <div className="space-y-2">
-                <button onClick={abrirWhatsapp} disabled={copiandoFoto}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 font-black text-base transition-all hover:brightness-110 hover:scale-[1.02] disabled:opacity-80"
-                  style={{ background: "linear-gradient(135deg, #25D366, #1ebe5d)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 4px 24px rgba(37,211,102,0.25)" }}>
-                  {copiandoFoto ? (
-                    <>
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                      PREPARANDO FOTO...
-                    </>
-                  ) : (
-                    <>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                      </svg>
-                      COMPRAR PELO WHATSAPP
-                    </>
-                  )}
-                </button>
-                <button onClick={compartilhar}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-black text-sm transition-all hover:brightness-110"
-                  style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.25)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
-                  <Share2 size={15} strokeWidth={2} />
-                  {copiado ? "✓ LINK COPIADO!" : "COMPARTILHAR PRODUTO"}
-                </button>
-              </div>
+              {/* ── NOVO: Quantidade ──────────────────────────────────── */}
+              {!corEsgotada && produto.estoque_disponivel && (
+                <div>
+                  <p className="text-xs font-black mb-2"
+                    style={{ color: "#8B949E", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.08em" }}>
+                    QUANTIDADE
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex items-center rounded-xl overflow-hidden"
+                      style={{ border: "1px solid rgba(92,200,0,0.25)" }}>
+                      <button
+                        onClick={() => setQuantidade(q => Math.max(1, q - 1))}
+                        aria-label="Diminuir quantidade"
+                        disabled={quantidade <= 1}
+                        className="flex h-11 w-11 items-center justify-center transition hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800" }}>
+                        <Minus size={16} strokeWidth={2.5} />
+                      </button>
+                      <span className="flex h-11 w-14 items-center justify-center font-black text-lg"
+                        style={{ background: "#161B22", color: "#E6EDF3", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {quantidade}
+                      </span>
+                      <button
+                        onClick={() => setQuantidade(q => Math.min(99, q + 1))}
+                        aria-label="Aumentar quantidade"
+                        className="flex h-11 w-11 items-center justify-center transition hover:brightness-125"
+                        style={{ background: "rgba(92,200,0,0.08)", color: "#5CC800" }}>
+                        <Plus size={16} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                    {quantidade > 1 && (
+                      <div className="text-sm">
+                        <span style={{ color: "#8B949E" }}>Subtotal: </span>
+                        <span className="font-black"
+                          style={{ color: "#5CC800", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                          {formatarPreco(precoFinal * quantidade)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback (validação / sucesso) */}
+              {feedback === "ok" && (
+                <div className="rounded-xl px-3 py-2 text-center text-sm font-black"
+                  style={{ background: "rgba(92,200,0,0.12)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  ✓ ADICIONADO AO CARRINHO
+                </div>
+              )}
+              {feedback === "falta" && (
+                <div className="rounded-xl px-3 py-2 text-center text-sm font-black"
+                  style={{ background: "rgba(255,107,0,0.12)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                  ⚠ {validarSelecao().motivo?.toUpperCase()}
+                </div>
+              )}
+
+              {/* CTAs de compra */}
+              {!corEsgotada && produto.estoque_disponivel && (
+                <div className="space-y-2">
+                  {/* Linha 1: Adicionar (verde, principal) + Comprar agora (amarelo, ícone) */}
+                  <div className="flex gap-2">
+                    <button onClick={() => handleAdicionar({ abrirDrawer: false })}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-black text-base transition-all hover:brightness-110 active:scale-[0.98]"
+                      style={{ background: "linear-gradient(135deg, #5CC800, #4aaa00)", color: "#fff", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em", boxShadow: "0 4px 24px rgba(92,200,0,0.25)" }}>
+                      <ShoppingBag size={18} strokeWidth={2.2} />
+                      ADICIONAR AO CARRINHO
+                    </button>
+                    <button onClick={() => handleAdicionar({ abrirDrawer: true })}
+                      title="Comprar agora — adicionar e abrir carrinho"
+                      aria-label="Comprar agora"
+                      className="shrink-0 flex items-center justify-center rounded-2xl px-4 transition-all hover:brightness-110 active:scale-[0.98]"
+                      style={{ background: "rgba(255,184,0,0.12)", color: "#FFB800", border: "1px solid rgba(255,184,0,0.4)", fontFamily: "'Barlow Condensed', sans-serif" }}>
+                      <Zap size={20} strokeWidth={2.2} />
+                    </button>
+                  </div>
+
+                  {/* Linha 2: Comprar só este (WhatsApp direto, mantém lógica antiga de copiar foto) */}
+                  <button onClick={abrirWhatsapp} disabled={copiandoFoto}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-black text-sm transition-all hover:brightness-110 disabled:opacity-80"
+                    style={{ background: "rgba(37,211,102,0.1)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    {copiandoFoto ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        PREPARANDO FOTO...
+                      </>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                        COMPRAR SÓ ESTE ITEM (WHATSAPP)
+                      </>
+                    )}
+                  </button>
+
+                  {/* Linha 3: Compartilhar */}
+                  <button onClick={compartilhar}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-2.5 font-black text-xs transition-all hover:brightness-110"
+                    style={{ background: "transparent", color: "#8B949E", border: "1px solid rgba(255,255,255,0.08)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    <Share2 size={13} strokeWidth={2} />
+                    {copiado ? "✓ LINK COPIADO!" : "COMPARTILHAR PRODUTO"}
+                  </button>
+                </div>
+              )}
+
+              {/* Se esgotado/sem estoque, mostrar só compartilhar */}
+              {(corEsgotada || !produto.estoque_disponivel) && (
+                <div className="space-y-2">
+                  <div className="rounded-2xl py-4 text-center font-black text-base"
+                    style={{ background: "rgba(255,107,0,0.1)", color: "#FF6B00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    🚫 INDISPONÍVEL NO MOMENTO
+                  </div>
+                  <button onClick={compartilhar}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-black text-sm transition-all hover:brightness-110"
+                    style={{ background: "rgba(92,200,0,0.1)", color: "#5CC800", border: "1px solid rgba(92,200,0,0.25)", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: "0.05em" }}>
+                    <Share2 size={15} strokeWidth={2} />
+                    {copiado ? "✓ LINK COPIADO!" : "COMPARTILHAR PRODUTO"}
+                  </button>
+                </div>
+              )}
 
               {/* Descrição */}
               {produto.descricao && (
@@ -493,6 +634,9 @@ export default function ProdutoPage(): React.JSX.Element {
         {modalAberto && fotosAtuais.length > 0 && (
           <ModalFoto fotos={fotosAtuais} indice={fotoAtiva} onClose={() => setModalAberto(false)} />
         )}
+
+        {/* FAB do carrinho */}
+        <CarrinhoFAB />
       </main>
     </>
   );
